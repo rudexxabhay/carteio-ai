@@ -204,3 +204,29 @@
 .dashboard-logout{min-height:36px;padding:0 12px;font-size:11px}
 .organization-empty{display:inline-flex;margin-top:13px;border-radius:20px;padding:7px 10px;background:#f3f5f9;color:#738096;font-size:10px;font-weight:700}
 @media(max-width:680px){.auth-card-polished{padding:24px 20px}.auth-form{gap:13px}.dash-header{gap:8px}.dashboard-logout{padding:0 9px}}
+.auth-shell{padding:clamp(18px,4vh,38px) clamp(14px,4vw,28px)}
+.auth-card-polished{width:min(460px,100%);padding:clamp(24px,4vw,36px);border-radius:18px}
+.auth-card-polished>p{max-width:39ch}
+.auth-method-switch button{min-height:42px}
+.auth-form input{min-width:0}
+.auth-button{min-height:46px;display:flex;align-items:center;justify-content:center;gap:9px}
+.auth-button-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:carteio-spin .7s linear infinite}
+.otp-email-note{margin:0;color:#748096;font-size:11px;overflow-wrap:anywhere}
+.otp-email-note strong{color:#34415a}
+.auth-form .otp-label{gap:9px}
+.otp-code-entry{position:relative;width:100%;max-width:350px;height:54px}
+.otp-code-input{position:absolute!important;inset:0;z-index:2;width:100%;height:100%!important;padding:0!important;border:0!important;background:transparent!important;color:transparent!important;caret-color:transparent!important;box-shadow:none!important;font-size:16px!important;letter-spacing:2.45em!important;cursor:text}
+.otp-code-input:focus{outline:0}
+.otp-slots{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:clamp(6px,2vw,10px);pointer-events:none}
+.otp-slots i{display:grid;place-items:center;min-width:0;border:1px solid #dce3ed;border-radius:9px;background:#fff;color:#1c2940;font-style:normal;font-size:19px;font-weight:700;transition:border-color .15s,background-color .15s,box-shadow .15s}
+.otp-code-entry:focus-within .otp-slots i.is-current{border-color:var(--auth-color);box-shadow:0 0 0 3px color-mix(in srgb,var(--auth-color) 14%,transparent)}
+.otp-code-entry:focus-within .otp-slots i{background:#fcfdff}
+.otp-code-entry.has-error .otp-slots i{border-color:#cf736a}
+.otp-code-entry .otp-code-input[aria-invalid="true"]+.otp-slots i{border-color:#cf736a}
+.otp-actions{align-items:center;flex-wrap:wrap}
+.otp-actions .auth-inline-link{min-height:36px;padding:7px 2px;background:transparent;border:0;cursor:pointer}
+.otp-actions .auth-inline-link:disabled{color:#98a1b0;cursor:default}
+.otp-login-link{justify-self:start}
+.auth-loading{min-height:100svh}
+@media(max-width:360px){.auth-card-polished{padding:22px 17px}.otp-code-entry{height:50px}.otp-slots{gap:5px}.otp-slots i{border-radius:7px;font-size:17px}.auth-method-switch button{font-size:10px;padding-inline:4px}}
+@media(prefers-reduced-motion:reduce){.auth-button-spinner{animation:none}.otp-slots i{transition:none}}

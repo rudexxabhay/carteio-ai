@@ -1,4 +1,4 @@
-import { BadRequestException, type ArgumentsHost } from '@nestjs/common';
+import { BadRequestException, ServiceUnavailableException, type ArgumentsHost } from '@nestjs/common';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import type { RequestWithId } from '../src/common/middleware/request-id.middleware';
 import type { Response } from 'express';
@@ -30,5 +30,12 @@ describe('AllExceptionsFilter', () => {
     expect(JSON.stringify(payload)).not.toContain('private infrastructure detail');
     expect(JSON.stringify(payload)).not.toContain('stack');
     log.mockRestore();
+  });
+
+  it('preserves structured auth service codes and safe messages with the request id', () => {
+    const { host, response } = makeHost();
+    new AllExceptionsFilter().catch(new ServiceUnavailableException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Email code sign-in is temporarily unavailable.' }), host);
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Email code sign-in is temporarily unavailable.', requestId: 'trace-test' }));
   });
 });

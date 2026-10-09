@@ -10,10 +10,31 @@ export const sessionCookieName = () => process.env.NODE_ENV === 'production' ? '
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const equal = (left: string, right: string) => { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); };
 const normalizeEmail = (email: string) => email.trim().normalize('NFKC').toLowerCase();
+const otpHashSecretConfigured = () => {
+  const secret = process.env.AUTH_OTP_HASH_SECRET ?? '';
+  return Buffer.byteLength(secret) >= 32 && !/^(GENERATE_|YOUR_|CHANGE_ME|PLACEHOLDER)/i.test(secret.trim());
+};
 const otpDigest = (email: string, code: string) => {
   const secret = process.env.AUTH_OTP_HASH_SECRET ?? '';
-  if (Buffer.byteLength(secret) < 32) throw new ServiceUnavailableException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Email code sign-in is not configured.' });
+  if (!otpHashSecretConfigured()) throw new ServiceUnavailableException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Email code sign-in is temporarily unavailable.' });
   return createHmac('sha256', secret).update(`${email}:${code}`).digest('hex');
+};
+const safePrismaErrorDetails = (error: unknown): Record<string, unknown> => {
+  if (typeof error !== 'object' || error === null) return {};
+  const candidate = error as { code?: unknown; meta?: unknown };
+  const details: Record<string, unknown> = {};
+  if (typeof candidate.code === 'string' && /^P\d{4}$/.test(candidate.code)) details.prismaCode = candidate.code;
+  if (typeof candidate.meta !== 'object' || candidate.meta === null) return details;
+  const meta = candidate.meta as Record<string, unknown>;
+  const identifier = (value: unknown) => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_.]{0,100}$/.test(value) ? value : undefined;
+  for (const key of ['modelName', 'table', 'column_name', 'constraint', 'field_name'] as const) {
+    const value = identifier(meta[key]);
+    if (value) details[key] = value;
+  }
+  const target = Array.isArray(meta.target) ? meta.target.map(identifier).filter((value): value is string => Boolean(value)) : identifier(meta.target);
+  if (Array.isArray(target) ? target.length > 0 : Boolean(target)) details.target = target;
+  if (typeof meta.code === 'string' && /^[A-Z0-9]{5}$/.test(meta.code)) details.sqlState = meta.code;
+  return details;
 };
 
 @Injectable()
@@ -48,17 +69,18 @@ export class AuthService {
     if (!name || /[\u0000-\u001f\u007f]/.test(name)) throw new BadRequestException('Enter a valid name.');
     if (/(password|123456|qwerty|letmein|welcome|admin)/i.test(input.password) && input.password.length < 16) throw new BadRequestException('Choose a less common password.');
     const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
-    try {
-      const user = await this.db.user.create({ data: { name, email, credential: { create: { passwordHash } } }, select: { id: true, email: true } });
-      const delivered = await this.sendVerification(user);
-      if (!delivered) throw new ServiceUnavailableException('Your account was created, but verification email delivery is unavailable. Contact support before retrying.');
-      await this.audit('auth.signup.created', user.id);
-      this.logger.log('signup_created');
-      return { status: 'verification_required' };
-    } catch (error) {
-      if ((error as { code?: string }).code === 'P2002') throw new ConflictException('An account with this email already exists.');
+    let user: { id: string; email: string };
+    try { user = await this.db.user.create({ data: { name, email, credential: { create: { passwordHash } } }, select: { id: true, email: true } }); }
+    catch (error) {
+      // Match the successful response so an unauthenticated signup cannot probe account ownership.
+      if ((error as { code?: string }).code === 'P2002') return { status: 'verification_required' };
       throw error;
     }
+    const delivered = await this.sendVerification(user);
+    if (!delivered) throw new ServiceUnavailableException('Your account was created, but verification email delivery is unavailable. Contact support before retrying.');
+    await this.audit('auth.signup.created', user.id);
+    this.logger.log('signup_created');
+    return { status: 'verification_required' };
   }
 
   async verify(token: string) {
@@ -149,21 +171,40 @@ export class AuthService {
     return { status: 'linked' };
   }
 
-  async requestOtp(emailInput: string) {
-    if (!this.email.available) throw new ServiceUnavailableException({ code: 'EMAIL_SERVICE_UNAVAILABLE', message: 'Email code delivery is temporarily unavailable.' });
+  async requestOtp(emailInput: string, requestId?: string) {
+    if (!otpHashSecretConfigured()) {
+      this.logOtpDiagnostic('OTP_CONFIGURATION_ERROR', requestId, 'otp_hash_secret');
+      throw new ServiceUnavailableException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Email code sign-in is temporarily unavailable.' });
+    }
+    if (!this.email.available) {
+      this.logOtpDiagnostic('OTP_CONFIGURATION_ERROR', requestId, 'email_provider_configuration');
+      throw new ServiceUnavailableException({ code: 'EMAIL_SERVICE_UNAVAILABLE', message: 'Email code delivery is temporarily unavailable.' });
+    }
     const email = normalizeEmail(emailInput);
     let failureBoundary = 'challenge_cleanup';
+    let failureOperation = 'delete_expired_challenges';
     try {
     const now = new Date(); const cooldownMs = Number(process.env.AUTH_OTP_RESEND_COOLDOWN_SECONDS ?? 60) * 1000;
     await this.db.emailOtpChallenge.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { consumedAt: { not: null }, createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60_000) } }] } });
     failureBoundary = 'challenge_transaction';
+    failureOperation = 'begin_challenge_transaction';
     const challenge = await this.db.$transaction(async (tx: any) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${email}, 0))`;
+      failureOperation = 'acquire_email_advisory_lock';
+      // The Neon adapter cannot decode PostgreSQL's `void` result from the lock
+      // function. Keep the function inside a materialized CTE and return a bool.
+      await tx.$queryRaw<Array<{ acquired: boolean }>>`
+        WITH lock_result AS MATERIALIZED (
+          SELECT pg_advisory_xact_lock(hashtextextended(${email}::text, 0::bigint))
+        )
+        SELECT TRUE AS acquired FROM lock_result
+      `;
+      failureOperation = 'find_existing_challenge';
       const prior = await tx.emailOtpChallenge.findUnique({ where: { email } });
       const remaining = prior ? cooldownMs - (now.getTime() - prior.createdAt.getTime()) : 0;
       if (remaining > 0) return { id: null, retryAfterSeconds: Math.ceil(remaining / 1000), code: null };
       const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
       const expiresAt = new Date(now.getTime() + Number(process.env.AUTH_OTP_EXPIRES_MINUTES ?? 5) * 60_000);
+      failureOperation = 'upsert_challenge';
       const saved = await tx.emailOtpChallenge.upsert({
         where: { email },
         create: { email, codeHash: otpDigest(email, code), createdAt: now, expiresAt, attempts: 0, consumedAt: null },
@@ -174,29 +215,44 @@ export class AuthService {
     });
     if (!challenge.id || !challenge.code) return { status: 'request_accepted', deliveryAccepted: false, retryAfterSeconds: challenge.retryAfterSeconds };
     failureBoundary = 'provider_delivery';
-    const sent = await this.email.send(email, 'Your Carteio AI sign-in code', `Your sign-in code is ${challenge.code}. It expires in ${process.env.AUTH_OTP_EXPIRES_MINUTES ?? '5'} minutes. If you did not request it, you can ignore this email.`);
-    if (!sent) { failureBoundary = 'failed_delivery_cleanup'; await this.db.emailOtpChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { consumedAt: new Date() } }); throw new ServiceUnavailableException({ code: 'EMAIL_SERVICE_UNAVAILABLE', message: 'Email code delivery is temporarily unavailable.' }); }
+    failureOperation = 'resend_email';
+    const sent = await this.email.send(email, 'Your Carteio AI sign-in code', `Your sign-in code is ${challenge.code}. It expires in ${process.env.AUTH_OTP_EXPIRES_MINUTES ?? '5'} minutes. If you did not request it, you can ignore this email.`, requestId);
+    if (!sent) { failureBoundary = 'failed_delivery_cleanup'; failureOperation = 'consume_undelivered_challenge'; await this.db.emailOtpChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { consumedAt: new Date() } }); throw new ServiceUnavailableException({ code: 'EMAIL_SERVICE_UNAVAILABLE', message: 'Email code delivery is temporarily unavailable.' }); }
     return { status: 'request_accepted', deliveryAccepted: sent, retryAfterSeconds: sent ? Math.ceil(cooldownMs / 1000) : 0, ...(sent ? { challengeId: challenge.id } : {}) };
     } catch (error) {
-      if (error instanceof HttpException) throw error;
-      this.logger.warn(`OTP request failed at ${failureBoundary}`);
+      if (error instanceof HttpException) {
+        const response = error.getResponse();
+        if (typeof response === 'object' && response !== null && 'code' in response && response.code === 'AUTH_SERVICE_UNAVAILABLE') this.logOtpDiagnostic('OTP_CONFIGURATION_ERROR', requestId, 'otp_hash_secret');
+        throw error;
+      }
+      const providerFailure = failureBoundary === 'provider_delivery';
+      this.logOtpDiagnostic(providerFailure ? 'OTP_EMAIL_PROVIDER_ERROR' : 'OTP_DATABASE_ERROR', requestId, failureBoundary, error, failureOperation);
       throw new ServiceUnavailableException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Email code sign-in is temporarily unavailable.' });
     }
   }
 
-  async verifyOtp(emailInput: string, challengeId: string, code: string, existingSessionToken?: string) {
+  private logOtpDiagnostic(event: string, requestId: string | undefined, stage: string, error?: unknown, operation?: string) {
+    const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(error.name) ? error.name : undefined;
+    const details = safePrismaErrorDetails(error);
+    this.logger.warn(JSON.stringify({ event, requestId: requestId ?? 'unknown', stage, ...(operation ? { operation } : {}), ...(errorName ? { errorName } : {}), ...details }));
+  }
+
+  async verifyOtp(emailInput: string, challengeId: string, code: string, existingSessionToken?: string, flow: 'login' | 'signup' = 'login', nameInput?: string) {
+    const name = nameInput?.trim().normalize('NFKC');
+    if (flow === 'signup' && (!name || /[\u0000-\u001f\u007f]/.test(name))) throw new BadRequestException('Enter a valid name to create your account.');
     const email = normalizeEmail(emailInput); const now = new Date(); const digest = otpDigest(email, code);
     const result = await this.db.$transaction(async (tx: any) => {
       const consumed = await tx.emailOtpChallenge.updateMany({ where: { id: challengeId, email, codeHash: digest, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5) } }, data: { consumedAt: now } });
       if (consumed.count !== 1) return null;
-      const user = await tx.user.upsert({
-        where: { email },
-        create: { email, name: null, emailVerifiedAt: now },
-        update: { emailVerifiedAt: now },
-      });
+      let user = await tx.user.findUnique({ where: { email } });
+      if (flow === 'signup') {
+        if (user) return { blocked: false, accountExists: true, user: null, session: null };
+        user = await tx.user.create({ data: { email, name, emailVerifiedAt: now } });
+      } else if (!user) return { blocked: false, accountExists: false, user: null, session: null };
+      if (!user.emailVerifiedAt) user = await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: now } });
       if (user.status !== 'ACTIVE') return { blocked: true, user: null, session: null };
       const session = await this.createSession(user, existingSessionToken, tx);
-      return { blocked: false, user, session };
+      return { blocked: false, accountExists: false, user, session };
     });
     if (!result) {
       const attempt = await this.db.emailOtpChallenge.updateMany({ where: { id: challengeId, email, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5) } }, data: { attempts: { increment: 1 } } });
@@ -209,8 +265,10 @@ export class AuthService {
       throw new BadRequestException({ code: 'OTP_INVALID', message: 'This code is invalid or expired. Request a new code and try again.' });
     }
     if (result.blocked) throw new UnauthorizedException('This account is unavailable.');
-    await this.audit('auth.otp.login.succeeded', result.user.id);
-    return result.session;
+    if (result.accountExists) return { status: 'account_exists' as const, session: null };
+    if (!result.user || !result.session) throw new UnauthorizedException('This code could not sign in to an account. Create an account or request a new code.');
+    await this.audit(flow === 'signup' ? 'auth.otp.signup.succeeded' : 'auth.otp.login.succeeded', result.user.id);
+    return { status: 'authenticated' as const, session: result.session };
   }
 
   async current(raw?: string) {

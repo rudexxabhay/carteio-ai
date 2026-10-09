@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class SignupDto {
@@ -18,4 +18,6 @@ export class OtpRequestDto extends EmailDto {}
 export class OtpVerifyDto extends EmailDto {
   @IsUUID() challengeId!: string;
   @IsString() @Matches(/^\d{6}$/) code!: string;
+  @IsOptional() @IsString() @Matches(/^(login|signup)$/) flow?: 'login' | 'signup';
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsOptional() @IsString() @MinLength(1) @MaxLength(200) name?: string;
 }

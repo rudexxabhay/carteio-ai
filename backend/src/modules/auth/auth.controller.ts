@@ -4,6 +4,7 @@ import { AuthService, sessionCookieName } from './auth.service';
 import { EmailDto, GoogleTokenDto, LoginDto, OtpRequestDto, OtpVerifyDto, ResetPasswordDto, SignupDto, TokenDto } from './auth.dto';
 import { AuthSessionGuard, getCookie } from './auth-session.guard';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard';
+import type { RequestWithId } from '../../common/middleware/request-id.middleware';
 
 export const sessionCookieOptions = (maxAge?: number) => ({ httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const, path: '/', ...(maxAge ? { maxAge } : {}) });
 @Controller('auth')
@@ -23,11 +24,11 @@ export class AuthController {
   @Post('google/link') @HttpCode(200) @UseGuards(AuthSessionGuard, AuthRateLimitGuard) linkGoogle(@Body() body: GoogleTokenDto, @Req() req: Request & { authSession?: { userId: string } }) {
     return this.auth.linkGoogle(req.authSession!.userId, body.credential);
   }
-  @Post('otp/request') @HttpCode(200) @UseGuards(AuthRateLimitGuard) requestOtp(@Body() body: OtpRequestDto) { return this.auth.requestOtp(body.email); }
+  @Post('otp/request') @HttpCode(200) @UseGuards(AuthRateLimitGuard) requestOtp(@Body() body: OtpRequestDto, @Req() req: RequestWithId) { return this.auth.requestOtp(body.email, req.requestId); }
   @Post('otp/verify') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async verifyOtp(@Body() body: OtpVerifyDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.verifyOtp(body.email, body.challengeId, body.code, getCookie(req, sessionCookieName()));
-    res.cookie(sessionCookieName(), result.token, sessionCookieOptions(result.expiresAt.getTime() - Date.now()));
-    return { user: result.user };
+    const result = await this.auth.verifyOtp(body.email, body.challengeId, body.code, getCookie(req, sessionCookieName()), body.flow ?? 'login', body.name);
+    if (result.session) res.cookie(sessionCookieName(), result.session.token, sessionCookieOptions(result.session.expiresAt.getTime() - Date.now()));
+    return result.status === 'account_exists' ? { status: result.status } : { user: result.session.user };
   }
   @Get('me') @UseGuards(AuthSessionGuard) async me(@Req() req: Request & { authSession?: { user: unknown } }) { return { user: req.authSession?.user }; }
   @Post('logout') @HttpCode(200) async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {

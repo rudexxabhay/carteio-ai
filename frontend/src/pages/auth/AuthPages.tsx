@@ -73,8 +73,8 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const sessionNotice = mode === 'login' && Boolean((location.state as { sessionExpired?: boolean } | null)?.sessionExpired);
   useEffect(() => { if (mode === 'verify' && token) { setBusy(true); apiPost('/auth/verify-email', { token }).then(() => setMessage('Your email is verified. You can now sign in.')).catch((e) => setError(errorText(e))).finally(() => setBusy(false)); } }, [mode, token]);
   useEffect(() => { if ((mode === 'verify' || mode === 'reset') && token) window.history.replaceState(window.history.state, '', `${location.pathname}${location.search}`); }, [mode, token, location.pathname, location.search]);
-  if ((mode === 'login' || mode === 'signup') && loading) return <main className="auth-loading">Checking your Carteio AI session…</main>;
-  if ((mode === 'login' || mode === 'signup') && user && !['GOOGLE_AUTHENTICATING', 'SESSION_VERIFYING', 'DASHBOARD_NAVIGATING'].includes(googleAuthState)) return <Navigate to="/dashboard" replace/>;
+  if ((mode === 'login' || mode === 'signup') && loading) return <main className="auth-loading" role="status" aria-live="polite" aria-busy="true">Checking your Carteio AI session…</main>;
+  if ((mode === 'login' || mode === 'signup') && user && !['GOOGLE_AUTHENTICATING', 'SESSION_VERIFYING', 'DASHBOARD_NAVIGATING'].includes(googleAuthState)) return <Navigate to={safeInternalDestination((location.state as { from?: unknown } | null)?.from)} replace/>;
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (inFlight.current) return; setError(''); setMessage('');
     const fields: Record<string, string> = {};
@@ -88,7 +88,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
     inFlight.current = true; setBusy(true);
     try {
       if (mode === 'login') { await login(email.trim(), password); const from = (location.state as { from?: unknown } | null)?.from; navigate(safeInternalDestination(from), { replace: true }); }
-      else if (mode === 'signup') { await signup(name.trim(), email.trim(), password); setMessage('Your account is ready for email verification. Check your inbox for a verification link.'); }
+      else if (mode === 'signup') { await signup(name.trim(), email.trim(), password); setMessage('If registration can be completed for this address, verification instructions have been sent. If you already have an account, log in to continue.'); }
       else if (mode === 'forgot') { const result = await apiPost<{ deliveryAvailable?: boolean }>('/auth/forgot-password', { email: email.trim() }); setMessage(result.deliveryAvailable === false ? 'Password recovery email is not configured yet. Contact support for help.' : 'If an account exists and delivery succeeds, you’ll receive a password reset link.'); }
       else if (mode === 'reset') { await apiPost('/auth/reset-password', { token, password }); setMessage('Your password has been changed. All previous sessions have been signed out.'); }
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); inFlight.current = false; }
@@ -97,6 +97,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const requestCode = async () => {
     const normalized = email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) { setFieldErrors({ email: 'Enter a valid email address.' }); return; }
+    if (mode === 'signup' && !name.trim()) { setFieldErrors({ name: 'Enter your full name to create an account.' }); return; }
     if (inFlight.current) return; inFlight.current = true; setBusy(true); setError(''); setMessage(''); setFieldErrors({});
     try {
       const result = await requestOtp(normalized);
@@ -109,11 +110,15 @@ export function AuthPage({ mode }: { mode: Mode }) {
     event.preventDefault(); if (inFlight.current) return;
     if (!/^\d{6}$/.test(otp)) { setFieldErrors({ otp: 'Enter the six-digit code from your email.' }); return; }
     inFlight.current = true; setBusy(true); setError(''); setFieldErrors({});
-    try { await verifyOtp(email.trim(), challengeId, otp); navigate(safeInternalDestination((location.state as { from?: unknown } | null)?.from), { replace: true }); }
+    try {
+      const result = await verifyOtp(email.trim(), challengeId, otp, mode === 'signup' ? 'signup' : 'login', mode === 'signup' ? name.trim() : undefined);
+      if (result === 'account_exists') { setError('An account already uses this email. Log in to continue.'); return; }
+      navigate(safeInternalDestination((location.state as { from?: unknown } | null)?.from), { replace: true });
+    }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); inFlight.current = false; }
   };
   const title = mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : mode === 'forgot' ? 'Reset your password' : mode === 'reset' ? 'Choose a new password' : 'Email verification';
-  if (mode === 'login' && ['GOOGLE_AUTHENTICATING', 'SESSION_VERIFYING', 'DASHBOARD_NAVIGATING'].includes(googleAuthState)) return <main className="auth-progress" role="status" aria-live="polite"><span className="auth-progress-mark" aria-hidden="true">C</span><span className="auth-progress-spinner" aria-hidden="true"/><h1>{googleAuthState === 'DASHBOARD_NAVIGATING' ? 'Opening your workspace…' : 'Signing you in…'}</h1><p>{googleAuthState === 'GOOGLE_AUTHENTICATING' ? 'Securely creating your session.' : googleAuthState === 'SESSION_VERIFYING' ? 'Your account is verified. Preparing your workspace.' : 'Loading your Carteio AI workspace.'}</p></main>;
+  if ((mode === 'login' || mode === 'signup') && ['GOOGLE_AUTHENTICATING', 'SESSION_VERIFYING', 'DASHBOARD_NAVIGATING'].includes(googleAuthState)) return <main className="auth-progress" role="status" aria-live="polite"><span className="auth-progress-mark" aria-hidden="true">C</span><span className="auth-progress-spinner" aria-hidden="true"/><h1>{googleAuthState === 'DASHBOARD_NAVIGATING' ? 'Opening your workspace…' : 'Signing you in…'}</h1><p>{googleAuthState === 'GOOGLE_AUTHENTICATING' ? 'Securely creating your session.' : googleAuthState === 'SESSION_VERIFYING' ? 'Your account is verified. Preparing your workspace.' : 'Loading your Carteio AI workspace.'}</p></main>;
   return <><Meta title={title} description="Secure access to your Carteio AI account." path={`/${mode === 'verify' ? 'verify-email' : mode === 'reset' ? 'reset-password' : mode === 'forgot' ? 'forgot-password' : mode}`} noIndex/><section className="auth-card auth-card-polished">
     <Link className="back-link" to="/"><ArrowLeft size={15}/> Back to Carteio AI</Link><div className="simple-icon"><ShieldCheck size={22}/></div><span className="eyebrow">{mode === 'signup' ? 'YOUR CARTEIO AI ACCOUNT' : mode === 'login' ? 'SECURE ACCOUNT ACCESS' : 'ACCOUNT SECURITY'}</span><h1>{title}</h1>
     <p>{mode === 'login' ? 'Sign in to continue to your Carteio AI workspace.' : mode === 'signup' ? 'One account for your business AI workspace.' : mode === 'forgot' ? 'Enter your email address and we’ll guide you through recovery.' : mode === 'reset' ? 'Use a strong passphrase with at least 12 characters.' : 'We’ll confirm when your email address is ready.'}</p>
@@ -121,15 +126,18 @@ export function AuthPage({ mode }: { mode: Mode }) {
     {(mode === 'login' || mode === 'signup') && <div className="auth-methods">
       <GoogleSignIn onCredential={handleGoogle} onError={setError} onDismiss={() => { if (!inFlight.current) { setGoogleAuthState('CANCELLED'); setMessage('Google sign-in was closed. Continue with email or password.'); } }} disabled={busy}/>
       <div className="auth-divider"><span>or continue with</span></div>
-      <div className="auth-method-switch"><button type="button" aria-label="Continue with Email OTP" className={authMethod === 'otp' ? 'is-selected' : ''} onClick={() => { setAuthMethod('otp'); setError(''); setMessage(''); }}>Email OTP</button><button type="button" aria-label="Sign in with Password" className={authMethod === 'password' ? 'is-selected' : ''} onClick={() => { setAuthMethod('password'); setError(''); setMessage(''); }}>Password</button></div>
+      <div className="auth-method-switch"><button type="button" aria-label={mode === 'signup' ? 'Create account with Email OTP' : 'Continue with Email OTP'} className={authMethod === 'otp' ? 'is-selected' : ''} onClick={() => { setAuthMethod('otp'); setError(''); setMessage(''); }}>Email OTP</button><button type="button" aria-label={mode === 'signup' ? 'Create account with password' : 'Sign in with Password'} className={authMethod === 'password' ? 'is-selected' : ''} onClick={() => { setAuthMethod('password'); setError(''); setMessage(''); }}>Email + Password</button></div>
     </div>}
     {(mode === 'login' || mode === 'signup') && authMethod === 'otp' && <form className="auth-form" onSubmit={submitOtp} noValidate>
+      {mode === 'signup' && <label>Full name<input aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? 'otp-name-error' : undefined} autoComplete="name" required maxLength={200} value={name} onChange={e => setName(e.target.value)} />{fieldErrors.name && <small id="otp-name-error" className="field-error">{fieldErrors.name}</small>}</label>}
       <label>Email address<span className="auth-input-wrap"><Mail size={16}/><input aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'otp-email-error' : undefined} type="email" autoComplete="email" required maxLength={320} value={email} onChange={e => { setEmail(e.target.value); setChallengeId(''); setOtp(''); }} /></span>{fieldErrors.email && <small id="otp-email-error" className="field-error">{fieldErrors.email}</small>}</label>
-      {!challengeId ? <button className="button button-primary auth-button" type="button" disabled={busy} onClick={() => void requestCode()}>{busy ? 'Sending code…' : 'Send email code'}</button> : <>
-        <label>Six-digit code<input inputMode="numeric" autoComplete="one-time-code" aria-invalid={Boolean(fieldErrors.otp)} aria-describedby={fieldErrors.otp ? 'otp-code-error' : undefined} maxLength={6} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} onPaste={e => { const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6); if (pasted) { e.preventDefault(); setOtp(pasted); } }} />{fieldErrors.otp && <small id="otp-code-error" className="field-error">{fieldErrors.otp}</small>}</label>
+      {!challengeId ? <button className="button button-primary auth-button" type="button" aria-busy={busy} disabled={busy} onClick={() => void requestCode()}>{busy ? <><span className="auth-button-spinner" aria-hidden="true"/>Sending code…</> : mode === 'signup' ? 'Send signup code' : 'Send email code'}</button> : <>
+        {mode === 'signup' && <p className="otp-email-note">Create an account for <strong>{email.trim()}</strong></p>}
+        <label className="otp-label">Six-digit verification code<div className={`otp-code-entry ${fieldErrors.otp || (error && /code/i.test(error)) ? 'has-error' : ''}`}><input className="otp-code-input" autoFocus inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" aria-label="Six-digit code" aria-invalid={Boolean(fieldErrors.otp || (error && /code/i.test(error)))} aria-describedby={fieldErrors.otp ? 'otp-code-error' : 'otp-code-help'} maxLength={6} value={otp} onChange={e => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }} onKeyDown={e => { if (e.key === 'Backspace' && !otp) e.preventDefault(); }} onPaste={e => { const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6); if (pasted) { e.preventDefault(); setOtp(pasted); } }} /><span className="otp-slots" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <i className={index === otp.length ? 'is-current' : ''} key={index}>{otp[index] ?? ''}</i>)}</span></div>{fieldErrors.otp && <small id="otp-code-error" className="field-error">{fieldErrors.otp}</small>}<small id="otp-code-help">Enter the code we sent to your email address.</small></label>
         {message && <div role="status" className="auth-alert">{message}</div>}{error && <div role="alert" className="auth-alert auth-alert-error">{error}</div>}
         <button className="button button-primary auth-button" type="submit" disabled={busy}>{busy ? 'Verifying…' : 'Verify and continue'}</button>
         <div className="otp-actions"><button type="button" className="auth-inline-link" onClick={() => { setChallengeId(''); setOtp(''); setMessage(''); setError(''); }}>Edit email</button><button type="button" className="auth-inline-link" onClick={() => void requestCode()} disabled={busy || resendSeconds > 0}>{resendSeconds > 0 ? `Resend in ${resendSeconds}s` : 'Resend code'}</button></div>
+        {error.includes('An account already uses') && <Link className="auth-inline-link otp-login-link" to="/login">Go to log in</Link>}
       </>}
       {error && !challengeId && <div role="alert" className="auth-alert auth-alert-error">{error}</div>}{message && !challengeId && <div role="status" className="auth-alert">{message}</div>}
     </form>}
