@@ -1,0 +1,79 @@
+name: Prisma UAT migrations
+
+on:
+  push:
+    branches: [uat]
+    paths:
+      - "backend/prisma/migrations/**"
+  workflow_dispatch:
+    inputs:
+      confirm_uat:
+        description: Confirm that the uat environment secret targets the Neon UAT database neondb
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-uat-prisma-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply pending migrations
+    if: github.ref == 'refs/heads/uat' && (github.event_name == 'push' || inputs.confirm_uat == true)
+    runs-on: ubuntu-latest
+    environment:
+      name: uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate UAT direct connection target
+        env:
+          DIRECT_URL: ${{ secrets.UAT_DATABASE_URL }}
+        run: |
+          node <<'NODE'
+          const value = process.env.DIRECT_URL;
+          let valid = false;
+          try {
+            const url = new URL(value ?? '');
+            const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
+            valid = ['postgres:', 'postgresql:'].includes(url.protocol)
+              && url.hostname.endsWith('.neon.tech')
+              && !/-pooler(?:\.|$)/i.test(url.hostname)
+              && Boolean(url.username && url.password)
+              && database === 'neondb'
+              && url.searchParams.get('sslmode') === 'require';
+          } catch {}
+          if (!valid) {
+            console.error('UAT_DATABASE_URL must be a direct Neon PostgreSQL connection for database neondb (not a pooled endpoint).');
+            process.exit(1);
+          }
+          NODE
+
+      - name: Apply pending Prisma migrations
+        working-directory: backend
+        env:
+          DIRECT_URL: ${{ secrets.UAT_DATABASE_URL }}
+        run: pnpm exec prisma migrate deploy
+
+      - name: Report migration failure safely
+        if: failure()
+        run: |
+          echo 'Migration failed. Review Prisma output and UAT migration history before retrying.'
+          echo 'Do not use prisma db push, reset the database, or edit _prisma_migrations manually.'
