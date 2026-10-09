@@ -1,0 +1,74 @@
+# Private environment files; keep example templates trackable.
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!.env.*.example
+!*.env.example
+!*.env.*.example
+
+# Local credentials and private keys.
+.aws/
+.azure/
+.gcloud/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.auto.tfvars
+service-account*.json
+*-service-account.json
+credentials.json
+secrets.json
+
+# Dependencies, generated output, caches, and temporary files.
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+.vite/
+.cache/
+.turbo/
+.next/
+.nuxt/
+out/
+tmp/
+temp/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+*.tsbuildinfo
+
+# Local database files and backups; keep SQL source and Prisma migrations.
+*.sql.gz
+*.dump
+*.backup
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+backups/
+database-backups/
+
+# Local machine and editor files; shared VS Code settings remain trackable.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*.local.json
+*.swp
+*.swo
+*.tmp
+*.orig
+*.sublime-workspace
+
+# Existing project-specific generated output.
+backend/src/generated/prisma/

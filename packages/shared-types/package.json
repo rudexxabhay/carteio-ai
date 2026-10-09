@@ -1,0 +1,14 @@
+{
+  "name": "@carteio/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.d.ts",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.d.ts"
+    }
+  }
+}

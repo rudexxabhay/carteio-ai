@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      try {
+        const savedTheme = localStorage.getItem('carteio-color-theme');
+        const allowedThemes = ['ocean-blue', 'royal-purple', 'emerald', 'sunset-coral', 'rose-pink', 'midnight-indigo'];
+        document.documentElement.dataset.theme = allowedThemes.includes(savedTheme) ? savedTheme : 'ocean-blue';
+      } catch { document.documentElement.dataset.theme = 'ocean-blue'; }
+    </script>
+    <meta name="description" content="Carteio AI is being built to connect helpful AI assistants with business knowledge, applications, and owner-controlled permissions." />
+    <link rel="canonical" href="https://ai.carteio.in/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Carteio AI — One AI Platform. Every Business Connection.</title>
+  </head>
+  <body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
+</html>

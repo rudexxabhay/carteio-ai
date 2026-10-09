@@ -1,0 +1,6 @@
+# Enable after DNS is pointed here and the deployment host is ready to serve TLS.
+server {
+    listen 80;
+    server_name ai.carteio.in;
+    return 301 https://ai.carteio.in$request_uri;
+}

@@ -1,0 +1,1 @@
+module.exports = { root: true, parser: '@typescript-eslint/parser', plugins: ['@typescript-eslint'], env: { node: true, es2022: true, jest: true }, parserOptions: { ecmaVersion: 'latest', sourceType: 'module' }, rules: { 'no-unused-vars': 'off', '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }] } };
