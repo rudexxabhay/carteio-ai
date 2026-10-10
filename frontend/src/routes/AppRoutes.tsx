@@ -12,6 +12,8 @@ import { WorkspaceSelectorPage } from '../pages/workspaces/WorkspaceSelectorPage
 import { OnboardingPage } from '../pages/workspaces/OnboardingPage';
 import { WorkspaceSettingsPage } from '../pages/workspaces/WorkspaceSettingsPage';
 import { WorkspaceTeamPage } from '../pages/workspaces/WorkspaceTeamPage';
+import { AssistantEditorPage, AssistantListPage } from '../pages/assistants/AssistantPages';
+import { KnowledgeBasePage } from '../pages/knowledge/KnowledgeBasePage';
 import { NotFoundPage } from '../pages/errors/NotFoundPage';
 
 export function AppRoutes() {
@@ -33,6 +35,9 @@ export function AppRoutes() {
         <Route index element={<DashboardPage/>}/>
         <Route path="team" element={<WorkspaceTeamPage/>}/>
         <Route path="settings" element={<WorkspaceSettingsPage/>}/>
+        <Route path="assistants" element={<AssistantListPage/>}/>
+        <Route path="knowledge" element={<KnowledgeBasePage/>}/>
+        <Route path="assistants/:assistantId" element={<AssistantEditorPage/>}/>
         <Route path="*" element={<InfoPage title="Workspace page" description="This workspace page is not available." noIndex/>}/>
       </Route>
     </Route>

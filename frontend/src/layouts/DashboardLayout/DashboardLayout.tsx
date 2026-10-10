@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, BookOpen, Building2, ChevronDown, LayoutDashboard, LogOut, Settings, Users } from 'lucide-react';
+import { Activity, BookOpen, Bot, Building2, ChevronDown, LayoutDashboard, LogOut, Settings, Users, Database } from 'lucide-react';
 import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { ThemeSwitcher } from '../../components/common/ThemeSwitcher';
@@ -56,6 +56,8 @@ export function DashboardLayout() {
       <span className="saas-nav-label">WORKSPACE</span>
       <nav className="saas-nav" aria-label="Workspace navigation">
         <NavLink to={`/workspace/${encodeURIComponent(slug)}`} end><LayoutDashboard size={17}/> Overview</NavLink>
+        <NavLink to={`/workspace/${encodeURIComponent(slug)}/assistants`}><Bot size={17}/> AI Assistants</NavLink>
+        <NavLink to={`/workspace/${encodeURIComponent(slug)}/knowledge`}><Database size={17}/> Knowledge Base</NavLink>
         <NavLink to={`/workspace/${encodeURIComponent(slug)}/team`}><Users size={17}/> Team</NavLink>
         <NavLink to={`/workspace/${encodeURIComponent(slug)}/settings`}><Settings size={17}/> Settings</NavLink>
       </nav>
@@ -74,6 +76,8 @@ export function DashboardLayout() {
       </header>
       <nav className="saas-mobile-nav" aria-label="Workspace navigation">
         <NavLink to={`/workspace/${encodeURIComponent(slug)}`} end><LayoutDashboard size={16}/><span>Overview</span></NavLink>
+        <NavLink to={`/workspace/${encodeURIComponent(slug)}/assistants`}><Bot size={16}/><span>Assistants</span></NavLink>
+        <NavLink to={`/workspace/${encodeURIComponent(slug)}/knowledge`}><Database size={16}/><span>Knowledge</span></NavLink>
         <NavLink to={`/workspace/${encodeURIComponent(slug)}/team`}><Users size={16}/><span>Team</span></NavLink>
         <NavLink to={`/workspace/${encodeURIComponent(slug)}/settings`}><Settings size={16}/><span>Settings</span></NavLink>
       </nav>

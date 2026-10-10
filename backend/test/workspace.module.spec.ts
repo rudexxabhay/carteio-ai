@@ -7,6 +7,12 @@ import { AuthSessionGuard } from '../src/modules/auth/auth-session.guard';
 import { WorkspaceController } from '../src/modules/workspaces/workspace.controller';
 import { WorkspaceModule } from '../src/modules/workspaces/workspace.module';
 import { DatabaseModule } from '../src/infrastructure/database/database.module';
+import { AssistantController } from '../src/modules/workspaces/assistant.controller';
+import { AssistantService } from '../src/modules/workspaces/assistant.service';
+import { KnowledgeController } from '../src/modules/workspaces/knowledge.controller';
+import { AssistantKnowledgeController } from '../src/modules/workspaces/assistant-knowledge.controller';
+import { KnowledgeService } from '../src/modules/workspaces/knowledge.service';
+import { PrivateKnowledgeStorage } from '../src/modules/workspaces/private-knowledge-storage';
 
 describe('WorkspaceModule initialization', () => {
   it('resolves the shared session guard and auth dependencies while keeping route protection active', async () => {
@@ -27,6 +33,12 @@ describe('WorkspaceModule initialization', () => {
       expect(authService).toBeInstanceOf(AuthService);
       expect((guard as unknown as { auth: AuthService }).auth).toBe(authService);
       expect(Reflect.getMetadata('__guards__', WorkspaceController)).toContain(AuthSessionGuard);
+      expect(Reflect.getMetadata('__guards__', AssistantController)).toContain(AuthSessionGuard);
+      expect(Reflect.getMetadata('__guards__', KnowledgeController)).toContain(AuthSessionGuard);
+      expect(Reflect.getMetadata('__guards__', AssistantKnowledgeController)).toContain(AuthSessionGuard);
+      expect(moduleRef.get(AssistantService)).toBeInstanceOf(AssistantService);
+      expect(moduleRef.get(KnowledgeService)).toBeInstanceOf(KnowledgeService);
+      expect(moduleRef.get(PrivateKnowledgeStorage).isConfigured()).toBe(false);
       expect(moduleRef.get(PrismaService)).toEqual({});
     } finally {
       await moduleRef.close();

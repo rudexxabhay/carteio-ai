@@ -34,6 +34,32 @@ enum WebsiteVerificationStatus {
   FAILED
 }
 
+enum AssistantStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum KnowledgeSourceType {
+  WEBSITE
+  FAQ
+  TEXT
+}
+
+enum KnowledgeSourceStatus {
+  REGISTERED
+  DISABLED
+  ARCHIVED
+}
+
+enum KnowledgeProcessingStatus {
+  NOT_PROCESSED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
 model User {
   id                String                   @id @default(uuid()) @db.Uuid
   email             String                   @unique @db.VarChar(320)
@@ -49,6 +75,8 @@ model User {
   verificationTokens EmailVerificationToken[]
   resetTokens       PasswordResetToken[]
   identities        AuthIdentity[]
+  createdChatbots    Chatbot[]                @relation("ChatbotCreator")
+  createdKnowledgeSources KnowledgeSource[]    @relation("KnowledgeSourceCreator")
 
   @@index([status, createdAt])
 }
@@ -139,6 +167,8 @@ model Organization {
   chatbots    Chatbot[]
   integrations Integration[]
   auditEvents AuditEvent[]
+  knowledgeSources KnowledgeSource[]
+  assistantKnowledgeSources AssistantKnowledgeSource[]
 
   @@index([status, createdAt])
 }
@@ -179,18 +209,27 @@ model Website {
 }
 
 model Chatbot {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
-  websiteId      String?       @db.Uuid
-  name           String        @db.VarChar(200)
-  status         RecordStatus  @default(ACTIVE)
-  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  website        Website?      @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
+  id                  String          @id @default(uuid()) @db.Uuid
+  organizationId      String          @db.Uuid
+  websiteId           String?         @db.Uuid
+  createdById         String?         @db.Uuid
+  name                String          @db.VarChar(200)
+  description         String?         @db.VarChar(1000)
+  businessPurpose     String?         @db.VarChar(500)
+  systemInstructions  String?         @db.VarChar(10000)
+  defaultLanguage     String          @default("en") @db.VarChar(35)
+  responseTone        String          @default("professional") @db.VarChar(32)
+  fallbackMessage     String          @default("I’m not able to help with that right now. Please contact the business directly.") @db.VarChar(500)
+  status              AssistantStatus @default(DRAFT)
+  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
+  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  website             Website?        @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy           User?           @relation("ChatbotCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  knowledgeSources    AssistantKnowledgeSource[]
 
   @@unique([id, organizationId])
-  @@index([organizationId, status])
+  @@index([organizationId, status, updatedAt])
   @@index([websiteId, organizationId])
 }
 
@@ -207,6 +246,50 @@ model Integration {
 
   @@index([organizationId, status])
   @@index([websiteId, organizationId])
+}
+
+model KnowledgeSource {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  organizationId       String                    @db.Uuid
+  createdById          String?                   @db.Uuid
+  type                 KnowledgeSourceType
+  status               KnowledgeSourceStatus     @default(REGISTERED)
+  processingStatus     KnowledgeProcessingStatus @default(NOT_PROCESSED)
+  name                 String                    @db.VarChar(200)
+  description          String?                   @db.VarChar(1000)
+  sourceUrl            String?                   @db.VarChar(2048)
+  contentBody          String?                   @db.Text
+  category             String?                   @db.VarChar(120)
+  languageHint         String?                   @db.VarChar(35)
+  canonicalKey         String                    @db.VarChar(80)
+  sourceVersion        Int                       @default(1)
+  lastSyncAt           DateTime?                 @db.Timestamptz(3)
+  lastSuccessfulSyncAt DateTime?                 @db.Timestamptz(3)
+  lastSyncErrorCode    String?                   @db.VarChar(100)
+  deletedAt            DateTime?                 @db.Timestamptz(3)
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
+  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy            User?                     @relation("KnowledgeSourceCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  assistantLinks       AssistantKnowledgeSource[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, canonicalKey])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, type, processingStatus])
+}
+
+model AssistantKnowledgeSource {
+  organizationId String          @db.Uuid
+  assistantId    String          @db.Uuid
+  sourceId       String          @db.Uuid
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant      Chatbot         @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  source         KnowledgeSource @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([assistantId, sourceId])
+  @@index([organizationId, sourceId])
 }
 
 model AuditEvent {

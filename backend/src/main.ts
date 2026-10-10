@@ -35,6 +35,7 @@ async function bootstrap() {
   app.use(express.urlencoded({extended:false,limit:'1mb'}));
   app.use(bodyParserErrorMiddleware);
   app.use('/api/v1/auth', csrfOriginMiddleware(config.CORS_ALLOWED_ORIGINS.split(',').map(value => value.trim())));
+  app.use('/api/v1/workspaces', csrfOriginMiddleware(config.CORS_ALLOWED_ORIGINS.split(',').map(value => value.trim())));
   app.setGlobalPrefix(config.API_PREFIX);
   app.enableCors({origin:config.CORS_ALLOWED_ORIGINS.split(',').map(value=>value.trim()),methods:['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','X-Request-ID'],exposedHeaders:['X-Request-ID'],credentials:true,maxAge:600});
   app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true,transformOptions:{enableImplicitConversion:false}}));

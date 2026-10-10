@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), apiConfig.timeoutMs);
   const abortFromCaller = () => controller.abort(signal?.reason);
@@ -27,8 +27,10 @@ async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH', path: string, bod
       }
     }
     if (!response.ok) {
-      const message = typeof responseBody === 'object' && responseBody !== null && 'message' in responseBody && typeof responseBody.message === 'string'
-        ? responseBody.message : `API request failed with status ${response.status}`;
+      const responseMessage = typeof responseBody === 'object' && responseBody !== null && 'message' in responseBody ? responseBody.message : undefined;
+      const message = typeof responseMessage === 'string' ? responseMessage
+        : Array.isArray(responseMessage) && responseMessage.every((item) => typeof item === 'string')
+          ? responseMessage.join(' ') : `API request failed with status ${response.status}`;
       const code = typeof responseBody === 'object' && responseBody !== null && 'code' in responseBody && typeof responseBody.code === 'string' ? responseBody.code : undefined;
       throw new ApiError(message, 'http', response.status, undefined, code);
     }
@@ -50,3 +52,4 @@ async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH', path: string, bod
 export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> { return apiRequest<T>('GET', path, undefined, signal); }
 export function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> { return apiRequest<T>('POST', path, body, signal); }
 export function apiPatch<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> { return apiRequest<T>('PATCH', path, body, signal); }
+export function apiDelete<T>(path: string, signal?: AbortSignal): Promise<T> { return apiRequest<T>('DELETE', path, undefined, signal); }
