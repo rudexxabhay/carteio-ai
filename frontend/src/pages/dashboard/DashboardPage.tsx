@@ -6,7 +6,7 @@ import { Meta } from '../../components/common/Meta';
 import { useWorkspaceRoute } from '../../layouts/DashboardLayout/DashboardLayout';
 
 function FeatureCard({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
-  return <article className="workspace-feature-card"><div className="workspace-feature-icon"><Icon size={18}/></div><h3>{title}</h3><div className="workspace-feature-copy">{children}</div>{action}</article>;
+  return <article className="workspace-feature-card"><div className="workspace-feature-icon"><Icon size={18}/></div><h3>{title}</h3><div className="workspace-feature-copy">{children}</div></article>;
 }
 
 export function DashboardPage() {
