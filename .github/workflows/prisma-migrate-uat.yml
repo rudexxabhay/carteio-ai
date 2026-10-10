@@ -1,14 +1,12 @@
-name: Prisma UAT migrations
+name: Prisma UAT migrations and deployment
 
 on:
   push:
     branches: [uat]
-    paths:
-      - "backend/prisma/migrations/**"
   workflow_dispatch:
     inputs:
       confirm_uat:
-        description: Confirm that the uat environment secret targets the Neon UAT database neondb
+        description: Confirm that the UAT environment secret targets the Neon UAT database neondb
         required: true
         type: boolean
         default: false
@@ -16,17 +14,19 @@ on:
 permissions:
   contents: read
 
+# Keep migrations and releases serialized. Do not cancel a deployment while it
+# may be applying a database migration or changing the live UAT projects.
 concurrency:
   group: neon-uat-prisma-migrations
   cancel-in-progress: false
 
 jobs:
   migrate:
-    name: Apply pending migrations
+    name: Validate and apply UAT migrations
     if: github.ref == 'refs/heads/uat' && (github.event_name == 'push' || inputs.confirm_uat == true)
     runs-on: ubuntu-latest
     environment:
-      name: uat
+      name: UAT
     steps:
       - uses: actions/checkout@v4
 
@@ -66,6 +66,46 @@ jobs:
           }
           NODE
 
+      - name: Validate Prisma schema
+        working-directory: backend
+        env:
+          DIRECT_URL: ${{ secrets.UAT_DATABASE_URL }}
+        run: pnpm exec prisma validate
+
+      - name: Validate migration files
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = 'backend/prisma/migrations';
+          const dirs = fs.readdirSync(root, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => entry.name)
+            .sort();
+          const errors = [];
+          for (const name of dirs) {
+            const file = path.join(root, name, 'migration.sql');
+            if (!/^\d{14}_[a-z0-9_]+$/.test(name)) errors.push(`${name}: invalid migration directory name`);
+            if (!fs.existsSync(file) || !fs.readFileSync(file, 'utf8').trim()) errors.push(`${name}: migration.sql is missing or empty`);
+            else {
+              const sql = fs.readFileSync(file, 'utf8');
+              if (/\b(DROP\s+(TABLE|COLUMN|SCHEMA|TYPE|DATABASE)|TRUNCATE\s+(TABLE\s+)?|ALTER\s+TABLE\s+[^;]*\bDROP\s+COLUMN)\b/i.test(sql)) {
+                errors.push(`${name}: destructive SQL needs an explicit review and a deliberate workflow policy update`);
+              }
+            }
+          }
+          if (errors.length) {
+            for (const error of errors) console.error(error);
+            process.exit(1);
+          }
+          console.log(`Validated ${dirs.length} Prisma migration directories.`);
+          NODE
+
+      - name: Typecheck changed applications
+        run: |
+          pnpm --filter @carteio/backend typecheck
+          pnpm --filter @carteio/frontend typecheck
+
       - name: Apply pending Prisma migrations
         working-directory: backend
         env:
@@ -75,5 +115,115 @@ jobs:
       - name: Report migration failure safely
         if: failure()
         run: |
-          echo 'Migration failed. Review Prisma output and UAT migration history before retrying.'
+          echo 'UAT validation or migration failed. Review the failed step and UAT migration history before retrying.'
           echo 'Do not use prisma db push, reset the database, or edit _prisma_migrations manually.'
+
+  backend:
+    name: Deploy UAT backend
+    needs: migrate
+    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: UAT
+      url: https://uat.ai.carteio.in
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy existing Vercel backend project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.UAT_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.UAT_VERCEL_BACKEND_PROJECT_ID }}
+          VERCEL_CLI_VERSION: ${{ vars.UAT_VERCEL_CLI_VERSION }}
+        run: |
+          test -n "$VERCEL_CLI_VERSION" || { echo 'Set UAT_VERCEL_CLI_VERSION to an approved exact Vercel CLI version.'; exit 1; }
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prod --yes --token "$VERCEL_TOKEN"
+
+  frontend:
+    name: Deploy UAT frontend
+    needs: backend
+    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: UAT
+      url: https://uat.ai.carteio.in
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy existing Vercel frontend project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.UAT_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.UAT_VERCEL_FRONTEND_PROJECT_ID }}
+          VERCEL_CLI_VERSION: ${{ vars.UAT_VERCEL_CLI_VERSION }}
+        run: |
+          test -n "$VERCEL_CLI_VERSION" || { echo 'Set UAT_VERCEL_CLI_VERSION to an approved exact Vercel CLI version.'; exit 1; }
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prod --yes --token "$VERCEL_TOKEN"
+
+  smoke:
+    name: Smoke check UAT deployment
+    needs: frontend
+    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: UAT
+      url: https://uat.ai.carteio.in
+    steps:
+      - name: Check backend health through frontend proxy
+        run: |
+          set -euo pipefail
+          base='https://uat.ai.carteio.in'
+          health="$(curl --fail --silent --show-error --retry 8 --retry-delay 5 --retry-all-errors "$base/api/v1/health")"
+          node -e 'const x=JSON.parse(process.argv[1]); if (x.status !== "ok" || x.service !== "carteio-ai-api") process.exit(1)' "$health"
+
+      - name: Check database readiness through frontend proxy
+        run: |
+          set -euo pipefail
+          ready="$(curl --fail --silent --show-error --retry 8 --retry-delay 5 --retry-all-errors 'https://uat.ai.carteio.in/api/v1/ready')"
+          node -e 'const x=JSON.parse(process.argv[1]); if (x.status !== "ready" || x.database !== "connected") process.exit(1)' "$ready"
+
+      - name: Check frontend and SPA route
+        run: |
+          set -euo pipefail
+          html="$(curl --fail --silent --show-error --retry 8 --retry-delay 5 --retry-all-errors 'https://uat.ai.carteio.in/')"
+          printf '%s' "$html" | grep -qi '<html'
+          route="$(curl --fail --silent --show-error --retry 3 --retry-delay 2 'https://uat.ai.carteio.in/login')"
+          printf '%s' "$route" | grep -qi '<html'
+
+      - name: Report smoke check failure
+        if: failure()
+        run: echo 'UAT deployment completed but one or more health, readiness, API proxy, or frontend checks failed.'
+
+  deployment-disabled:
+    name: UAT deployment remains disabled
+    needs: migrate
+    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Migrations succeeded. Vercel deployment is intentionally gated; disable Vercel Git auto-deployments and set the UAT environment variable UAT_DEPLOY_ENABLED=true to activate.'
