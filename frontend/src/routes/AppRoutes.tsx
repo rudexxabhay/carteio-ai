@@ -7,6 +7,11 @@ import { InfoPage } from '../pages/documentation/InfoPage';
 import { AuthPage } from '../pages/auth/AuthPages';
 import { RequireAuth } from './RequireAuth';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
+import { WorkspaceEntry } from '../pages/workspaces/WorkspaceEntry';
+import { WorkspaceSelectorPage } from '../pages/workspaces/WorkspaceSelectorPage';
+import { OnboardingPage } from '../pages/workspaces/OnboardingPage';
+import { WorkspaceSettingsPage } from '../pages/workspaces/WorkspaceSettingsPage';
+import { WorkspaceTeamPage } from '../pages/workspaces/WorkspaceTeamPage';
 import { NotFoundPage } from '../pages/errors/NotFoundPage';
 
 export function AppRoutes() {
@@ -20,7 +25,17 @@ export function AppRoutes() {
       <Route path="/help" element={<InfoPage title="Help center" description="Find guidance for getting started with Carteio AI. Support resources are coming soon." />} />
     </Route>
     <Route element={<AuthLayout />}><Route path="/login" element={<AuthPage mode="login" />} /><Route path="/signup" element={<AuthPage mode="signup" />} /><Route path="/forgot-password" element={<AuthPage mode="forgot" />} /><Route path="/reset-password" element={<AuthPage mode="reset" />} /><Route path="/verify-email" element={<AuthPage mode="verify" />} /></Route>
-    <Route element={<RequireAuth />}><Route path="/dashboard" element={<DashboardLayout />}><Route index element={<DashboardPage />} /><Route path="*" element={<InfoPage title="Dashboard" description="Your Carteio AI workspace." path="/dashboard" noIndex />} /></Route></Route>
+    <Route element={<RequireAuth />}>
+      <Route path="/onboarding" element={<OnboardingPage/>}/>
+      <Route path="/workspaces" element={<WorkspaceSelectorPage/>}/>
+      <Route path="/dashboard" element={<WorkspaceEntry/>}/>
+      <Route path="/workspace/:slug" element={<DashboardLayout/>}>
+        <Route index element={<DashboardPage/>}/>
+        <Route path="team" element={<WorkspaceTeamPage/>}/>
+        <Route path="settings" element={<WorkspaceSettingsPage/>}/>
+        <Route path="*" element={<InfoPage title="Workspace page" description="This workspace page is not available." noIndex/>}/>
+      </Route>
+    </Route>
     <Route path="*" element={<NotFoundPage />} />
   </Routes>;
 }

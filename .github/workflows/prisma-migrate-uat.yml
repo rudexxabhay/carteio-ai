@@ -118,10 +118,33 @@ jobs:
           echo 'UAT validation or migration failed. Review the failed step and UAT migration history before retrying.'
           echo 'Do not use prisma db push, reset the database, or edit _prisma_migrations manually.'
 
+  deployment-gate:
+    name: Read UAT deployment gate
+    needs: migrate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: UAT
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - name: Read environment-scoped deployment setting
+        id: gate
+        env:
+          UAT_DEPLOY_ENABLED: ${{ vars.UAT_DEPLOY_ENABLED }}
+        run: |
+          if [[ "$UAT_DEPLOY_ENABLED" == "true" ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+            echo 'UAT deployment gate is enabled.'
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo 'UAT deployment gate is unset or false; deployments will be skipped.'
+          fi
+
   backend:
     name: Deploy UAT backend
-    needs: migrate
-    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED == 'true'
+    needs: [migrate, deployment-gate]
+    if: github.event_name == 'push' && needs.deployment-gate.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: UAT
@@ -154,8 +177,8 @@ jobs:
 
   frontend:
     name: Deploy UAT frontend
-    needs: backend
-    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED == 'true'
+    needs: [backend, deployment-gate]
+    if: github.event_name == 'push' && needs.deployment-gate.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: UAT
@@ -188,8 +211,8 @@ jobs:
 
   smoke:
     name: Smoke check UAT deployment
-    needs: frontend
-    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED == 'true'
+    needs: [frontend, deployment-gate]
+    if: github.event_name == 'push' && needs.deployment-gate.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: UAT
@@ -219,11 +242,3 @@ jobs:
       - name: Report smoke check failure
         if: failure()
         run: echo 'UAT deployment completed but one or more health, readiness, API proxy, or frontend checks failed.'
-
-  deployment-disabled:
-    name: UAT deployment remains disabled
-    needs: migrate
-    if: github.event_name == 'push' && vars.UAT_DEPLOY_ENABLED != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo 'Migrations succeeded. Vercel deployment is intentionally gated; disable Vercel Git auto-deployments and set the UAT environment variable UAT_DEPLOY_ENABLED=true to activate.'

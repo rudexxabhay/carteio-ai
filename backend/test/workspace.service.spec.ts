@@ -1,0 +1,166 @@
+import 'reflect-metadata';
+import { ConflictException, ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { PrismaService } from '../src/infrastructure/database/prisma.service';
+import { AuthSessionGuard } from '../src/modules/auth/auth-session.guard';
+import { WorkspaceController } from '../src/modules/workspaces/workspace.controller';
+import { WorkspaceService, normalizeWorkspaceSlug } from '../src/modules/workspaces/workspace.service';
+import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+
+const userId = 'b9b936fb-ff46-44c5-83fd-dd40b0d6f825';
+const otherUserId = '6a6c17b9-bd0e-42a6-81fa-5319e24994a6';
+const org = (overrides: Record<string, unknown> = {}) => ({
+  id: 'org-1', name: 'Carteio', slug: 'carteio', websiteUrl: null, businessType: null,
+  status: 'ACTIVE', createdAt: new Date('2026-10-10T00:00:00Z'), updatedAt: new Date('2026-10-10T00:00:00Z'), ...overrides,
+});
+const workspaceService = (db: Record<string, any>) => new WorkspaceService(db as unknown as PrismaService);
+
+describe('workspace authorization and creation', () => {
+  it('requires a verified authenticated session on workspace endpoints', async () => {
+    const guard = new AuthSessionGuard({ current: jest.fn().mockRejectedValue(new UnauthorizedException()) } as any);
+    const request = { headers: {} };
+    const context = { switchToHttp: () => ({ getRequest: () => request }) } as any;
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(Reflect.getMetadata('__guards__', WorkspaceController)).toContain(AuthSessionGuard);
+  });
+
+  it('normalizes workspace slugs consistently and rejects reserved or invalid values', () => {
+    expect(normalizeWorkspaceSlug('  Carteió  AI ')).toBe('carteio-ai');
+    expect(normalizeWorkspaceSlug('my_workspace')).toBe('my-workspace');
+    expect(() => normalizeWorkspaceSlug('admin')).toThrow();
+    expect(() => normalizeWorkspaceSlug('has/route')).toThrow();
+  });
+
+  it('creates an organization, owner membership, and audit event in one transaction', async () => {
+    const calls: Array<{ model: string; args: any }> = [];
+    const transaction = {
+      organization: { create: jest.fn(async ({ data }: any) => { calls.push({ model: 'organization', args: data }); return org(data); }) },
+      organizationMembership: { create: jest.fn(async ({ data }: any) => { calls.push({ model: 'membership', args: data }); return data; }) },
+      auditEvent: { create: jest.fn(async ({ data }: any) => { calls.push({ model: 'audit', args: data }); return data; }) },
+    };
+    const db = { $transaction: jest.fn(async (callback: (tx: any) => unknown) => callback(transaction)) };
+    const result = await workspaceService(db).create(userId, { name: ' Carteio ', slug: 'CARTEIO', websiteUrl: 'https://carteio.in', businessType: 'SaaS' });
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(calls.map((call) => call.model)).toEqual(['organization', 'membership', 'audit']);
+    expect(calls[0]?.args).toMatchObject({ name: 'Carteio', slug: 'carteio', websiteUrl: 'https://carteio.in', businessType: 'SaaS' });
+    expect(calls[1]?.args).toMatchObject({ userId, role: 'OWNER', status: 'ACTIVE' });
+    expect(calls[2]?.args).toMatchObject({ actorUserId: userId, action: 'workspace.created', entityType: 'organization' });
+    expect(result).toMatchObject({ slug: 'carteio', role: 'owner', status: 'active' });
+  });
+
+  it('maps a slug uniqueness race to a safe conflict response', async () => {
+    const db = { $transaction: jest.fn(async (_callback?: unknown) => { throw { code: 'P2002' }; }) };
+    await expect(workspaceService(db).create(userId, { name: 'Example', slug: 'example' })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rolls back the complete creation callback when owner membership or audit creation fails', async () => {
+    const operations: string[] = [];
+    const committed: string[] = [];
+    const transaction = {
+      organization: { create: jest.fn(async () => { operations.push('organization'); return org(); }) },
+      organizationMembership: { create: jest.fn(async () => { operations.push('membership'); return {}; }) },
+      auditEvent: { create: jest.fn(async () => { throw new Error('audit unavailable'); }) },
+    };
+    const db = { $transaction: jest.fn(async (callback: (tx: any) => unknown) => {
+      const staged: string[] = [];
+      const wrapped = {
+        organization: { create: async (...args: any[]) => { const value = await transaction.organization.create(...args); staged.push('organization'); return value; } },
+        organizationMembership: { create: async (...args: any[]) => { const value = await transaction.organizationMembership.create(...args); staged.push('membership'); return value; } },
+        auditEvent: transaction.auditEvent,
+      };
+      const result = await callback(wrapped);
+      committed.push(...staged);
+      return result;
+    }) };
+    await expect(workspaceService(db).create(userId, { name: 'Example', slug: 'example' })).rejects.toThrow('audit unavailable');
+    expect(operations).toEqual(['organization', 'membership']);
+    expect(committed).toEqual([]);
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows the database unique constraint to resolve concurrent slug creation races', async () => {
+    const slugs = new Set<string>();
+    const db = {
+      $transaction: jest.fn(async (callback) => callback({
+        organization: { create: jest.fn(async ({ data }: any) => {
+          if (slugs.has(data.slug)) throw { code: 'P2002' };
+          slugs.add(data.slug);
+          return org(data);
+        }) },
+        organizationMembership: { create: jest.fn(async () => ({})) },
+        auditEvent: { create: jest.fn(async () => ({})) },
+      })),
+    };
+    const results = await Promise.allSettled([
+      workspaceService(db).create(userId, { name: 'Example', slug: 'example' }),
+      workspaceService(db).create(otherUserId, { name: 'Example', slug: 'example' }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected' && result.reason instanceof ConflictException)).toHaveLength(1);
+  });
+
+  it('lists only active memberships belonging to the current user', async () => {
+    const findMany = jest.fn().mockResolvedValue([{ role: 'OWNER', organization: org() }]);
+    const count = jest.fn().mockResolvedValue(1);
+    const result = await workspaceService({ organizationMembership: { findMany, count } }).list(userId, { page: 1, pageSize: 25 });
+    expect(findMany.mock.calls[0]?.[0].where).toEqual({ userId, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
+    expect(result.workspaces).toHaveLength(1);
+    expect(result.workspaces[0]).toMatchObject({ slug: 'carteio', role: 'owner' });
+  });
+
+  it('hides unauthorized or inactive organizations as not found', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const service = workspaceService({ organizationMembership: { findFirst } });
+    await expect(service.getAuthorized(otherUserId, 'carteio')).rejects.toBeInstanceOf(NotFoundException);
+    expect(findFirst.mock.calls[0]?.[0].where).toEqual({ userId: otherUserId, status: 'ACTIVE', organization: { slug: 'carteio', status: 'ACTIVE' } });
+  });
+
+  it('returns a generic not-found API error without revealing organization identifiers', () => {
+    const filter = new AllExceptionsFilter();
+    const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const request = { requestId: 'req-1', method: 'GET', route: { path: '/workspaces/:slug' } };
+    const host = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as any;
+    filter.catch(new NotFoundException({ code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found.' }), host);
+    expect(response.status).toHaveBeenCalledWith(404);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found.', path: '/workspaces/:slug' }));
+    expect(JSON.stringify(response.json.mock.calls)).not.toContain('org-secret');
+  });
+
+  it('prevents members from changing settings and never reaches the cross-tenant update', async () => {
+    const update = jest.fn();
+    const service = workspaceService({
+      organizationMembership: { findFirst: jest.fn().mockResolvedValue({ organizationId: 'org-1', role: 'MEMBER' }) },
+      organization: { update },
+    });
+    await expect(service.update(otherUserId, 'carteio', { name: 'Changed' })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('rejects cross-tenant updates without exposing whether the slug exists', async () => {
+    const update = jest.fn();
+    const service = workspaceService({ organizationMembership: { findFirst: jest.fn().mockResolvedValue(null) }, organization: { update } });
+    await expect(service.update(otherUserId, 'carteio', { name: 'Changed' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('returns member names and roles without emails or other private fields', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ organizationId: 'org-1', role: 'OWNER' });
+    const findMany = jest.fn().mockResolvedValue([{ id: 'membership-1', role: 'OWNER', createdAt: new Date(), user: { id: userId, name: 'Owner' } }]);
+    const count = jest.fn().mockResolvedValue(1);
+    const result = await workspaceService({ organizationMembership: { findFirst, findMany, count } }).members(userId, 'carteio', { page: 1, pageSize: 25 });
+    expect(findMany.mock.calls[0]?.[0]).toMatchObject({ where: { organizationId: 'org-1', status: 'ACTIVE' }, select: { user: { select: { id: true, name: true } } } });
+    expect(result.members[0]).toEqual({ id: userId, name: 'Owner', role: 'owner', joinedAt: expect.any(Date) });
+    expect(JSON.stringify(result)).not.toContain('@');
+  });
+
+  it('uses a forward-only migration for optional workspace profile fields', () => {
+    const schema = readFileSync(resolve(__dirname, '../prisma/schema.prisma'), 'utf8');
+    const migration = readFileSync(resolve(__dirname, '../prisma/migrations/20261010120000_phase_05_workspace_profile/migration.sql'), 'utf8');
+    expect(schema).toContain('websiteUrl  String?');
+    expect(schema).toContain('businessType String?');
+    expect(migration).toContain('ADD COLUMN "websiteUrl"');
+    expect(migration).toContain('ADD COLUMN "businessType"');
+    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN|SCHEMA)/i);
+  });
+});

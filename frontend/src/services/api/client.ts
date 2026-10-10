@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-async function apiRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), apiConfig.timeoutMs);
   const abortFromCaller = () => controller.abort(signal?.reason);
@@ -49,3 +49,4 @@ async function apiRequest<T>(method: 'GET' | 'POST', path: string, body?: unknow
 
 export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> { return apiRequest<T>('GET', path, undefined, signal); }
 export function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> { return apiRequest<T>('POST', path, body, signal); }
+export function apiPatch<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> { return apiRequest<T>('PATCH', path, body, signal); }
