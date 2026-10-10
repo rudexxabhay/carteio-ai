@@ -7,9 +7,11 @@ import { WorkspaceModule } from './modules/workspaces/workspace.module';
 @Module({})
 export class AppModule {
   static register(databaseEnabled: boolean): DynamicModule {
+    const databaseModule = DatabaseModule.register(databaseEnabled);
+    const authModule = AuthModule.register(databaseModule);
     return {
       module: AppModule,
-      imports: [HealthModule.register(DatabaseModule.register(databaseEnabled)), ...(databaseEnabled ? [AuthModule, WorkspaceModule] : [])],
+      imports: [HealthModule.register(databaseModule), ...(databaseEnabled ? [authModule, WorkspaceModule.register(authModule, databaseModule)] : [])],
     };
   }
 }

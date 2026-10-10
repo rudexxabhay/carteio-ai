@@ -1,12 +1,16 @@
-import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { Module, type DynamicModule } from '@nestjs/common';
 import { WorkspaceController } from './workspace.controller';
 import { WorkspaceService } from './workspace.service';
 
-@Module({
-  imports: [AuthModule],
-  controllers: [WorkspaceController],
-  providers: [WorkspaceService],
-  exports: [WorkspaceService],
-})
-export class WorkspaceModule {}
+@Module({})
+export class WorkspaceModule {
+  static register(authModule: DynamicModule, databaseModule: DynamicModule): DynamicModule {
+    return {
+      module: WorkspaceModule,
+      imports: [authModule, databaseModule],
+      controllers: [WorkspaceController],
+      providers: [WorkspaceService],
+      exports: [WorkspaceService],
+    };
+  }
+}
