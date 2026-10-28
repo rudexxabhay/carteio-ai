@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
@@ -26,6 +26,12 @@ export class UpdateWorkspaceDto {
 
   @Transform(trim) @IsOptional() @IsString() @MaxLength(80)
   businessType?: string | null;
+
+  @Transform(trim) @IsOptional() @IsString() @MinLength(1) @MaxLength(80)
+  timezone?: string;
+
+  @Transform(trim) @IsOptional() @IsString() @Matches(/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/) @MaxLength(35)
+  locale?: string;
 }
 
 export class WorkspacePaginationDto {

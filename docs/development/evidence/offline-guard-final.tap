@@ -1,0 +1,11 @@
+✔ Phase 00 refuses unmocked provider fetches (3.560065ms)
+✔ Phase 00 refuses unmocked Shopify HTTP clients (0.291197ms)
+✔ Phase 00 refuses socket clients including live database drivers (1.466385ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108.714036

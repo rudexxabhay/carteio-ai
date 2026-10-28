@@ -1,0 +1,3410 @@
+{
+  "run": "B2",
+  "sourceReport": "/tmp/carteio-phase00-backend-baseline.json",
+  "exitCode": 1,
+  "selection": "unfiltered",
+  "reportedCounters": {
+    "numTotalTestSuites": 74,
+    "numPassedTestSuites": 42,
+    "numFailedTestSuites": 32,
+    "numRuntimeErrorTestSuites": 5,
+    "numTotalTests": 573,
+    "numPassedTests": 508,
+    "numFailedTests": 65,
+    "numPendingTests": 0
+  },
+  "fileCount": 74,
+  "files": [
+    {
+      "path": "backend/test/assistant.playground.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [
+        "TS2339",
+        "TS2552",
+        "TS6133"
+      ],
+      "assertions": []
+    },
+    {
+      "path": "backend/test/conversation-provider.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [
+        "TS1005",
+        "TS1135"
+      ],
+      "assertions": []
+    },
+    {
+      "path": "backend/test/knowledge-processing.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "KnowledgeProcessingService returns bounded tenant-scoped chunk previews and marks active versus stale generations",
+          "status": "failed",
+          "title": "returns bounded tenant-scoped chunk previews and marks active versus stale generations"
+        },
+        {
+          "name": "KnowledgeProcessingService does not reveal chunk state for a source outside the authorized workspace",
+          "status": "passed",
+          "title": "does not reveal chunk state for a source outside the authorized workspace"
+        },
+        {
+          "name": "KnowledgeProcessingService indexes FAQ sources into an unpublished generation before setting READY",
+          "status": "passed",
+          "title": "indexes FAQ sources into an unpublished generation before setting READY"
+        },
+        {
+          "name": "KnowledgeProcessingService indexes TEXT sources into an unpublished generation before setting READY",
+          "status": "passed",
+          "title": "indexes TEXT sources into an unpublished generation before setting READY"
+        },
+        {
+          "name": "KnowledgeProcessingService indexes a FAQ lexically without embedding credentials or outbound model calls",
+          "status": "passed",
+          "title": "indexes a FAQ lexically without embedding credentials or outbound model calls"
+        },
+        {
+          "name": "KnowledgeProcessingService rejects incompatible semantic dimensions while still publishing the lexical generation",
+          "status": "passed",
+          "title": "rejects incompatible semantic dimensions while still publishing the lexical generation"
+        },
+        {
+          "name": "KnowledgeProcessingService publishes lexical readiness without semantic vectors after an embedding outage",
+          "status": "passed",
+          "title": "publishes lexical readiness without semantic vectors after an embedding outage"
+        },
+        {
+          "name": "KnowledgeProcessingService keeps Knowledge text and exception-supplied values out of processing failure logs and stored diagnostics",
+          "status": "passed",
+          "title": "keeps Knowledge text and exception-supplied values out of processing failure logs and stored diagnostics"
+        },
+        {
+          "name": "KnowledgeProcessingService records only safe P2028 subtype and timing metadata",
+          "status": "passed",
+          "title": "records only safe P2028 subtype and timing metadata"
+        },
+        {
+          "name": "KnowledgeProcessingService does not publish a generation after the worker loses its lease",
+          "status": "passed",
+          "title": "does not publish a generation after the worker loses its lease"
+        },
+        {
+          "name": "KnowledgeProcessingService claims a durable job with a lock-safe query and moves the source to PROCESSING",
+          "status": "passed",
+          "title": "claims a durable job with a lock-safe query and moves the source to PROCESSING"
+        },
+        {
+          "name": "KnowledgeProcessingService rejects website processing requests while allowing FAQ/Text indexing jobs",
+          "status": "failed",
+          "title": "rejects website processing requests while allowing FAQ/Text indexing jobs"
+        },
+        {
+          "name": "KnowledgeProcessingService auto-enqueues imported FAQ/text rows discovered by the worker poller",
+          "status": "passed",
+          "title": "auto-enqueues imported FAQ/text rows discovered by the worker poller"
+        },
+        {
+          "name": "KnowledgeProcessingService moves a crashed job at its retry ceiling to FAILED instead of leaving it leased forever",
+          "status": "failed",
+          "title": "moves a crashed job at its retry ceiling to FAILED instead of leaving it leased forever"
+        },
+        {
+          "name": "KnowledgeProcessingService bounds search to session workspace and resolver-provided source IDs",
+          "status": "passed",
+          "title": "bounds search to session workspace and resolver-provided source IDs"
+        },
+        {
+          "name": "KnowledgeProcessingService searches a small set of English paraphrases in one tenant-scoped lexical query",
+          "status": "passed",
+          "title": "searches a small set of English paraphrases in one tenant-scoped lexical query"
+        },
+        {
+          "name": "KnowledgeProcessingService deduplicates hybrid candidates and labels reciprocal-rank fusion honestly",
+          "status": "passed",
+          "title": "deduplicates hybrid candidates and labels reciprocal-rank fusion honestly"
+        },
+        {
+          "name": "KnowledgeProcessingService reports eligible source records separately from an empty active index",
+          "status": "passed",
+          "title": "reports eligible source records separately from an empty active index"
+        },
+        {
+          "name": "KnowledgeProcessingService reports a lexical miss distinctly when semantic retrieval is not configured",
+          "status": "passed",
+          "title": "reports a lexical miss distinctly when semantic retrieval is not configured"
+        },
+        {
+          "name": "KnowledgeProcessingService does not search when the effective resolver returns no eligible sources",
+          "status": "passed",
+          "title": "does not search when the effective resolver returns no eligible sources"
+        },
+        {
+          "name": "KnowledgeProcessingService returns the same authorized public knowledge scope for the assistant availability read model",
+          "status": "failed",
+          "title": "returns the same authorized public knowledge scope for the assistant availability read model"
+        },
+        {
+          "name": "KnowledgeProcessingService constrains public retrieval to resolver-authorized tenant sources without coupling website hostname to widget domain",
+          "status": "failed",
+          "title": "constrains public retrieval to resolver-authorized tenant sources without coupling website hostname to widget domain"
+        },
+        {
+          "name": "KnowledgeProcessingService allows a tenant-owned public website source on a different host from the widget domain",
+          "status": "passed",
+          "title": "allows a tenant-owned public website source on a different host from the widget domain"
+        },
+        {
+          "name": "KnowledgeProcessingService keeps Shopify-discovered storefront ownership verification for public website knowledge",
+          "status": "passed",
+          "title": "keeps Shopify-discovered storefront ownership verification for public website knowledge"
+        },
+        {
+          "name": "KnowledgeProcessingService batch revalidates chunk tenant, public visibility, lifecycle, generation, and assistant authorization",
+          "status": "passed",
+          "title": "batch revalidates chunk tenant, public visibility, lifecycle, generation, and assistant authorization"
+        },
+        {
+          "name": "KnowledgeProcessingService shares only public eligible source language hints with query interpretation",
+          "status": "failed",
+          "title": "shares only public eligible source language hints with query interpretation"
+        },
+        {
+          "name": "KnowledgeProcessingService performs lexical preview without an embedding provider or embedding query",
+          "status": "passed",
+          "title": "performs lexical preview without an embedding provider or embedding query"
+        },
+        {
+          "name": "KnowledgeProcessingService uses English stemming and stop-word handling for natural-language lexical policy questions",
+          "status": "passed",
+          "title": "uses English stemming and stop-word handling for natural-language lexical policy questions"
+        },
+        {
+          "name": "KnowledgeProcessingService limits the server-side public retrieval scope to active verified origin and public sources",
+          "status": "passed",
+          "title": "limits the server-side public retrieval scope to active verified origin and public sources"
+        },
+        {
+          "name": "KnowledgeProcessingService rejects a MEMBER from the search preview before querying embeddings or chunks",
+          "status": "passed",
+          "title": "rejects a MEMBER from the search preview before querying embeddings or chunks"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/platform-commerce.adapters.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Phase 16 platform adapter security and normalization routes documented business webhook topics to bounded refresh resources and rejects unrelated topics",
+          "status": "passed",
+          "title": "routes documented business webhook topics to bounded refresh resources and rejects unrelated topics"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization requires Shopify read_products and validates scopes through the provider response",
+          "status": "passed",
+          "title": "requires Shopify read_products and validates scopes through the provider response"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization advertises an added read capability only after an authenticated provider probe succeeds",
+          "status": "passed",
+          "title": "advertises an added read capability only after an authenticated provider probe succeeds"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization refreshes an expiring Shopify token before discovering installed scopes",
+          "status": "passed",
+          "title": "refreshes an expiring Shopify token before discovering installed scopes"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization checks Shopify signatures against exact raw bytes and shop origin",
+          "status": "passed",
+          "title": "checks Shopify signatures against exact raw bytes and shop origin"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization verifies WooCommerce with a real products request and only grants permitted order capability",
+          "status": "passed",
+          "title": "verifies WooCommerce with a real products request and only grants permitted order capability"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization normalizes provider products without inventing currency or inventory",
+          "status": "passed",
+          "title": "normalizes provider products without inventing currency or inventory"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization preserves WooCommerce publication and stock status independently and never converts missing stock to zero",
+          "status": "passed",
+          "title": "preserves WooCommerce publication and stock status independently and never converts missing stock to zero"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization retries a WooCommerce page on rate limits instead of treating it as completed",
+          "status": "passed",
+          "title": "retries a WooCommerce page on rate limits instead of treating it as completed"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization rejects a WooCommerce webhook with a mismatched source even when its signature is valid",
+          "status": "passed",
+          "title": "rejects a WooCommerce webhook with a mismatched source even when its signature is valid"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization validates WooCommerce HTTPS and requires both API credentials",
+          "status": "passed",
+          "title": "validates WooCommerce HTTPS and requires both API credentials"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization uses a real provider cursor and requests changes after the last successful checkpoint",
+          "status": "passed",
+          "title": "uses a real provider cursor and requests changes after the last successful checkpoint"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization normalizes Shopify product type, taxonomy, collections, variant options, compare-at price, and safe image metadata",
+          "status": "passed",
+          "title": "normalizes Shopify product type, taxonomy, collections, variant options, compare-at price, and safe image metadata"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization syncs verified Shopify locations as scoped, normalized knowledge records",
+          "status": "passed",
+          "title": "syncs verified Shopify locations as scoped, normalized knowledge records"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization does not issue a Shopify content query when the current verified grants omit its scope",
+          "status": "passed",
+          "title": "does not issue a Shopify content query when the current verified grants omit its scope"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization returns a retryable connector rate-limit error for Shopify HTTP and GraphQL throttling",
+          "status": "passed",
+          "title": "returns a retryable connector rate-limit error for Shopify HTTP and GraphQL throttling"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization continues Shopify online-page pagination and strips active script markup before indexing",
+          "status": "passed",
+          "title": "continues Shopify online-page pagination and strips active script markup before indexing"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization queries and normalizes SHOPIFY_SHIPPING only when its verified scope is supplied",
+          "status": "passed",
+          "title": "queries and normalizes SHOPIFY_SHIPPING only when its verified scope is supplied"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization queries and normalizes SHOPIFY_LEGAL_POLICIES only when its verified scope is supplied",
+          "status": "passed",
+          "title": "queries and normalizes SHOPIFY_LEGAL_POLICIES only when its verified scope is supplied"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization queries and normalizes SHOPIFY_MARKETS only when its verified scope is supplied",
+          "status": "passed",
+          "title": "queries and normalizes SHOPIFY_MARKETS only when its verified scope is supplied"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization queries and normalizes SHOPIFY_DISCOUNTS only when its verified scope is supplied",
+          "status": "passed",
+          "title": "queries and normalizes SHOPIFY_DISCOUNTS only when its verified scope is supplied"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization queries and normalizes SHOPIFY_METAOBJECT_DEFINITIONS only when its verified scope is supplied",
+          "status": "passed",
+          "title": "queries and normalizes SHOPIFY_METAOBJECT_DEFINITIONS only when its verified scope is supplied"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization registers metaobject reads only behind both definition and entry scopes",
+          "status": "passed",
+          "title": "registers metaobject reads only behind both definition and entry scopes"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization rejects private, sensitive, or unknown metaobject definition fields",
+          "status": "passed",
+          "title": "rejects private, sensitive, or unknown metaobject definition fields"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization syncs entries only for currently public safe definitions and filters undeclared entry fields",
+          "status": "passed",
+          "title": "syncs entries only for currently public safe definitions and filters undeclared entry fields"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization continues collection pagination to include remaining pages",
+          "status": "passed",
+          "title": "continues collection pagination to include remaining pages"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization retrieves product images across cursors in order and removes duplicate IDs",
+          "status": "passed",
+          "title": "retrieves product images across cursors in order and removes duplicate IDs"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization fails shipping sync when nested delivery zone or method pages are truncated",
+          "status": "passed",
+          "title": "fails shipping sync when nested delivery zone or method pages are truncated"
+        },
+        {
+          "name": "Phase 16 platform adapter security and normalization normalizes Shopify order totals and provider update time without selecting customer data",
+          "status": "passed",
+          "title": "normalizes Shopify order totals and provider update time without selecting customer data"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConnectorService tenant and verification boundaries scopes instance lookup to the organization returned by workspace authorization",
+          "status": "passed",
+          "title": "scopes instance lookup to the organization returned by workspace authorization"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries refuses to queue synchronization before genuine connector verification",
+          "status": "passed",
+          "title": "refuses to queue synchronization before genuine connector verification"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries keeps Shopify assistant order access disabled without verified customer ownership",
+          "status": "failed",
+          "title": "keeps Shopify assistant order access disabled without verified customer ownership"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries does not infer requested or granted status from SHOPIFY_SCOPES",
+          "status": "passed",
+          "title": "does not infer requested or granted status from SHOPIFY_SCOPES"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries returns each customer organization’s own Shopify grant snapshot",
+          "status": "passed",
+          "title": "returns each customer organization’s own Shopify grant snapshot"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries reflects assistant permission revocation in the Shopify permission response",
+          "status": "passed",
+          "title": "reflects assistant permission revocation in the Shopify permission response"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries saves the assistant-scoped product permission and returns the value read back from persisted state",
+          "status": "passed",
+          "title": "saves the assistant-scoped product permission and returns the value read back from persisted state"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries rejects an assistant permission write when the assistant belongs to another workspace",
+          "status": "passed",
+          "title": "rejects an assistant permission write when the assistant belongs to another workspace"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries does not build a successful permission response when the write transaction fails",
+          "status": "passed",
+          "title": "does not build a successful permission response when the write transaction fails"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries reports persisted Shopify record counts from tenant scoped storage queries",
+          "status": "passed",
+          "title": "reports persisted Shopify record counts from tenant scoped storage queries"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries persists Shopify scope revocations and purges data protected by the revoked grants",
+          "status": "failed",
+          "title": "persists Shopify scope revocations and purges data protected by the revoked grants"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries never decrypts or returns stored credential material in connector listing",
+          "status": "passed",
+          "title": "never decrypts or returns stored credential material in connector listing"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries retries only a failed job belonging to the authorized tenant and connector",
+          "status": "passed",
+          "title": "retries only a failed job belonging to the authorized tenant and connector"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries runs slow Shopify verification outside Prisma transactions and atomically persists capabilities and scopes",
+          "status": "passed",
+          "title": "runs slow Shopify verification outside Prisma transactions and atomically persists capabilities and scopes"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries does not report a connector verified when final Prisma persistence fails with P2028",
+          "status": "passed",
+          "title": "does not report a connector verified when final Prisma persistence fails with P2028"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries does not start a second verification while the persisted CONNECTING claim is still fresh",
+          "status": "failed",
+          "title": "does not start a second verification while the persisted CONNECTING claim is still fresh"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries allows an explicit verification request to recover a stale CONNECTING claim",
+          "status": "failed",
+          "title": "allows an explicit verification request to recover a stale CONNECTING claim"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries prevents a stale verification attempt from persisting scopes after its claim is superseded",
+          "status": "passed",
+          "title": "prevents a stale verification attempt from persisting scopes after its claim is superseded"
+        },
+        {
+          "name": "ConnectorService tenant and verification boundaries removes only the disconnected Shopify connection commerce records and preserves crawler knowledge",
+          "status": "failed",
+          "title": "removes only the disconnected Shopify connection commerce records and preserves crawler knowledge"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-base.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "KnowledgeBaseService creates a normalized workspace-owned base and translates duplicate names",
+          "status": "passed",
+          "title": "creates a normalized workspace-owned base and translates duplicate names"
+        },
+        {
+          "name": "KnowledgeBaseService edits and archives a base without deleting its source or assistant memberships",
+          "status": "passed",
+          "title": "edits and archives a base without deleting its source or assistant memberships"
+        },
+        {
+          "name": "KnowledgeBaseService persists the opt-in auto-link policy through a tenant-qualified manager update",
+          "status": "passed",
+          "title": "persists the opt-in auto-link policy through a tenant-qualified manager update"
+        },
+        {
+          "name": "KnowledgeBaseService requires manager membership and rejects cross-tenant sources in bulk assignment",
+          "status": "passed",
+          "title": "requires manager membership and rejects cross-tenant sources in bulk assignment"
+        },
+        {
+          "name": "KnowledgeBaseService uses bounded database pagination and name search for collection lists",
+          "status": "passed",
+          "title": "uses bounded database pagination and name search for collection lists"
+        },
+        {
+          "name": "KnowledgeBaseService lists only sources without membership in any active base using bounded workspace filters",
+          "status": "passed",
+          "title": "lists only sources without membership in any active base using bounded workspace filters"
+        },
+        {
+          "name": "KnowledgeBaseService reports current-generation page/chunk counts and indexing time rather than total stale records",
+          "status": "passed",
+          "title": "reports current-generation page/chunk counts and indexing time rather than total stale records"
+        },
+        {
+          "name": "KnowledgeBaseService normalizes source enum values for collection UI contracts while preserving website verification state",
+          "status": "passed",
+          "title": "normalizes source enum values for collection UI contracts while preserving website verification state"
+        },
+        {
+          "name": "KnowledgeBaseService adds unique memberships in a bounded transaction and reports duplicates accurately",
+          "status": "passed",
+          "title": "adds unique memberships in a bounded transaction and reports duplicates accurately"
+        },
+        {
+          "name": "KnowledgeBaseService reports restricted visibility and processing blockers without changing those source records",
+          "status": "passed",
+          "title": "reports restricted visibility and processing blockers without changing those source records"
+        },
+        {
+          "name": "KnowledgeBaseService reuses a canonical source in different bases and removes memberships without removing the source",
+          "status": "passed",
+          "title": "reuses a canonical source in different bases and removes memberships without removing the source"
+        },
+        {
+          "name": "KnowledgeBaseService allows one base to link to multiple assistants and rejects archived-base links",
+          "status": "passed",
+          "title": "allows one base to link to multiple assistants and rejects archived-base links"
+        },
+        {
+          "name": "KnowledgeBaseService offers only active assistants for new Knowledge Base links and blocks inactive IDs server-side",
+          "status": "passed",
+          "title": "offers only active assistants for new Knowledge Base links and blocks inactive IDs server-side"
+        },
+        {
+          "name": "KnowledgeBaseService keeps assistant links organization-scoped and reports duplicate relationship attempts",
+          "status": "failed",
+          "title": "keeps assistant links organization-scoped and reports duplicate relationship attempts"
+        },
+        {
+          "name": "KnowledgeBaseService replaces assistant/base links atomically without changing legacy direct source links",
+          "status": "passed",
+          "title": "replaces assistant/base links atomically without changing legacy direct source links"
+        },
+        {
+          "name": "KnowledgeBaseService rejects archived or cross-tenant bases before replacing assistant links",
+          "status": "passed",
+          "title": "rejects archived or cross-tenant bases before replacing assistant links"
+        },
+        {
+          "name": "KnowledgeBaseService resolves ready sources from direct and base links once, excluding archived bases",
+          "status": "passed",
+          "title": "resolves ready sources from direct and base links once, excluding archived bases"
+        },
+        {
+          "name": "KnowledgeBaseService uses a sole active base automatically for public ready sources while keeping its restricted sources private",
+          "status": "failed",
+          "title": "uses a sole active base automatically for public ready sources while keeping its restricted sources private"
+        },
+        {
+          "name": "KnowledgeBaseService includes directly assigned public sources in public effective retrieval while keeping the query tenant-scoped",
+          "status": "failed",
+          "title": "includes directly assigned public sources in public effective retrieval while keeping the query tenant-scoped"
+        },
+        {
+          "name": "KnowledgeBaseService resolves all existing public indexed workspace sources under the assistant-level policy without duplicate paths",
+          "status": "failed",
+          "title": "resolves all existing public indexed workspace sources under the assistant-level policy without duplicate paths"
+        },
+        {
+          "name": "KnowledgeBaseService does not resolve restricted or unindexed sources for public automatic access",
+          "status": "passed",
+          "title": "does not resolve restricted or unindexed sources for public automatic access"
+        },
+        {
+          "name": "KnowledgeBaseService includes a newly indexed public source on the next resolver call without writing an assignment row",
+          "status": "failed",
+          "title": "includes a newly indexed public source on the next resolver call without writing an assignment row"
+        },
+        {
+          "name": "KnowledgeBaseService requires explicit assignments when multiple active bases exist and preserves tenant scoping",
+          "status": "passed",
+          "title": "requires explicit assignments when multiple active bases exist and preserves tenant scoping"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "KnowledgeService normalizes public website URLs and rejects unsafe destinations",
+          "status": "passed",
+          "title": "normalizes public website URLs and rejects unsafe destinations"
+        },
+        {
+          "name": "KnowledgeService validates website DTO payloads",
+          "status": "passed",
+          "title": "validates website DTO payloads"
+        },
+        {
+          "name": "KnowledgeService makes only explicitly selected owner-reviewed FAQ sources public and reports blocked records",
+          "status": "passed",
+          "title": "makes only explicitly selected owner-reviewed FAQ sources public and reports blocked records"
+        },
+        {
+          "name": "KnowledgeService rejects bulk visibility changes for non-owners",
+          "status": "passed",
+          "title": "rejects bulk visibility changes for non-owners"
+        },
+        {
+          "name": "KnowledgeService persists an explicitly customer-facing FAQ as PUBLIC_REFERENCE",
+          "status": "passed",
+          "title": "persists an explicitly customer-facing FAQ as PUBLIC_REFERENCE"
+        },
+        {
+          "name": "KnowledgeService atomically enables assistant workspace knowledge and explicitly selected FAQs for an owner",
+          "status": "passed",
+          "title": "atomically enables assistant workspace knowledge and explicitly selected FAQs for an owner"
+        },
+        {
+          "name": "KnowledgeService supports a single activation request for 100 selected FAQs",
+          "status": "passed",
+          "title": "supports a single activation request for 100 selected FAQs"
+        },
+        {
+          "name": "KnowledgeService rejects an assistant from another workspace without changing selected source visibility",
+          "status": "passed",
+          "title": "rejects an assistant from another workspace without changing selected source visibility"
+        },
+        {
+          "name": "KnowledgeService keeps customer knowledge activation owner-only",
+          "status": "passed",
+          "title": "keeps customer knowledge activation owner-only"
+        },
+        {
+          "name": "KnowledgeService preserves explicit public visibility on imported FAQ rows",
+          "status": "passed",
+          "title": "preserves explicit public visibility on imported FAQ rows"
+        },
+        {
+          "name": "KnowledgeService rejects website knowledge and atomically queues a new FAQ",
+          "status": "failed",
+          "title": "rejects website knowledge and atomically queues a new FAQ"
+        },
+        {
+          "name": "KnowledgeService creates knowledge directly inside a collection in the same transaction",
+          "status": "passed",
+          "title": "creates knowledge directly inside a collection in the same transaction"
+        },
+        {
+          "name": "KnowledgeService auto-links newly created FAQ and text sources only to opted-in bases without changing visibility",
+          "status": "passed",
+          "title": "auto-links newly created FAQ and text sources only to opted-in bases without changing visibility"
+        },
+        {
+          "name": "KnowledgeService creates a FAQ batch and collection memberships atomically with conservative visibility",
+          "status": "passed",
+          "title": "creates a FAQ batch and collection memberships atomically with conservative visibility"
+        },
+        {
+          "name": "KnowledgeService imports only valid new FAQ rows with internal visibility and reports duplicate skips",
+          "status": "passed",
+          "title": "imports only valid new FAQ rows with internal visibility and reports duplicate skips"
+        },
+        {
+          "name": "KnowledgeService preserves workspace authorization for FAQ imports and propagates persistence failures without queuing indexing",
+          "status": "passed",
+          "title": "preserves workspace authorization for FAQ imports and propagates persistence failures without queuing indexing"
+        },
+        {
+          "name": "KnowledgeService persists all 154 valid FAQ rows and queues one indexing job for every created source",
+          "status": "passed",
+          "title": "persists all 154 valid FAQ rows and queues one indexing job for every created source"
+        },
+        {
+          "name": "KnowledgeService archives selected sources with workspace scoping while retaining membership records",
+          "status": "failed",
+          "title": "archives selected sources with workspace scoping while retaining membership records"
+        },
+        {
+          "name": "KnowledgeService requires manager membership for mutations and rejects duplicate source keys",
+          "status": "passed",
+          "title": "requires manager membership for mutations and rejects duplicate source keys"
+        },
+        {
+          "name": "KnowledgeService allows workspace admins to create knowledge while members remain read-only",
+          "status": "passed",
+          "title": "allows workspace admins to create knowledge while members remain read-only"
+        },
+        {
+          "name": "KnowledgeService scopes source and assistant access to current tenant",
+          "status": "passed",
+          "title": "scopes source and assistant access to current tenant"
+        },
+        {
+          "name": "KnowledgeService uses tenant-qualified source updates and excludes archived sources from active lists",
+          "status": "failed",
+          "title": "uses tenant-qualified source updates and excludes archived sources from active lists"
+        },
+        {
+          "name": "KnowledgeService preserves Unicode text body exactly when creating a text source",
+          "status": "passed",
+          "title": "preserves Unicode text body exactly when creating a text source"
+        },
+        {
+          "name": "KnowledgeService rejects duplicate links and unlinks the relation without deleting the source",
+          "status": "passed",
+          "title": "rejects duplicate links and unlinks the relation without deleting the source"
+        },
+        {
+          "name": "KnowledgeService does not permit archived sources to be linked to an assistant",
+          "status": "passed",
+          "title": "does not permit archived sources to be linked to an assistant"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/playground-diagnostics.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Playground diagnostics reports loaded behavior metadata and whether the behavior layer reached an outbound request without exposing content",
+          "status": "passed",
+          "title": "reports loaded behavior metadata and whether the behavior layer reached an outbound request without exposing content"
+        },
+        {
+          "name": "Playground diagnostics records bounded provider calls with purpose, timing, usage and retry reason",
+          "status": "passed",
+          "title": "records bounded provider calls with purpose, timing, usage and retry reason"
+        },
+        {
+          "name": "Playground diagnostics requires an explicit flag and permits only development or UAT",
+          "status": "passed",
+          "title": "requires an explicit flag and permits only development or UAT"
+        },
+        {
+          "name": "Playground diagnostics tracks the retrieved → selected → revalidated → supplied → cited evidence chain without retaining the query",
+          "status": "passed",
+          "title": "tracks the retrieved → selected → revalidated → supplied → cited evidence chain without retaining the query"
+        },
+        {
+          "name": "Playground diagnostics does not claim retrieved but uncited evidence supported the answer",
+          "status": "passed",
+          "title": "does not claim retrieved but uncited evidence supported the answer"
+        },
+        {
+          "name": "Playground diagnostics records safe citation rejection separately from missing retrieval evidence",
+          "status": "passed",
+          "title": "records safe citation rejection separately from missing retrieval evidence"
+        },
+        {
+          "name": "Playground diagnostics records no eligible sources and an empty retrieval separately from search not attempted",
+          "status": "passed",
+          "title": "records no eligible sources and an empty retrieval separately from search not attempted"
+        },
+        {
+          "name": "Playground diagnostics keeps public-widget and internal-preview audience labels explicit",
+          "status": "passed",
+          "title": "keeps public-widget and internal-preview audience labels explicit"
+        },
+        {
+          "name": "Playground diagnostics exposes bounded server retrieval counts and safe rejection reasons without retaining query text",
+          "status": "passed",
+          "title": "exposes bounded server retrieval counts and safe rejection reasons without retaining query text"
+        },
+        {
+          "name": "Playground diagnostics records language handling labels without storing message or query text",
+          "status": "passed",
+          "title": "records language handling labels without storing message or query text"
+        },
+        {
+          "name": "Playground diagnostics shows rejected revalidation, provider failure and citation rejection without claiming evidence was supplied or cited",
+          "status": "passed",
+          "title": "shows rejected revalidation, provider failure and citation rejection without claiming evidence was supplied or cited"
+        },
+        {
+          "name": "Playground diagnostics keeps concurrent authorized traces isolated by correlation ID",
+          "status": "passed",
+          "title": "keeps concurrent authorized traces isolated by correlation ID"
+        },
+        {
+          "name": "Playground diagnostics does not expose query text or locator credentials and bounds excerpts",
+          "status": "passed",
+          "title": "does not expose query text or locator credentials and bounds excerpts"
+        },
+        {
+          "name": "Playground diagnostics reports deterministic answers as system responses even when a retrieval occurred",
+          "status": "passed",
+          "title": "reports deterministic answers as system responses even when a retrieval occurred"
+        },
+        {
+          "name": "Playground diagnostics keeps failed turns unknown and records an actual failed terminal event",
+          "status": "passed",
+          "title": "keeps failed turns unknown and records an actual failed terminal event"
+        },
+        {
+          "name": "Playground diagnostics emits bounded correlated tool execution events in sequence order",
+          "status": "passed",
+          "title": "emits bounded correlated tool execution events in sequence order"
+        },
+        {
+          "name": "Playground diagnostics records safely redacted tool inputs, normalized data source, elapsed time, and tool evidence delivery",
+          "status": "failed",
+          "title": "records safely redacted tool inputs, normalized data source, elapsed time, and tool evidence delivery"
+        },
+        {
+          "name": "Playground diagnostics keeps a failed interpretation visible when original-query recovery succeeds and records product routing safely",
+          "status": "passed",
+          "title": "keeps a failed interpretation visible when original-query recovery succeeds and records product routing safely"
+        },
+        {
+          "name": "Playground diagnostics preserves truncation and empty-response categories separately from schema-invalid output",
+          "status": "passed",
+          "title": "preserves truncation and empty-response categories separately from schema-invalid output"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/auth.google-otp.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Google and email OTP authentication creates a session for an existing Google identity",
+          "status": "passed",
+          "title": "creates a session for an existing Google identity"
+        },
+        {
+          "name": "Google and email OTP authentication creates a Google account with a provider-subject identity when the verified email is new",
+          "status": "passed",
+          "title": "creates a Google account with a provider-subject identity when the verified email is new"
+        },
+        {
+          "name": "Google and email OTP authentication creates a Google account with a provider-subject identity when the verified email is new",
+          "status": "passed",
+          "title": "creates a Google account with a provider-subject identity when the verified email is new"
+        },
+        {
+          "name": "Google and email OTP authentication does not automatically link a Google subject to a password account by email",
+          "status": "passed",
+          "title": "does not automatically link a Google subject to a password account by email"
+        },
+        {
+          "name": "Google and email OTP authentication requires the authenticated account email to match before Google linking",
+          "status": "passed",
+          "title": "requires the authenticated account email to match before Google linking"
+        },
+        {
+          "name": "Google and email OTP authentication links a verified Google subject only to the authenticated matching account",
+          "status": "passed",
+          "title": "links a verified Google subject only to the authenticated matching account"
+        },
+        {
+          "name": "Google and email OTP authentication stores a keyed OTP digest and reports provider acceptance",
+          "status": "passed",
+          "title": "stores a keyed OTP digest and reports provider acceptance"
+        },
+        {
+          "name": "Google and email OTP authentication finishes the Prisma transaction before starting external email delivery",
+          "status": "passed",
+          "title": "finishes the Prisma transaction before starting external email delivery"
+        },
+        {
+          "name": "Google and email OTP authentication uses a parameterized transaction advisory lock and returns an adapter-supported scalar",
+          "status": "passed",
+          "title": "uses a parameterized transaction advisory lock and returns an adapter-supported scalar"
+        },
+        {
+          "name": "Google and email OTP authentication updates an expired challenge in place and resets its attempt count",
+          "status": "passed",
+          "title": "updates an expired challenge in place and resets its attempt count"
+        },
+        {
+          "name": "Google and email OTP authentication serializes concurrent requests for the same normalized email under the transaction lock",
+          "status": "passed",
+          "title": "serializes concurrent requests for the same normalized email under the transaction lock"
+        },
+        {
+          "name": "Google and email OTP authentication classifies missing OTP hash configuration before touching the database",
+          "status": "passed",
+          "title": "classifies missing OTP hash configuration before touching the database"
+        },
+        {
+          "name": "Google and email OTP authentication creates a signup account and session only after atomically consuming a valid OTP",
+          "status": "passed",
+          "title": "creates a signup account and session only after atomically consuming a valid OTP"
+        },
+        {
+          "name": "Google and email OTP authentication does not create a duplicate account or session when a signup code belongs to an existing account",
+          "status": "passed",
+          "title": "does not create a duplicate account or session when a signup code belongs to an existing account"
+        },
+        {
+          "name": "Google and email OTP authentication rejects expired or replayed OTP challenges and counts invalid attempts",
+          "status": "passed",
+          "title": "rejects expired or replayed OTP challenges and counts invalid attempts"
+        },
+        {
+          "name": "Google and email OTP authentication allows a code to be consumed only once and locks a challenge after the maximum invalid attempts",
+          "status": "passed",
+          "title": "allows a code to be consumed only once and locks a challenge after the maximum invalid attempts"
+        },
+        {
+          "name": "Google and email OTP authentication enforces resend cooldown and reports Resend rejection as a safe service error",
+          "status": "passed",
+          "title": "enforces resend cooldown and reports Resend rejection as a safe service error"
+        },
+        {
+          "name": "Google and email OTP authentication reports missing OTP delivery configuration without claiming successful delivery",
+          "status": "passed",
+          "title": "reports missing OTP delivery configuration without claiming successful delivery"
+        },
+        {
+          "name": "Google and email OTP authentication classifies OTP persistence failures without exposing database details",
+          "status": "passed",
+          "title": "classifies OTP persistence failures without exposing database details"
+        },
+        {
+          "name": "Google and email OTP authentication logs Prisma codes and safe model identifiers for a challenge transaction failure",
+          "status": "passed",
+          "title": "logs Prisma codes and safe model identifiers for a challenge transaction failure"
+        },
+        {
+          "name": "Google and email OTP authentication identifies a raw-lock Prisma failure without logging its query or parameters",
+          "status": "passed",
+          "title": "identifies a raw-lock Prisma failure without logging its query or parameters"
+        },
+        {
+          "name": "Google and email OTP authentication sanitizes and records unique-constraint metadata for a Prisma P2002 failure",
+          "status": "passed",
+          "title": "sanitizes and records unique-constraint metadata for a Prisma P2002 failure"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary requires an active assistant in the same tenant and scopes product search to that tenant",
+          "status": "failed",
+          "title": "requires an active assistant in the same tenant and scopes product search to that tenant"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary uses an explicit model-selected browse operation and returns real tenant-scoped products",
+          "status": "passed",
+          "title": "uses an explicit model-selected browse operation and returns real tenant-scoped products"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not manufacture a product result when an authorized broad catalog query has no synchronized rows",
+          "status": "passed",
+          "title": "does not manufacture a product result when an authorized broad catalog query has no synchronized rows"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary supports model-selected broad catalog browsing for natural-language queries without English browse keywords",
+          "status": "passed",
+          "title": "supports model-selected broad catalog browsing for natural-language queries without English browse keywords"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary parses only explicit INR price ceilings",
+          "status": "passed",
+          "title": "parses only explicit INR price ceilings"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary filters by authorized persisted variant prices and returns only qualifying variants",
+          "status": "passed",
+          "title": "filters by authorized persisted variant prices and returns only qualifying variants"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary searches persisted selected option values such as a Shopify variant color",
+          "status": "passed",
+          "title": "searches persisted selected option values such as a Shopify variant color"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not expose customer orders until the channel can verify order ownership",
+          "status": "passed",
+          "title": "does not expose customer orders until the channel can verify order ownership"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary requires Owner/Admin membership for workspace operator order reads",
+          "status": "failed",
+          "title": "requires Owner/Admin membership for workspace operator order reads"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary omits price and inventory evidence unless both workspace and assistant permissions and Shopify scopes allow it",
+          "status": "passed",
+          "title": "omits price and inventory evidence unless both workspace and assistant permissions and Shopify scopes allow it"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not query catalog data if the assistant has no enabled product permission",
+          "status": "passed",
+          "title": "does not query catalog data if the assistant has no enabled product permission"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary offers product search only when current Shopify permissions and query-ready catalog rows exist",
+          "status": "passed",
+          "title": "offers product search only when current Shopify permissions and query-ready catalog rows exist"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not query catalog data when workspace AI permission is disabled",
+          "status": "passed",
+          "title": "does not query catalog data when workspace AI permission is disabled"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not query catalog data when the Shopify grant snapshot is stale",
+          "status": "passed",
+          "title": "does not query catalog data when the Shopify grant snapshot is stale"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary rejects previously cached commerce evidence after assistant permission is removed",
+          "status": "passed",
+          "title": "rejects previously cached commerce evidence after assistant permission is removed"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/assistant.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [
+        "TS2345"
+      ],
+      "assertions": []
+    },
+    {
+      "path": "backend/test/workspace.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "workspace authorization and creation requires a verified authenticated session on workspace endpoints",
+          "status": "passed",
+          "title": "requires a verified authenticated session on workspace endpoints"
+        },
+        {
+          "name": "workspace authorization and creation fails closed for an invalid credential before attaching a trusted identity",
+          "status": "passed",
+          "title": "fails closed for an invalid credential before attaching a trusted identity"
+        },
+        {
+          "name": "workspace authorization and creation fails closed for a malformed encoded credential before attaching a trusted identity",
+          "status": "passed",
+          "title": "fails closed for a malformed encoded credential before attaching a trusted identity"
+        },
+        {
+          "name": "workspace authorization and creation derives request identity from the verified session, not client fields",
+          "status": "passed",
+          "title": "derives request identity from the verified session, not client fields"
+        },
+        {
+          "name": "workspace authorization and creation passes only the guard-established identity to Playground session access",
+          "status": "failed",
+          "title": "passes only the guard-established identity to Playground session access"
+        },
+        {
+          "name": "workspace authorization and creation normalizes workspace slugs consistently and rejects reserved or invalid values",
+          "status": "passed",
+          "title": "normalizes workspace slugs consistently and rejects reserved or invalid values"
+        },
+        {
+          "name": "workspace authorization and creation creates an organization, owner membership, and audit event in one transaction",
+          "status": "passed",
+          "title": "creates an organization, owner membership, and audit event in one transaction"
+        },
+        {
+          "name": "workspace authorization and creation maps a slug uniqueness race to a safe conflict response",
+          "status": "passed",
+          "title": "maps a slug uniqueness race to a safe conflict response"
+        },
+        {
+          "name": "workspace authorization and creation rolls back the complete creation callback when owner membership or audit creation fails",
+          "status": "passed",
+          "title": "rolls back the complete creation callback when owner membership or audit creation fails"
+        },
+        {
+          "name": "workspace authorization and creation allows the database unique constraint to resolve concurrent slug creation races",
+          "status": "passed",
+          "title": "allows the database unique constraint to resolve concurrent slug creation races"
+        },
+        {
+          "name": "workspace authorization and creation lists only active memberships belonging to the current user",
+          "status": "passed",
+          "title": "lists only active memberships belonging to the current user"
+        },
+        {
+          "name": "workspace authorization and creation hides unauthorized or inactive organizations as not found",
+          "status": "passed",
+          "title": "hides unauthorized or inactive organizations as not found"
+        },
+        {
+          "name": "workspace authorization and creation returns a generic not-found API error without revealing organization identifiers",
+          "status": "passed",
+          "title": "returns a generic not-found API error without revealing organization identifiers"
+        },
+        {
+          "name": "workspace authorization and creation prevents members from changing settings and never reaches the cross-tenant update",
+          "status": "passed",
+          "title": "prevents members from changing settings and never reaches the cross-tenant update"
+        },
+        {
+          "name": "workspace authorization and creation rejects cross-tenant updates without exposing whether the slug exists",
+          "status": "passed",
+          "title": "rejects cross-tenant updates without exposing whether the slug exists"
+        },
+        {
+          "name": "workspace authorization and creation returns member names and roles without emails or other private fields",
+          "status": "passed",
+          "title": "returns member names and roles without emails or other private fields"
+        },
+        {
+          "name": "workspace authorization and creation uses a forward-only migration for optional workspace profile fields",
+          "status": "passed",
+          "title": "uses a forward-only migration for optional workspace profile fields"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/conversation-context.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "bounded conversation context resolution retains a bounded search rewrite when only semantic metadata fails validation",
+          "status": "failed",
+          "title": "retains a bounded search rewrite when only semantic metadata fails validation"
+        },
+        {
+          "name": "bounded conversation context resolution rejects partial rewrites with mismatched originals, malformed variants, or unsafe bounds",
+          "status": "passed",
+          "title": "rejects partial rewrites with mismatched originals, malformed variants, or unsafe bounds"
+        },
+        {
+          "name": "bounded conversation context resolution classifies malformed, truncated, and incomplete interpretation output with specific safe reasons",
+          "status": "passed",
+          "title": "classifies malformed, truncated, and incomplete interpretation output with specific safe reasons"
+        },
+        {
+          "name": "bounded conversation context resolution resolves a multilingual follow-up to the latest authorized user topic and exact identifier",
+          "status": "passed",
+          "title": "resolves a multilingual follow-up to the latest authorized user topic and exact identifier"
+        },
+        {
+          "name": "bounded conversation context resolution keeps multiple identifiers ambiguous instead of choosing one",
+          "status": "passed",
+          "title": "keeps multiple identifiers ambiguous instead of choosing one"
+        },
+        {
+          "name": "bounded conversation context resolution does not resolve without authorized session history",
+          "status": "passed",
+          "title": "does not resolve without authorized session history"
+        },
+        {
+          "name": "bounded conversation context resolution distinguishes bounded history expiry from absent history",
+          "status": "passed",
+          "title": "distinguishes bounded history expiry from absent history"
+        },
+        {
+          "name": "bounded conversation context resolution never resolves an identifier mentioned only by a previous assistant message",
+          "status": "passed",
+          "title": "never resolves an identifier mentioned only by a previous assistant message"
+        },
+        {
+          "name": "bounded conversation context resolution uses the corrected current exact entity and does not carry the old identifier forward",
+          "status": "passed",
+          "title": "uses the corrected current exact entity and does not carry the old identifier forward"
+        },
+        {
+          "name": "bounded conversation context resolution uses an authorized prior question to continue a pending clarification without treating the answer as proof",
+          "status": "passed",
+          "title": "uses an authorized prior question to continue a pending clarification without treating the answer as proof"
+        },
+        {
+          "name": "bounded conversation context resolution keeps a clarification pending after a standalone acknowledgment",
+          "status": "failed",
+          "title": "keeps a clarification pending after a standalone acknowledgment"
+        },
+        {
+          "name": "bounded conversation context resolution marks exact repeated requests as advisory and leaves different requests untouched",
+          "status": "passed",
+          "title": "marks exact repeated requests as advisory and leaves different requests untouched"
+        },
+        {
+          "name": "bounded conversation context resolution accepts only a reference offset into a supplied user turn, never an assistant or invented turn",
+          "status": "passed",
+          "title": "accepts only a reference offset into a supplied user turn, never an assistant or invented turn"
+        },
+        {
+          "name": "bounded conversation context resolution validates bounded answer aspects as exact current-message spans",
+          "status": "passed",
+          "title": "validates bounded answer aspects as exact current-message spans"
+        },
+        {
+          "name": "bounded conversation context resolution accepts an explicitly empty aspect list only for validated standalone social or feedback turns",
+          "status": "passed",
+          "title": "accepts an explicitly empty aspect list only for validated standalone social or feedback turns"
+        },
+        {
+          "name": "bounded conversation context resolution reports bounded schema shape without returning prompt or model content",
+          "status": "passed",
+          "title": "reports bounded schema shape without returning prompt or model content"
+        },
+        {
+          "name": "bounded conversation context resolution accepts semantic conversation feedback with its distinct legacy label and keeps legacy intent validation bounded",
+          "status": "passed",
+          "title": "accepts semantic conversation feedback with its distinct legacy label and keeps legacy intent validation bounded"
+        },
+        {
+          "name": "bounded conversation context resolution validates ticket intent as advisory typed semantics and never accepts model authorization fields",
+          "status": "passed",
+          "title": "validates ticket intent as advisory typed semantics and never accepts model authorization fields"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/ticketing.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "TicketingService requires a workspace manager and scopes ticket listing to that organization",
+          "status": "passed",
+          "title": "requires a workspace manager and scopes ticket listing to that organization"
+        },
+        {
+          "name": "TicketingService binds drafts to a hashed visitor session and conversation ownership",
+          "status": "passed",
+          "title": "binds drafts to a hashed visitor session and conversation ownership"
+        },
+        {
+          "name": "TicketingService rejects generic acknowledgements and expires stale ticket drafts",
+          "status": "passed",
+          "title": "rejects generic acknowledgements and expires stale ticket drafts"
+        },
+        {
+          "name": "TicketingService routes only explicit ticket intent into a bounded draft and leaves normal AI turns alone",
+          "status": "passed",
+          "title": "routes only explicit ticket intent into a bounded draft and leaves normal AI turns alone"
+        },
+        {
+          "name": "TicketingService never creates a ticket from a model-only CONFIRM interpretation",
+          "status": "passed",
+          "title": "never creates a ticket from a model-only CONFIRM interpretation"
+        },
+        {
+          "name": "TicketingService rejects a typed confirmation for a stale ticket draft version",
+          "status": "passed",
+          "title": "rejects a typed confirmation for a stale ticket draft version"
+        },
+        {
+          "name": "TicketingService replays ticket cancellation only for the same tenant, assistant, conversation, and visitor session",
+          "status": "passed",
+          "title": "replays ticket cancellation only for the same tenant, assistant, conversation, and visitor session"
+        },
+        {
+          "name": "TicketingService sets ticket expiry exactly 72 hours from the persisted creation timestamp",
+          "status": "passed",
+          "title": "sets ticket expiry exactly 72 hours from the persisted creation timestamp"
+        },
+        {
+          "name": "TicketingService scopes customer ticket status lookup to the original conversation and visitor session",
+          "status": "passed",
+          "title": "scopes customer ticket status lookup to the original conversation and visitor session"
+        },
+        {
+          "name": "TicketingService blocks owner replies to closed tickets before writing to the customer stream",
+          "status": "passed",
+          "title": "blocks owner replies to closed tickets before writing to the customer stream"
+        },
+        {
+          "name": "TicketingService rejects replies for expired tickets even before the cleanup worker runs",
+          "status": "passed",
+          "title": "rejects replies for expired tickets even before the cleanup worker runs"
+        },
+        {
+          "name": "TicketingService cannot create a business reply before a confirmed ticket exists",
+          "status": "passed",
+          "title": "cannot create a business reply before a confirmed ticket exists"
+        },
+        {
+          "name": "TicketingService persists owner replies into the canonical conversation and does not claim delivery",
+          "status": "failed",
+          "title": "persists owner replies into the canonical conversation and does not claim delivery"
+        },
+        {
+          "name": "TicketingService rejects invalid status transitions and never retrieves cross-tenant tickets",
+          "status": "passed",
+          "title": "rejects invalid status transitions and never retrieves cross-tenant tickets"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/widget.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "WidgetService public sessions issues opaque signed origin-bound bearer credentials for an enabled active assistant",
+          "status": "passed",
+          "title": "issues opaque signed origin-bound bearer credentials for an enabled active assistant"
+        },
+        {
+          "name": "WidgetService public sessions rejects an unapproved website origin during bootstrap",
+          "status": "passed",
+          "title": "rejects an unapproved website origin during bootstrap"
+        },
+        {
+          "name": "WidgetService public sessions serves a complete appearance with a built-in-avatar fallback when legacy appearance fields are absent",
+          "status": "passed",
+          "title": "serves a complete appearance with a built-in-avatar fallback when legacy appearance fields are absent"
+        },
+        {
+          "name": "WidgetService public sessions preserves a valid customer avatar URL in the public appearance response",
+          "status": "passed",
+          "title": "preserves a valid customer avatar URL in the public appearance response"
+        },
+        {
+          "name": "WidgetService public sessions rejects expired or tampered session credentials",
+          "status": "passed",
+          "title": "rejects expired or tampered session credentials"
+        },
+        {
+          "name": "WidgetService public sessions renews a session against its same origin and tenant-bound conversation",
+          "status": "failed",
+          "title": "renews a session against its same origin and tenant-bound conversation"
+        },
+        {
+          "name": "WidgetService public sessions resumes only the original visitor conversation with the opaque resume credential",
+          "status": "passed",
+          "title": "resumes only the original visitor conversation with the opaque resume credential"
+        },
+        {
+          "name": "WidgetService public sessions rejects expired ticket conversations before loading history",
+          "status": "passed",
+          "title": "rejects expired ticket conversations before loading history"
+        },
+        {
+          "name": "WidgetService public sessions routes a widget customer turn through SaasService into shared customer AI",
+          "status": "passed",
+          "title": "routes a widget customer turn through SaasService into shared customer AI"
+        },
+        {
+          "name": "WidgetService public sessions loads history only for the signed conversation and tenant",
+          "status": "passed",
+          "title": "loads history only for the signed conversation and tenant"
+        },
+        {
+          "name": "WidgetService public sessions restores only coarse persisted answer provenance with history",
+          "status": "passed",
+          "title": "restores only coarse persisted answer provenance with history"
+        },
+        {
+          "name": "WidgetService public sessions acknowledges only outbox messages in the current signed conversation",
+          "status": "passed",
+          "title": "acknowledges only outbox messages in the current signed conversation"
+        },
+        {
+          "name": "WidgetService public sessions confirms only the session-bound draft ID and displayed version through TicketingService",
+          "status": "failed",
+          "title": "confirms only the session-bound draft ID and displayed version through TicketingService"
+        },
+        {
+          "name": "WidgetService public sessions reports a failed cancellation without claiming that the request was cancelled",
+          "status": "failed",
+          "title": "reports a failed cancellation without claiming that the request was cancelled"
+        },
+        {
+          "name": "WidgetService public sessions keeps anonymous sessions available for ordinary AI conversations",
+          "status": "passed",
+          "title": "keeps anonymous sessions available for ordinary AI conversations"
+        },
+        {
+          "name": "WidgetService public sessions uses the current session conversation to authorize ticket status rather than the reference alone",
+          "status": "passed",
+          "title": "uses the current session conversation to authorize ticket status rather than the reference alone"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/flow.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "validateGraph accepts a bounded graph with valid references and acyclic connections",
+          "status": "passed",
+          "title": "accepts a bounded graph with valid references and acyclic connections"
+        },
+        {
+          "name": "validateGraph preserves supported handles and rejects conflicting or invalid handle metadata",
+          "status": "passed",
+          "title": "preserves supported handles and rejects conflicting or invalid handle metadata"
+        },
+        {
+          "name": "validateGraph rejects nodes outside the supported catalog and duplicate node ids",
+          "status": "passed",
+          "title": "rejects nodes outside the supported catalog and duplicate node ids"
+        },
+        {
+          "name": "validateGraph rejects dangling references, duplicate edges, and cycles",
+          "status": "passed",
+          "title": "rejects dangling references, duplicate edges, and cycles"
+        },
+        {
+          "name": "validateGraph requires exactly one input node and enforces node and edge limits",
+          "status": "passed",
+          "title": "requires exactly one input node and enforces node and edge limits"
+        },
+        {
+          "name": "validateGraph allows the executable input-to-assistant-to-response path and rejects a disconnected topology",
+          "status": "passed",
+          "title": "allows the executable input-to-assistant-to-response path and rejects a disconnected topology"
+        },
+        {
+          "name": "validateGraph executes optional message templates on either side of the assistant and validates their configuration",
+          "status": "passed",
+          "title": "executes optional message templates on either side of the assistant and validates their configuration"
+        },
+        {
+          "name": "validateGraph accepts ordered True and False paths when every branch reaches its own assistant and response",
+          "status": "passed",
+          "title": "accepts ordered True and False paths when every branch reaches its own assistant and response"
+        },
+        {
+          "name": "evaluateFlowCondition matches normalized text with a bounded, explicit operator set",
+          "status": "passed",
+          "title": "matches normalized text with a bounded, explicit operator set"
+        },
+        {
+          "name": "renderFlowTemplate substitutes every current-message token",
+          "status": "passed",
+          "title": "substitutes every current-message token"
+        },
+        {
+          "name": "renderFlowTemplate rejects expansions that exceed the assistant message bounds before rendering",
+          "status": "passed",
+          "title": "rejects expansions that exceed the assistant message bounds before rendering"
+        },
+        {
+          "name": "flowValueCharCount returns safe size metadata for run trace values without exposing their content",
+          "status": "passed",
+          "title": "returns safe size metadata for run trace values without exposing their content"
+        },
+        {
+          "name": "flowValueCharCount counts retrieved results as items rather than characters",
+          "status": "passed",
+          "title": "counts retrieved results as items rather than characters"
+        },
+        {
+          "name": "FlowService.run preserves provider and model metadata when the assistant response supplies them",
+          "status": "passed",
+          "title": "preserves provider and model metadata when the assistant response supplies them"
+        },
+        {
+          "name": "FlowService.run executes only the selected branch and reports an ordered content-safe trace",
+          "status": "passed",
+          "title": "executes only the selected branch and reports an ordered content-safe trace"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector-sync-worker.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [
+        "TS2345"
+      ],
+      "assertions": []
+    },
+    {
+      "path": "backend/src/modules/workspaces/saas.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "SaasService tenant-scoped product foundations creates only a draft and never stores or returns submitted credentials",
+          "status": "passed",
+          "title": "creates only a draft and never stores or returns submitted credentials"
+        },
+        {
+          "name": "SaasService tenant-scoped product foundations rejects non-HTTPS integration URLs before persistence",
+          "status": "passed",
+          "title": "rejects non-HTTPS integration URLs before persistence"
+        },
+        {
+          "name": "SaasService tenant-scoped product foundations scopes catalog queries to the active workspace and bounds page size",
+          "status": "passed",
+          "title": "scopes catalog queries to the active workspace and bounds page size"
+        },
+        {
+          "name": "SaasService tenant-scoped product foundations loads a product detail by exact external ID and authorized store connection",
+          "status": "passed",
+          "title": "loads a product detail by exact external ID and authorized store connection"
+        },
+        {
+          "name": "SaasService tenant-scoped product foundations does not report empty store data as zero sales when no integration exists",
+          "status": "passed",
+          "title": "does not report empty store data as zero sales when no integration exists"
+        },
+        {
+          "name": "SaasService tenant-scoped product foundations filters and scopes inbox records by workspace and refuses foreign conversation reads",
+          "status": "failed",
+          "title": "filters and scopes inbox records by workspace and refuses foreign conversation reads"
+        },
+        {
+          "name": "SaasService customer inbox safeguards keeps every inbox query scoped to the resolved workspace and limits support access to managers",
+          "status": "failed",
+          "title": "keeps every inbox query scoped to the resolved workspace and limits support access to managers"
+        },
+        {
+          "name": "SaasService customer inbox safeguards keeps Playground records outside the support inbox tables",
+          "status": "failed",
+          "title": "keeps Playground records outside the support inbox tables"
+        },
+        {
+          "name": "SaasService customer inbox safeguards hashes visitor identity, validates the owning active assistant, and idempotently inserts customer messages",
+          "status": "passed",
+          "title": "hashes visitor identity, validates the owning active assistant, and idempotently inserts customer messages"
+        },
+        {
+          "name": "SaasService customer inbox safeguards retries a serialization conflict so concurrent intake can settle safely",
+          "status": "passed",
+          "title": "retries a serialization conflict so concurrent intake can settle safely"
+        },
+        {
+          "name": "SaasService customer inbox safeguards rejects invalid metadata-like untrusted message payloads before database writes",
+          "status": "passed",
+          "title": "rejects invalid metadata-like untrusted message payloads before database writes"
+        },
+        {
+          "name": "SaasService customer inbox safeguards rejects unbounded or unknown source metadata instead of persisting it",
+          "status": "passed",
+          "title": "rejects unbounded or unknown source metadata instead of persisting it"
+        },
+        {
+          "name": "SaasService customer inbox safeguards does not increment conversation summaries when an idempotent message is already stored",
+          "status": "passed",
+          "title": "does not increment conversation summaries when an idempotent message is already stored"
+        },
+        {
+          "name": "SaasService customer inbox safeguards refuses foreign conversation detail and persists a per-member read cursor for authorized views",
+          "status": "passed",
+          "title": "refuses foreign conversation detail and persists a per-member read cursor for authorized views"
+        },
+        {
+          "name": "SaasService customer inbox safeguards audits authorized status changes and leaves assignment unsupported in this phase",
+          "status": "failed",
+          "title": "audits authorized status changes and leaves assignment unsupported in this phase"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/conversation-diagnostics.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "conversation diagnostics metadata reports bounded history truncation without including message content",
+          "status": "passed",
+          "title": "reports bounded history truncation without including message content"
+        },
+        {
+          "name": "conversation diagnostics metadata allows only a bounded list of UUID source identifiers",
+          "status": "passed",
+          "title": "allows only a bounded list of UUID source identifiers"
+        },
+        {
+          "name": "conversation diagnostics metadata keeps empty, one-message, and within-budget histories stable",
+          "status": "passed",
+          "title": "keeps empty, one-message, and within-budget histories stable"
+        },
+        {
+          "name": "conversation diagnostics metadata keeps the newest complete turns and returns chronological order on overflow",
+          "status": "failed",
+          "title": "keeps the newest complete turns and returns chronological order on overflow"
+        },
+        {
+          "name": "conversation diagnostics metadata retains the latest customer follow-up and handles oversized and repeated messages safely",
+          "status": "failed",
+          "title": "retains the latest customer follow-up and handles oversized and repeated messages safely"
+        },
+        {
+          "name": "conversation diagnostics metadata does not insert the current message into prior history",
+          "status": "passed",
+          "title": "does not insert the current message into prior history"
+        },
+        {
+          "name": "conversation diagnostics metadata accepts cited policy durations only when the cited source contains the same value",
+          "status": "passed",
+          "title": "accepts cited policy durations only when the cited source contains the same value"
+        },
+        {
+          "name": "conversation diagnostics metadata validates a Hindi answer against English policy evidence without changing language behavior",
+          "status": "passed",
+          "title": "validates a Hindi answer against English policy evidence without changing language behavior"
+        },
+        {
+          "name": "conversation diagnostics metadata rejects a claim whose citation points to an unrelated source",
+          "status": "passed",
+          "title": "rejects a claim whose citation points to an unrelated source"
+        },
+        {
+          "name": "conversation diagnostics metadata checks structured product amount and currency against cited Shopify snapshot evidence",
+          "status": "passed",
+          "title": "checks structured product amount and currency against cited Shopify snapshot evidence"
+        },
+        {
+          "name": "conversation diagnostics metadata rejects fabricated price when the product record has no price data",
+          "status": "passed",
+          "title": "rejects fabricated price when the product record has no price data"
+        },
+        {
+          "name": "conversation diagnostics metadata requires stale synchronized Shopify prices to be labeled as snapshots",
+          "status": "failed",
+          "title": "requires stale synchronized Shopify prices to be labeled as snapshots"
+        },
+        {
+          "name": "conversation diagnostics metadata validates only explicit, snapshot-labeled Shopify availability states",
+          "status": "failed",
+          "title": "validates only explicit, snapshot-labeled Shopify availability states"
+        },
+        {
+          "name": "conversation diagnostics metadata checks exact cited URLs and rejects URLs absent from that source",
+          "status": "passed",
+          "title": "checks exact cited URLs and rejects URLs absent from that source"
+        },
+        {
+          "name": "conversation diagnostics metadata checks cited merchant contact details and structured SKUs exactly",
+          "status": "passed",
+          "title": "checks cited merchant contact details and structured SKUs exactly"
+        },
+        {
+          "name": "conversation diagnostics metadata rejects missing and unauthorized citations without leaking source details",
+          "status": "passed",
+          "title": "rejects missing and unauthorized citations without leaking source details"
+        },
+        {
+          "name": "conversation diagnostics metadata validates multiple cited facts against the specific sources named in each sentence",
+          "status": "passed",
+          "title": "validates multiple cited facts against the specific sources named in each sentence"
+        },
+        {
+          "name": "conversation diagnostics metadata keeps contradictory cited source values distinguishable for the existing conflict plan",
+          "status": "passed",
+          "title": "keeps contradictory cited source values distinguishable for the existing conflict plan"
+        },
+        {
+          "name": "conversation diagnostics metadata leaves ordinary conversational and semantic prose outside fact entailment claims",
+          "status": "passed",
+          "title": "leaves ordinary conversational and semantic prose outside fact entailment claims"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/website-crawler.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "website crawler network and extraction boundaries propagates a stage-progress persistence error instead of converting it into an empty crawl",
+          "status": "failed",
+          "title": "propagates a stage-progress persistence error instead of converting it into an empty crawl"
+        },
+        {
+          "name": "website crawler network and extraction boundaries requires a registered server-authorized source, without DNS ownership verification",
+          "status": "passed",
+          "title": "requires a registered server-authorized source, without DNS ownership verification"
+        },
+        {
+          "name": "website crawler network and extraction boundaries accepts public addresses and rejects private, loopback, link-local, metadata and mapped private IPv6",
+          "status": "passed",
+          "title": "accepts public addresses and rejects private, loopback, link-local, metadata and mapped private IPv6"
+        },
+        {
+          "name": "website crawler network and extraction boundaries fails closed when any DNS answer is private, preventing mixed-answer rebinding",
+          "status": "passed",
+          "title": "fails closed when any DNS answer is private, preventing mixed-answer rebinding"
+        },
+        {
+          "name": "website crawler network and extraction boundaries normalizes fragment/default-port variants and rejects unsafe URL forms",
+          "status": "passed",
+          "title": "normalizes fragment/default-port variants and rejects unsafe URL forms"
+        },
+        {
+          "name": "website crawler network and extraction boundaries matches robots wildcard and end-anchor rules and treats malformed rules as blocked",
+          "status": "passed",
+          "title": "matches robots wildcard and end-anchor rules and treats malformed rules as blocked"
+        },
+        {
+          "name": "website crawler network and extraction boundaries pins the real request lookup callback to a checked public DNS answer and keeps TLS verification enabled",
+          "status": "passed",
+          "title": "pins the real request lookup callback to a checked public DNS answer and keeps TLS verification enabled"
+        },
+        {
+          "name": "website crawler network and extraction boundaries rejects a redirect to a private destination before issuing a second request",
+          "status": "passed",
+          "title": "rejects a redirect to a private destination before issuing a second request"
+        },
+        {
+          "name": "website crawler network and extraction boundaries sends conditional validators and retains a 304 page without treating it as removed",
+          "status": "passed",
+          "title": "sends conditional validators and retains a 304 page without treating it as removed"
+        },
+        {
+          "name": "website crawler network and extraction boundaries extracts useful HTML while stripping navigation, scripts and preserving Unicode and canonical provenance",
+          "status": "passed",
+          "title": "extracts useful HTML while stripping navigation, scripts and preserving Unicode and canonical provenance"
+        },
+        {
+          "name": "website crawler network and extraction boundaries extracts structured FAQ answers, language and a business page category",
+          "status": "passed",
+          "title": "extracts structured FAQ answers, language and a business page category"
+        },
+        {
+          "name": "website crawler network and extraction boundaries does not enqueue Shopify product and collection URLs as website knowledge",
+          "status": "passed",
+          "title": "does not enqueue Shopify product and collection URLs as website knowledge"
+        },
+        {
+          "name": "website crawler network and extraction boundaries uses standards parsing for malformed nesting and selects main content while retaining headings and FAQ text",
+          "status": "passed",
+          "title": "uses standards parsing for malformed nesting and selects main content while retaining headings and FAQ text"
+        },
+        {
+          "name": "website crawler network and extraction boundaries separates internal preview visibility from public visitor scope and checks a verified exact origin",
+          "status": "passed",
+          "title": "separates internal preview visibility from public visitor scope and checks a verified exact origin"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/multilingual-semantics.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "multilingual semantic interpretation contract returns a safe specific rejection code while preserving the nullable validator contract",
+          "status": "passed",
+          "title": "returns a safe specific rejection code while preserving the nullable validator contract"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture A_NORMAL_ENGLISH without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture A_NORMAL_ENGLISH without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture B_HINDI without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture B_HINDI without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture C_HINGLISH without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture C_HINGLISH without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture D_ROMANIZED_HINDI without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture D_ROMANIZED_HINDI without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture E_SHORTHAND without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture E_SHORTHAND without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture F_TYPOS without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture F_TYPOS without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture G_NEGATION without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture G_NEGATION without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture H_MIXED_INTENT without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture H_MIXED_INTENT without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture I_MISSING_ENTITY without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture I_MISSING_ENTITY without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture J_OUT_OF_DOMAIN without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture J_OUT_OF_DOMAIN without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture K_PROMPT_INJECTION without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture K_PROMPT_INJECTION without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture L_AMBIGUOUS_REFERENCE without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture L_AMBIGUOUS_REFERENCE without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture M_OTHER_BUSINESS without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture M_OTHER_BUSINESS without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract validates fixture N_PARTIAL_SCOPE without treating it as model accuracy evidence",
+          "status": "passed",
+          "title": "validates fixture N_PARTIAL_SCOPE without treating it as model accuracy evidence"
+        },
+        {
+          "name": "multilingual semantic interpretation contract preserves the order identifier exactly and rejects an invented or fuzzy-repaired value",
+          "status": "passed",
+          "title": "preserves the order identifier exactly and rejects an invented or fuzzy-repaired value"
+        },
+        {
+          "name": "multilingual semantic interpretation contract keeps affirmative and negated mixed-language actions distinct",
+          "status": "passed",
+          "title": "keeps affirmative and negated mixed-language actions distinct"
+        },
+        {
+          "name": "multilingual semantic interpretation contract keeps an explicit requested reply language separate from detected message language",
+          "status": "passed",
+          "title": "keeps an explicit requested reply language separate from detected message language"
+        },
+        {
+          "name": "multilingual semantic interpretation contract accepts assistant identity as an advisory intent without adding authorization",
+          "status": "failed",
+          "title": "accepts assistant identity as an advisory intent without adding authorization"
+        },
+        {
+          "name": "multilingual semantic interpretation contract accepts conversational feedback as an intent without treating it as business evidence or authorization",
+          "status": "passed",
+          "title": "accepts conversational feedback as an intent without treating it as business evidence or authorization"
+        },
+        {
+          "name": "multilingual semantic interpretation contract rejects invalid enums, contradictory uncertainty, source claims and authorization claims",
+          "status": "passed",
+          "title": "rejects invalid enums, contradictory uncertainty, source claims and authorization claims"
+        },
+        {
+          "name": "multilingual semantic interpretation contract keeps unknown and ambiguous meanings as first-class outcomes",
+          "status": "passed",
+          "title": "keeps unknown and ambiguous meanings as first-class outcomes"
+        },
+        {
+          "name": "multilingual semantic interpretation contract preserves legacy retrieval interpretation while exposing validated semantics to later stages",
+          "status": "failed",
+          "title": "preserves legacy retrieval interpretation while exposing validated semantics to later stages"
+        },
+        {
+          "name": "multilingual semantic interpretation contract does not turn cross-domain semantic labels into tenant capabilities or source authorization",
+          "status": "passed",
+          "title": "does not turn cross-domain semantic labels into tenant capabilities or source authorization"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/intelligence-evaluation.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "intelligence evaluation engine validates versioned synthetic cases and unique IDs",
+          "status": "passed",
+          "title": "validates versioned synthetic cases and unique IDs"
+        },
+        {
+          "name": "intelligence evaluation engine validates the synthetic retrieval quality and authorization cases against the same versioned contract",
+          "status": "passed",
+          "title": "validates the synthetic retrieval quality and authorization cases against the same versioned contract"
+        },
+        {
+          "name": "intelligence evaluation engine validates the separate 09F grounded-answer dataset version and evaluates plan provenance",
+          "status": "passed",
+          "title": "validates the separate 09F grounded-answer dataset version and evaluates plan provenance"
+        },
+        {
+          "name": "intelligence evaluation engine checks exact identifiers, citations and required safety limitations",
+          "status": "failed",
+          "title": "checks exact identifiers, citations and required safety limitations"
+        },
+        {
+          "name": "intelligence evaluation engine evaluates retrieval query count and exact original-query retention with the real evaluator",
+          "status": "passed",
+          "title": "evaluates retrieval query count and exact original-query retention with the real evaluator"
+        },
+        {
+          "name": "intelligence evaluation engine does not count unevaluated cases as passes and has a zero denominator",
+          "status": "failed",
+          "title": "does not count unevaluated cases as passes and has a zero denominator"
+        },
+        {
+          "name": "intelligence evaluation engine reports all explicit result statuses and applies severity release gates",
+          "status": "passed",
+          "title": "reports all explicit result statuses and applies severity release gates"
+        },
+        {
+          "name": "intelligence evaluation engine keeps provider failure classification separate from evaluator failure and supports cancellation",
+          "status": "failed",
+          "title": "keeps provider failure classification separate from evaluator failure and supports cancellation"
+        },
+        {
+          "name": "intelligence evaluation engine labels mocked and live evaluation separately and restricts diagnostics to same-tenant owners",
+          "status": "passed",
+          "title": "labels mocked and live evaluation separately and restricts diagnostics to same-tenant owners"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-website-publication.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "website index publication transaction uses a bounded transaction and publishes multiple tenant-scoped pages and chunks atomically",
+          "status": "failed",
+          "title": "uses a bounded transaction and publishes multiple tenant-scoped pages and chunks atomically"
+        },
+        {
+          "name": "website index publication transaction auto-links an opted-in website source only after a complete active index is published",
+          "status": "failed",
+          "title": "auto-links an opted-in website source only after a complete active index is published"
+        },
+        {
+          "name": "website index publication transaction persists a large page as bounded chunks within the publication transaction",
+          "status": "failed",
+          "title": "persists a large page as bounded chunks within the publication transaction"
+        },
+        {
+          "name": "website index publication transaction does not publish the active generation or complete the job when transaction persistence fails",
+          "status": "failed",
+          "title": "does not publish the active generation or complete the job when transaction persistence fails"
+        },
+        {
+          "name": "website index publication transaction keeps partial crawl results visible as warnings instead of reporting a complete sync",
+          "status": "failed",
+          "title": "keeps partial crawl results visible as warnings instead of reporting a complete sync"
+        },
+        {
+          "name": "website index publication transaction reuses deterministic chunk identifiers for a retry of the same unpublished generation",
+          "status": "failed",
+          "title": "reuses deterministic chunk identifiers for a retry of the same unpublished generation"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/faq-import.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "FAQ import parser accepts the generated CSV template contract and preserves Unicode FAQ text",
+          "status": "passed",
+          "title": "accepts the generated CSV template contract and preserves Unicode FAQ text"
+        },
+        {
+          "name": "FAQ import parser parses a plain XLSX inline-string worksheet",
+          "status": "passed",
+          "title": "parses a plain XLSX inline-string worksheet"
+        },
+        {
+          "name": "FAQ import parser reads the workbook-declared first worksheet when it is not sheet1 and accepts namespace-prefixed Excel XML",
+          "status": "passed",
+          "title": "reads the workbook-declared first worksheet when it is not sheet1 and accepts namespace-prefixed Excel XML"
+        },
+        {
+          "name": "FAQ import parser parses required-only CSV, UTF-8 BOM, quoted commas and multiline answers with normalized headers",
+          "status": "passed",
+          "title": "parses required-only CSV, UTF-8 BOM, quoted commas and multiline answers with normalized headers"
+        },
+        {
+          "name": "FAQ import parser decodes UTF-16LE CSV exported from spreadsheet software",
+          "status": "passed",
+          "title": "decodes UTF-16LE CSV exported from spreadsheet software"
+        },
+        {
+          "name": "FAQ import parser parses all 154 FAQ rows in an XLSX worksheet without truncation",
+          "status": "passed",
+          "title": "parses all 154 FAQ rows in an XLSX worksheet without truncation"
+        },
+        {
+          "name": "FAQ import parser distinguishes empty, corrupt, headerless and missing-header files",
+          "status": "passed",
+          "title": "distinguishes empty, corrupt, headerless and missing-header files"
+        },
+        {
+          "name": "FAQ import parser rejects unsupported headers, duplicate questions and spreadsheet formulas",
+          "status": "passed",
+          "title": "rejects unsupported headers, duplicate questions and spreadsheet formulas"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/env.validation.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "environment configuration accepts the local defaults",
+          "status": "passed",
+          "title": "accepts the local defaults"
+        },
+        {
+          "name": "environment configuration keeps OpenRouter optional unless selected and pins its configurable API base to the official origin",
+          "status": "passed",
+          "title": "keeps OpenRouter optional unless selected and pins its configurable API base to the official origin"
+        },
+        {
+          "name": "environment configuration validates passwordless email OTP limits",
+          "status": "passed",
+          "title": "validates passwordless email OTP limits"
+        },
+        {
+          "name": "environment configuration requires the OTP hash secret in production without echoing its value",
+          "status": "passed",
+          "title": "requires the OTP hash secret in production without echoing its value"
+        },
+        {
+          "name": "environment configuration accepts an explicitly configured production origin and keeps secrets out of returned config",
+          "status": "passed",
+          "title": "accepts an explicitly configured production origin and keeps secrets out of returned config"
+        },
+        {
+          "name": "environment configuration rejects unsupported environments and malformed ports",
+          "status": "passed",
+          "title": "rejects unsupported environments and malformed ports"
+        },
+        {
+          "name": "environment configuration requires production CORS configuration and rejects development origins",
+          "status": "passed",
+          "title": "requires production CORS configuration and rejects development origins"
+        },
+        {
+          "name": "environment configuration validates log level and restricts proxy trust to configured production hops",
+          "status": "passed",
+          "title": "validates log level and restricts proxy trust to configured production hops"
+        },
+        {
+          "name": "environment configuration rejects malformed origins and wildcard CORS",
+          "status": "passed",
+          "title": "rejects malformed origins and wildcard CORS"
+        },
+        {
+          "name": "environment configuration rejects insecure or loopback production origins",
+          "status": "passed",
+          "title": "rejects insecure or loopback production origins"
+        },
+        {
+          "name": "environment configuration allows explicitly limited local mode without database credentials",
+          "status": "passed",
+          "title": "allows explicitly limited local mode without database credentials"
+        },
+        {
+          "name": "environment configuration requires both encrypted PostgreSQL URLs in production and never returns them",
+          "status": "passed",
+          "title": "requires both encrypted PostgreSQL URLs in production and never returns them"
+        },
+        {
+          "name": "environment configuration rejects partial, malformed, non-PostgreSQL, and non-TLS database URLs without echoing credentials",
+          "status": "passed",
+          "title": "rejects partial, malformed, non-PostgreSQL, and non-TLS database URLs without echoing credentials"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/business-source-router.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "business capability and source routing routes a static policy need to Knowledge and separates eligible sources from relevant evidence",
+          "status": "passed",
+          "title": "routes a static policy need to Knowledge and separates eligible sources from relevant evidence"
+        },
+        {
+          "name": "business capability and source routing treats generic service availability as a static Knowledge question unless semantics identify a personal live record",
+          "status": "passed",
+          "title": "treats generic service availability as a static Knowledge question unless semantics identify a personal live record"
+        },
+        {
+          "name": "business capability and source routing requires unavailable live lookup for personal status and does not treat generic Knowledge as status evidence",
+          "status": "passed",
+          "title": "requires unavailable live lookup for personal status and does not treat generic Knowledge as status evidence"
+        },
+        {
+          "name": "business capability and source routing does not allow a static label to downgrade an explicit current-status intent",
+          "status": "passed",
+          "title": "does not allow a static label to downgrade an explicit current-status intent"
+        },
+        {
+          "name": "business capability and source routing allows a truthful static-only partial result for mixed requests and records the missing live source",
+          "status": "passed",
+          "title": "allows a truthful static-only partial result for mixed requests and records the missing live source"
+        },
+        {
+          "name": "business capability and source routing requires clarification for ambiguous transaction needs without asking for sensitive identifiers",
+          "status": "passed",
+          "title": "requires clarification for ambiguous transaction needs without asking for sensitive identifiers"
+        },
+        {
+          "name": "business capability and source routing fails closed if assistant authorization was not verified and ignores a user claim of integration access",
+          "status": "passed",
+          "title": "fails closed if assistant authorization was not verified and ignores a user claim of integration access"
+        },
+        {
+          "name": "business capability and source routing marks only authenticated configured adapters temporarily unavailable and never fabricates execution",
+          "status": "passed",
+          "title": "marks only authenticated configured adapters temporarily unavailable and never fabricates execution"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/conversation-orchestrator.customer.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConversationOrchestrator trusted customer adapter reuses shared execution and persists an AI message in the canonical support conversation",
+          "status": "passed",
+          "title": "reuses shared execution and persists an AI message in the canonical support conversation"
+        },
+        {
+          "name": "ConversationOrchestrator trusted customer adapter rejects messages that are not persisted CUSTOMER messages, including business-team replies",
+          "status": "passed",
+          "title": "rejects messages that are not persisted CUSTOMER messages, including business-team replies"
+        },
+        {
+          "name": "ConversationOrchestrator trusted customer adapter returns the persisted AI response without running inference again for a duplicate turn",
+          "status": "passed",
+          "title": "returns the persisted AI response without running inference again for a duplicate turn"
+        },
+        {
+          "name": "ConversationOrchestrator trusted customer adapter serializes concurrent customer turns with the support conversation lease",
+          "status": "passed",
+          "title": "serializes concurrent customer turns with the support conversation lease"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/auth.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AuthService security behavior stores only an Argon2id password hash during registration",
+          "status": "passed",
+          "title": "stores only an Argon2id password hash during registration"
+        },
+        {
+          "name": "AuthService security behavior uses generic credentials and persists a server-side session after valid login",
+          "status": "passed",
+          "title": "uses generic credentials and persists a server-side session after valid login"
+        },
+        {
+          "name": "AuthService security behavior rejects invalid credentials without creating a session",
+          "status": "passed",
+          "title": "rejects invalid credentials without creating a session"
+        },
+        {
+          "name": "AuthService security behavior logs categorized email-provider failures without addresses, OTPs or provider error content",
+          "status": "passed",
+          "title": "logs categorized email-provider failures without addresses, OTPs or provider error content"
+        },
+        {
+          "name": "AuthService security behavior rejects expired and revoked sessions and revokes a session on logout",
+          "status": "passed",
+          "title": "rejects expired and revoked sessions and revokes a session on logout"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/website-pages-visibility.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "stored website page visibility lists actual saved tenant pages with current-generation chunk readiness and source assignment",
+          "status": "failed",
+          "title": "lists actual saved tenant pages with current-generation chunk readiness and source assignment"
+        },
+        {
+          "name": "stored website page visibility returns stored full page content only through the manager-scoped detail method",
+          "status": "passed",
+          "title": "returns stored full page content only through the manager-scoped detail method"
+        },
+        {
+          "name": "stored website page visibility keeps indexed public knowledge ready even when no assistant matches the widget domain",
+          "status": "failed",
+          "title": "keeps indexed public knowledge ready even when no assistant matches the widget domain"
+        },
+        {
+          "name": "stored website page visibility does not report AI readiness while source processing is still pending",
+          "status": "failed",
+          "title": "does not report AI readiness while source processing is still pending"
+        },
+        {
+          "name": "stored website page visibility blocks members without owner/admin access from viewing saved page contents",
+          "status": "passed",
+          "title": "blocks members without owner/admin access from viewing saved page contents"
+        },
+        {
+          "name": "stored website page visibility keeps an empty database state empty instead of synthesizing page counts",
+          "status": "passed",
+          "title": "keeps an empty database state empty instead of synthesizing page counts"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/shopify-granted-scope-discovery.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Shopify granted scope discovery discovers a small installed grant set and retains provider descriptions",
+          "status": "passed",
+          "title": "discovers a small installed grant set and retains provider descriptions"
+        },
+        {
+          "name": "Shopify granted scope discovery does not trust an unsafe provider storefront URL as a crawl origin",
+          "status": "passed",
+          "title": "does not trust an unsafe provider storefront URL as a crawl origin"
+        },
+        {
+          "name": "Shopify granted scope discovery supports 50+ actual scopes, preserves unknown future handles, and deduplicates entries",
+          "status": "passed",
+          "title": "supports 50+ actual scopes, preserves unknown future handles, and deduplicates entries"
+        },
+        {
+          "name": "Shopify granted scope discovery maps only explicit read scopes to supported operations and keeps orders restricted",
+          "status": "passed",
+          "title": "maps only explicit read scopes to supported operations and keeps orders restricted"
+        },
+        {
+          "name": "Shopify granted scope discovery rejects malformed scope handles and mismatched store identities",
+          "status": "passed",
+          "title": "rejects malformed scope handles and mismatched store identities"
+        },
+        {
+          "name": "Shopify granted scope discovery preserves failures without persisting and treats expired snapshots as unavailable",
+          "status": "passed",
+          "title": "preserves failures without persisting and treats expired snapshots as unavailable"
+        },
+        {
+          "name": "Shopify granted scope discovery writes each verified snapshot to only its owning organization and store connection",
+          "status": "passed",
+          "title": "writes each verified snapshot to only its owning organization and store connection"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/conversation-intent.recovery.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "semantic interpretation recovery metadata retains only the bounded language and search rewrite when semantic language metadata is malformed",
+          "status": "passed",
+          "title": "retains only the bounded language and search rewrite when semantic language metadata is malformed"
+        },
+        {
+          "name": "semantic interpretation recovery metadata keeps a valid interpretation when optional semantic metadata has an incompatible shape",
+          "status": "passed",
+          "title": "keeps a valid interpretation when optional semantic metadata has an incompatible shape"
+        },
+        {
+          "name": "semantic interpretation recovery metadata maps a validated semantic intent emitted in the legacy intent field to its compatible legacy category",
+          "status": "passed",
+          "title": "maps a validated semantic intent emitted in the legacy intent field to its compatible legacy category"
+        },
+        {
+          "name": "semantic interpretation recovery metadata does not recover unknown or malformed language labels",
+          "status": "passed",
+          "title": "does not recover unknown or malformed language labels"
+        },
+        {
+          "name": "semantic interpretation recovery metadata recovers safe language and lexical rewrite after invalid legacy intent while rejecting the intent itself",
+          "status": "passed",
+          "title": "recovers safe language and lexical rewrite after invalid legacy intent while rejecting the intent itself"
+        },
+        {
+          "name": "semantic interpretation recovery metadata recovers a correction pointer only when it refers to a recent user turn",
+          "status": "passed",
+          "title": "recovers a correction pointer only when it refers to a recent user turn"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/assistant.controller.playground.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AssistantController live Playground trace sends readiness before correlated execution events and reconciles with the completed trace",
+          "status": "passed",
+          "title": "sends readiness before correlated execution events and reconciles with the completed trace"
+        },
+        {
+          "name": "AssistantController live Playground trace rejects the live endpoint before starting an AI turn when diagnostics are disabled",
+          "status": "passed",
+          "title": "rejects the live endpoint before starting an AI turn when diagnostics are disabled"
+        },
+        {
+          "name": "AssistantController live Playground trace reports provider rate limiting as an SSE failure with a failed terminal event after HTTP 200 headers",
+          "status": "passed",
+          "title": "reports provider rate limiting as an SSE failure with a failed terminal event after HTTP 200 headers"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/all-exceptions.filter.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AllExceptionsFilter returns validation failures without exposing submitted values or arbitrary detail text",
+          "status": "failed",
+          "title": "returns validation failures without exposing submitted values or arbitrary detail text"
+        },
+        {
+          "name": "AllExceptionsFilter keeps rejected session identifiers generic while preserving the recovery code",
+          "status": "passed",
+          "title": "keeps rejected session identifiers generic while preserving the recovery code"
+        },
+        {
+          "name": "AllExceptionsFilter hides unknown exception details from the response",
+          "status": "passed",
+          "title": "hides unknown exception details from the response"
+        },
+        {
+          "name": "AllExceptionsFilter preserves structured auth service codes and safe messages with the request id",
+          "status": "passed",
+          "title": "preserves structured auth service codes and safe messages with the request id"
+        },
+        {
+          "name": "AllExceptionsFilter returns only a bounded Retry-After header for rate-limit responses",
+          "status": "passed",
+          "title": "returns only a bounded Retry-After header for rate-limit responses"
+        },
+        {
+          "name": "AllExceptionsFilter preserves the provider Retry-After value within its wider provider-specific bound",
+          "status": "passed",
+          "title": "preserves the provider Retry-After value within its wider provider-specific bound"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/grounded-answer-plan.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "grounded answer planning maps exact evidence identities to distinct answer aspects without claiming entailment",
+          "status": "failed",
+          "title": "maps exact evidence identities to distinct answer aspects without claiming entailment"
+        },
+        {
+          "name": "grounded answer planning reports partial candidate coverage and leaves unsupported aspects explicit",
+          "status": "passed",
+          "title": "reports partial candidate coverage and leaves unsupported aspects explicit"
+        },
+        {
+          "name": "grounded answer planning marks different time values from distinct sources as a potential unresolved conflict",
+          "status": "failed",
+          "title": "marks different time values from distinct sources as a potential unresolved conflict"
+        },
+        {
+          "name": "grounded answer planning does not call an evidence candidate a verified factual claim",
+          "status": "passed",
+          "title": "does not call an evidence candidate a verified factual claim"
+        },
+        {
+          "name": "grounded answer planning validates bounded plans and binds every evidence reference to authorized observed evidence",
+          "status": "passed",
+          "title": "validates bounded plans and binds every evidence reference to authorized observed evidence"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/intelligence-foundation.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "09D.1 intelligence foundation constructs tenant context from server authorization and ignores customer identity claims",
+          "status": "passed",
+          "title": "constructs tenant context from server authorization and ignores customer identity claims"
+        },
+        {
+          "name": "09D.1 intelligence foundation does not enable domain capabilities from business terms and distinguishes unavailable from unsupported",
+          "status": "passed",
+          "title": "does not enable domain capabilities from business terms and distinguishes unavailable from unsupported"
+        },
+        {
+          "name": "09D.1 intelligence foundation only selects static knowledge when eligible knowledge is supplied and never infers live API availability",
+          "status": "passed",
+          "title": "only selects static knowledge when eligible knowledge is supplied and never infers live API availability"
+        },
+        {
+          "name": "09D.1 intelligence foundation validates interpretation structure and rejects authorization or source claims",
+          "status": "passed",
+          "title": "validates interpretation structure and rejects authorization or source claims"
+        },
+        {
+          "name": "09D.1 intelligence foundation does not fabricate quality or accuracy and keeps diagnostics disabled unless owner flag is explicit",
+          "status": "passed",
+          "title": "does not fabricate quality or accuracy and keeps diagnostics disabled unless owner flag is explicit"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/quality-benchmark-fixtures.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "synthetic Carteio quality benchmark fixtures contains at least 60 fully specified, uniquely identified scenarios across all requested categories",
+          "status": "passed",
+          "title": "contains at least 60 fully specified, uniquely identified scenarios across all requested categories"
+        },
+        {
+          "name": "synthetic Carteio quality benchmark fixtures supplies both conflicting records and explicit tenant ownership for cross-tenant fixtures",
+          "status": "passed",
+          "title": "supplies both conflicting records and explicit tenant ownership for cross-tenant fixtures"
+        },
+        {
+          "name": "synthetic Carteio quality benchmark fixtures scores retrieval using explicit relevant source labels and catches a wrong top result",
+          "status": "passed",
+          "title": "scores retrieval using explicit relevant source labels and catches a wrong top result"
+        },
+        {
+          "name": "synthetic Carteio quality benchmark fixtures measures supported and unsupported labeled claims separately",
+          "status": "passed",
+          "title": "measures supported and unsupported labeled claims separately"
+        },
+        {
+          "name": "synthetic Carteio quality benchmark fixtures marks non-applicable retrieval checks as null and rejects invalid metric inputs",
+          "status": "passed",
+          "title": "marks non-applicable retrieval checks as null and rejects invalid metric inputs"
+        },
+        {
+          "name": "synthetic Carteio quality benchmark fixtures estimates cost only with an explicit rate card and attributes only evidence-supported earliest failures",
+          "status": "passed",
+          "title": "estimates cost only with an explicit rate card and attributes only evidence-supported earliest failures"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/gemini-model-diagnostic.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "manual Gemini ListModels diagnostic requires an explicit live-request flag before it can call Google",
+          "status": "passed",
+          "title": "requires an explicit live-request flag before it can call Google"
+        },
+        {
+          "name": "manual Gemini ListModels diagnostic uses the configured project credential and returns only the configured model name and methods",
+          "status": "passed",
+          "title": "uses the configured project credential and returns only the configured model name and methods"
+        },
+        {
+          "name": "manual Gemini ListModels diagnostic paginates without exposing pagination tokens and finds the configured model on later pages",
+          "status": "passed",
+          "title": "paginates without exposing pagination tokens and finds the configured model on later pages"
+        },
+        {
+          "name": "manual Gemini ListModels diagnostic suppresses Google error bodies and reports only safe HTTP status metadata",
+          "status": "passed",
+          "title": "suppresses Google error bodies and reports only safe HTTP status metadata"
+        },
+        {
+          "name": "manual Gemini ListModels diagnostic returns model metadata so the caller can see when generateContent is unsupported",
+          "status": "passed",
+          "title": "returns model metadata so the caller can see when generateContent is unsupported"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/email.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Resend transactional email provider posts the transactional payload and accepts only a provider message id",
+          "status": "passed",
+          "title": "posts the transactional payload and accepts only a provider message id"
+        },
+        {
+          "name": "Resend transactional email provider reports provider rejection with a request-correlated diagnostic and never includes credentials",
+          "status": "passed",
+          "title": "reports provider rejection with a request-correlated diagnostic and never includes credentials"
+        },
+        {
+          "name": "Resend transactional email provider classifies provider network timeouts without exposing the error text",
+          "status": "passed",
+          "title": "classifies provider network timeouts without exposing the error text"
+        },
+        {
+          "name": "Resend transactional email provider does not accept provider rejection or malformed success responses",
+          "status": "passed",
+          "title": "does not accept provider rejection or malformed success responses"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/shopify-oauth.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Shopify OAuth installation compatibility keeps the legacy three-scope authorization-code request intact for new installs",
+          "status": "passed",
+          "title": "keeps the legacy three-scope authorization-code request intact for new installs"
+        },
+        {
+          "name": "Shopify OAuth installation compatibility keeps the existing connected store untouched while the upgrade allow-list is empty",
+          "status": "passed",
+          "title": "keeps the existing connected store untouched while the upgrade allow-list is empty"
+        },
+        {
+          "name": "Shopify OAuth installation compatibility rejects invalid callbacks before consulting stored credentials",
+          "status": "passed",
+          "title": "rejects invalid callbacks before consulting stored credentials"
+        },
+        {
+          "name": "Shopify OAuth installation compatibility rejects Customer Account and Storefront scopes from the Admin OAuth request list",
+          "status": "passed",
+          "title": "rejects Customer Account and Storefront scopes from the Admin OAuth request list"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/knowledge-public-website.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "website knowledge registration registers a normalized website only in the authorized organization",
+          "status": "failed",
+          "title": "registers a normalized website only in the authorized organization"
+        },
+        {
+          "name": "website knowledge registration rejects unsafe website URLs before persisting a source",
+          "status": "passed",
+          "title": "rejects unsafe website URLs before persisting a source"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/workspace-dashboard.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "workspace dashboard aggregates returns tenant-scoped commerce and training data without mixing currency totals",
+          "status": "passed",
+          "title": "returns tenant-scoped commerce and training data without mixing currency totals"
+        },
+        {
+          "name": "workspace dashboard aggregates does not execute or expose sales aggregates to workspace members",
+          "status": "passed",
+          "title": "does not execute or expose sales aggregates to workspace members"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/clarification-guard.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "clarification guard asks one focused question for ambiguous payment intent and avoids sensitive data",
+          "status": "passed",
+          "title": "asks one focused question for ambiguous payment intent and avoids sensitive data"
+        },
+        {
+          "name": "clarification guard clarifies unresolved follow-ups and inconsistent polarity",
+          "status": "passed",
+          "title": "clarifies unresolved follow-ups and inconsistent polarity"
+        },
+        {
+          "name": "clarification guard provides bounded Hindi and English rephrase requests for unknown interpretation",
+          "status": "passed",
+          "title": "provides bounded Hindi and English rephrase requests for unknown interpretation"
+        },
+        {
+          "name": "clarification guard treats a missing structured semantic payload with an unknown legacy intent as a clarification case",
+          "status": "passed",
+          "title": "treats a missing structured semantic payload with an unknown legacy intent as a clarification case"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/database-foundation.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "database foundation returns minimal ready status when the configured database answers",
+          "status": "passed",
+          "title": "returns minimal ready status when the configured database answers"
+        },
+        {
+          "name": "database foundation returns a redacted unavailable status on a database error",
+          "status": "passed",
+          "title": "returns a redacted unavailable status on a database error"
+        },
+        {
+          "name": "database foundation maps unavailable database readiness to HTTP 503 without returning driver details",
+          "status": "passed",
+          "title": "maps unavailable database readiness to HTTP 503 without returning driver details"
+        },
+        {
+          "name": "database foundation disconnects Prisma during Nest application shutdown",
+          "status": "passed",
+          "title": "disconnects Prisma during Nest application shutdown"
+        },
+        {
+          "name": "database foundation classifies common Prisma failures without inspecting error messages",
+          "status": "passed",
+          "title": "classifies common Prisma failures without inspecting error messages"
+        },
+        {
+          "name": "database foundation declares tenant-matching composite foreign keys and restrictive deletion in the schema",
+          "status": "passed",
+          "title": "declares tenant-matching composite foreign keys and restrictive deletion in the schema"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/widget-retention-worker.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "WidgetRetentionWorker deletes ticket-linked records and the exact conversation after its last ticket expires",
+          "status": "failed",
+          "title": "deletes ticket-linked records and the exact conversation after its last ticket expires"
+        },
+        {
+          "name": "WidgetRetentionWorker retains the shared conversation while another ticket is still active",
+          "status": "passed",
+          "title": "retains the shared conversation while another ticket is still active"
+        },
+        {
+          "name": "WidgetRetentionWorker uses bounded cross-worker row locking and leaves failed transactions retryable",
+          "status": "passed",
+          "title": "uses bounded cross-worker row locking and leaves failed transactions retryable"
+        },
+        {
+          "name": "WidgetRetentionWorker is idempotent when the indexed expiry query has no due conversations",
+          "status": "passed",
+          "title": "is idempotent when the indexed expiry query has no due conversations"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/config/shopify-scope-inventory.config.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Shopify owner-supplied scope inventory normalizes, deduplicates and validates the full supplied inventory",
+          "status": "passed",
+          "title": "normalizes, deduplicates and validates the full supplied inventory"
+        },
+        {
+          "name": "Shopify owner-supplied scope inventory separates Admin, Customer Account, Storefront and special scopes",
+          "status": "passed",
+          "title": "separates Admin, Customer Account, Storefront and special scopes"
+        },
+        {
+          "name": "Shopify owner-supplied scope inventory accepts only version-documented, non-sensitive Admin read candidates",
+          "status": "passed",
+          "title": "accepts only version-documented, non-sensitive Admin read candidates"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/retrieval-query-plan.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "bounded retrieval query planning keeps contextual and original wording and caps multi-aspect expansion",
+          "status": "passed",
+          "title": "keeps contextual and original wording and caps multi-aspect expansion"
+        },
+        {
+          "name": "bounded retrieval query planning does not let an answer-aspect search expression introduce an identifier",
+          "status": "passed",
+          "title": "does not let an answer-aspect search expression introduce an identifier"
+        },
+        {
+          "name": "bounded retrieval query planning rejects provider rewrites that introduce identifier-shaped values",
+          "status": "passed",
+          "title": "rejects provider rewrites that introduce identifier-shaped values"
+        },
+        {
+          "name": "bounded retrieval query planning preserves exact validated entities in rewrites and rejects entities outside current or resolved context",
+          "status": "passed",
+          "title": "preserves exact validated entities in rewrites and rejects entities outside current or resolved context"
+        },
+        {
+          "name": "bounded retrieval query planning strips control characters, bounds text, and deduplicates without changing source access",
+          "status": "failed",
+          "title": "strips control characters, bounds text, and deduplicates without changing source access"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/business-scope-guard.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "business scope guard redirects only an explicit out-of-scope candidate when server business context exists",
+          "status": "passed",
+          "title": "redirects only an explicit out-of-scope candidate when server business context exists"
+        },
+        {
+          "name": "business scope guard does not let an out-of-scope estimate override a plausible business question",
+          "status": "passed",
+          "title": "does not let an out-of-scope estimate override a plausible business question"
+        },
+        {
+          "name": "business scope guard represents partial and unknown scope separately",
+          "status": "failed",
+          "title": "represents partial and unknown scope separately"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/website-sync.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "website synchronization page retention allows page removals only from a complete crawl snapshot",
+          "status": "passed",
+          "title": "allows page removals only from a complete crawl snapshot"
+        },
+        {
+          "name": "website synchronization page retention reuses embeddings only when chunk content and the configured embedding profile match",
+          "status": "passed",
+          "title": "reuses embeddings only when chunk content and the configured embedding profile match"
+        },
+        {
+          "name": "website synchronization page retention retains a prior page omitted by crawl limits until a 404/410 confirms removal",
+          "status": "passed",
+          "title": "retains a prior page omitted by crawl limits until a 404/410 confirms removal"
+        },
+        {
+          "name": "website synchronization page retention counts changed and unchanged fetched pages from content fingerprints",
+          "status": "passed",
+          "title": "counts changed and unchanged fetched pages from content fingerprints"
+        },
+        {
+          "name": "website synchronization page retention treats a page classification or language change as an update even when body text is unchanged",
+          "status": "passed",
+          "title": "treats a page classification or language change as an update even when body text is unchanged"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/knowledge-processing.shopify-scopes.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Shopify-backed knowledge permission filtering returns only tenant-owned Shopify content with a fresh grant and both merchant permissions",
+          "status": "passed",
+          "title": "returns only tenant-owned Shopify content with a fresh grant and both merchant permissions"
+        },
+        {
+          "name": "Shopify-backed knowledge permission filtering blocks Shopify evidence when missing actual grant",
+          "status": "passed",
+          "title": "blocks Shopify evidence when missing actual grant"
+        },
+        {
+          "name": "Shopify-backed knowledge permission filtering blocks Shopify evidence when workspace permission disabled",
+          "status": "passed",
+          "title": "blocks Shopify evidence when workspace permission disabled"
+        },
+        {
+          "name": "Shopify-backed knowledge permission filtering blocks Shopify evidence when assistant permission disabled",
+          "status": "passed",
+          "title": "blocks Shopify evidence when assistant permission disabled"
+        },
+        {
+          "name": "Shopify-backed knowledge permission filtering rechecks Shopify grants before returning cached public evidence",
+          "status": "failed",
+          "title": "rechecks Shopify grants before returning cached public evidence"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/workspace.module.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "WorkspaceModule initialization resolves the shared session guard and auth dependencies while keeping route protection active",
+          "status": "passed",
+          "title": "resolves the shared session guard and auth dependencies while keeping route protection active"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/knowledge-context-builder.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "buildEvidenceContext deduplicates overlapping excerpts, preserves attribution and assigns stable citation references",
+          "status": "failed",
+          "title": "deduplicates overlapping excerpts, preserves attribution and assigns stable citation references"
+        },
+        {
+          "name": "buildEvidenceContext selects more authoritative current Shopify policy evidence before public page evidence",
+          "status": "passed",
+          "title": "selects more authoritative current Shopify policy evidence before public page evidence"
+        },
+        {
+          "name": "buildEvidenceContext enforces per-source diversity and a bounded context byte budget",
+          "status": "passed",
+          "title": "enforces per-source diversity and a bounded context byte budget"
+        },
+        {
+          "name": "buildEvidenceContext retains prompt-like merchant text only as an attributed excerpt value",
+          "status": "passed",
+          "title": "retains prompt-like merchant text only as an attributed excerpt value"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-worker.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "dedicated knowledge worker bootstrap requires explicit standalone enablement and a database URL",
+          "status": "passed",
+          "title": "requires explicit standalone enablement and a database URL"
+        },
+        {
+          "name": "dedicated knowledge worker bootstrap refuses startup in Vercel even if the worker flag is accidentally enabled",
+          "status": "passed",
+          "title": "refuses startup in Vercel even if the worker flag is accidentally enabled"
+        },
+        {
+          "name": "dedicated knowledge worker bootstrap registers only the knowledge processor and its direct service dependencies",
+          "status": "passed",
+          "title": "registers only the knowledge processor and its direct service dependencies"
+        },
+        {
+          "name": "dedicated knowledge worker bootstrap starts one referenced standalone polling timer and stops it cleanly",
+          "status": "passed",
+          "title": "starts one referenced standalone polling timer and stops it cleanly"
+        },
+        {
+          "name": "dedicated knowledge worker bootstrap does not start polling in Vercel even if the worker flag is true",
+          "status": "passed",
+          "title": "does not start polling in Vercel even if the worker flag is true"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/ticket-outbox-worker.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "TicketOutboxWorker claims due records with PostgreSQL SKIP LOCKED and repairs an expired processing lease",
+          "status": "passed",
+          "title": "claims due records with PostgreSQL SKIP LOCKED and repairs an expired processing lease"
+        },
+        {
+          "name": "TicketOutboxWorker schedules retryable failures with bounded backoff and keeps them out of delivered state",
+          "status": "failed",
+          "title": "schedules retryable failures with bounded backoff and keeps them out of delivered state"
+        },
+        {
+          "name": "TicketOutboxWorker marks absent channel support permanently unsupported without claiming customer delivery",
+          "status": "failed",
+          "title": "marks absent channel support permanently unsupported without claiming customer delivery"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/assistant-contact-evidence.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "assistant behavior and support contact evidence passes the complete stored behavior configuration into the response instruction layer",
+          "status": "passed",
+          "title": "passes the complete stored behavior configuration into the response instruction layer"
+        },
+        {
+          "name": "assistant behavior and support contact evidence accepts only validated labeled fields under an explicit HELP CONTACTS heading",
+          "status": "passed",
+          "title": "accepts only validated labeled fields under an explicit HELP CONTACTS heading"
+        },
+        {
+          "name": "assistant behavior and support contact evidence creates stable tenant-scoped evidence identity and changes it when contact facts change",
+          "status": "passed",
+          "title": "creates stable tenant-scoped evidence identity and changes it when contact facts change"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/playground.dto.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "PlaygroundChatDto rejects a missing or non-meaningful message",
+          "status": "passed",
+          "title": "rejects a missing or non-meaningful message"
+        },
+        {
+          "name": "PlaygroundChatDto rejects a missing or non-meaningful message",
+          "status": "passed",
+          "title": "rejects a missing or non-meaningful message"
+        },
+        {
+          "name": "PlaygroundChatDto rejects a missing or non-meaningful message",
+          "status": "passed",
+          "title": "rejects a missing or non-meaningful message"
+        },
+        {
+          "name": "PlaygroundChatDto accepts bounded multilingual UTF-8 text including emoji and combining marks",
+          "status": "passed",
+          "title": "accepts bounded multilingual UTF-8 text including emoji and combining marks"
+        },
+        {
+          "name": "PlaygroundChatDto rejects messages above the existing Playground character limit",
+          "status": "passed",
+          "title": "rejects messages above the existing Playground character limit"
+        },
+        {
+          "name": "PlaygroundChatDto requires v4 identifiers when session or turn identifiers are supplied",
+          "status": "passed",
+          "title": "requires v4 identifiers when session or turn identifiers are supplied"
+        },
+        {
+          "name": "PlaygroundChatDto rejects client authorization fields before controller work and does not echo submitted content",
+          "status": "passed",
+          "title": "rejects client authorization fields before controller work and does not echo submitted content"
+        },
+        {
+          "name": "assistant provider fallback DTO accepts an explicitly configured OpenRouter model route without restricting model IDs",
+          "status": "passed",
+          "title": "accepts an explicitly configured OpenRouter model route without restricting model IDs"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-indexing.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "knowledge indexing primitives keeps short FAQ question and answer together with authored Unicode",
+          "status": "passed",
+          "title": "keeps short FAQ question and answer together with authored Unicode"
+        },
+        {
+          "name": "knowledge indexing primitives bounds long text chunks and overlaps adjacent chunks",
+          "status": "passed",
+          "title": "bounds long text chunks and overlaps adjacent chunks"
+        },
+        {
+          "name": "knowledge indexing primitives fingerprints exact source text deterministically",
+          "status": "passed",
+          "title": "fingerprints exact source text deterministically"
+        },
+        {
+          "name": "knowledge indexing primitives validates provider vector dimensions and sends bounded multilingual input",
+          "status": "passed",
+          "title": "validates provider vector dimensions and sends bounded multilingual input"
+        },
+        {
+          "name": "knowledge indexing primitives rejects an incompatible provider vector instead of persisting it",
+          "status": "passed",
+          "title": "rejects an incompatible provider vector instead of persisting it"
+        },
+        {
+          "name": "knowledge indexing primitives does not initialize embeddings by default, keeping lexical indexing provider-free",
+          "status": "passed",
+          "title": "does not initialize embeddings by default, keeping lexical indexing provider-free"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/shopify-website-discovery.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Shopify website discovery authorization registers Shopify primary storefront metadata as a normal unverified website source",
+          "status": "passed",
+          "title": "registers Shopify primary storefront metadata as a normal unverified website source"
+        },
+        {
+          "name": "Shopify website discovery authorization refuses unsafe storefront URL metadata instead of registering a crawl source",
+          "status": "failed",
+          "title": "refuses unsafe storefront URL metadata instead of registering a crawl source"
+        },
+        {
+          "name": "Shopify website discovery authorization loads only a connected Shopify instance owned by the requested tenant",
+          "status": "failed",
+          "title": "loads only a connected Shopify instance owned by the requested tenant"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector-sync-debug.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "connectorSyncDebug database error diagnostics keeps Prisma P2010 separate from the underlying PostgreSQL SQLSTATE",
+          "status": "passed",
+          "title": "keeps Prisma P2010 separate from the underlying PostgreSQL SQLSTATE"
+        },
+        {
+          "name": "connectorSyncDebug database error diagnostics does not report the Prisma wrapper code as a SQLSTATE when database metadata is absent",
+          "status": "passed",
+          "title": "does not report the Prisma wrapper code as a SQLSTATE when database metadata is absent"
+        },
+        {
+          "name": "connectorSyncDebug database error diagnostics identifies missing schema objects from safe nested adapter metadata",
+          "status": "passed",
+          "title": "identifies missing schema objects from safe nested adapter metadata"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-controller.routes.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "KnowledgeController website sync route contract registers the secured POST route used by the dashboard under the global API prefix",
+          "status": "passed",
+          "title": "registers the secured POST route used by the dashboard under the global API prefix"
+        },
+        {
+          "name": "KnowledgeController website sync route contract keeps training status on the existing GET website details route",
+          "status": "passed",
+          "title": "keeps training status on the existing GET website details route"
+        },
+        {
+          "name": "KnowledgeController knowledge inspection routes exposes workspace-scoped chunk inspection and runs preview as a public customer retrieval",
+          "status": "passed",
+          "title": "exposes workspace-scoped chunk inspection and runs preview as a public customer retrieval"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/knowledge-indexing.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "knowledge indexing contract normalizes line endings and whitespace deterministically while retaining Unicode facts",
+          "status": "passed",
+          "title": "normalizes line endings and whitespace deterministically while retaining Unicode facts"
+        },
+        {
+          "name": "knowledge indexing contract keeps a heading attached to its section and preserves FAQ question-answer pairs",
+          "status": "passed",
+          "title": "keeps a heading attached to its section and preserves FAQ question-answer pairs"
+        },
+        {
+          "name": "knowledge indexing contract deduplicates normalized chunk bodies while keeping their first source-order occurrence",
+          "status": "passed",
+          "title": "deduplicates normalized chunk bodies while keeping their first source-order occurrence"
+        },
+        {
+          "name": "knowledge indexing contract keeps chunks bounded for long content and produces stable identities for the same source version",
+          "status": "passed",
+          "title": "keeps chunks bounded for long content and produces stable identities for the same source version"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/widget-source-indicator.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "widgetSourceIndicator labels generated answers without evidence as AI generated",
+          "status": "passed",
+          "title": "labels generated answers without evidence as AI generated"
+        },
+        {
+          "name": "widgetSourceIndicator classifies cited Knowledge Base and public website evidence only",
+          "status": "passed",
+          "title": "classifies cited Knowledge Base and public website evidence only"
+        },
+        {
+          "name": "widgetSourceIndicator classifies Shopify catalog and Shopify API policy evidence",
+          "status": "passed",
+          "title": "classifies Shopify catalog and Shopify API policy evidence"
+        },
+        {
+          "name": "widgetSourceIndicator uses a deterministic system label only for known system origins",
+          "status": "passed",
+          "title": "uses a deterministic system label only for known system origins"
+        },
+        {
+          "name": "widgetSourceIndicator ignores uncited references and is safe for historical reloads",
+          "status": "passed",
+          "title": "ignores uncited references and is safe for historical reloads"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/google-token-verifier.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "GoogleTokenVerifier rejects signature/library verification failures without leaking details",
+          "status": "passed",
+          "title": "rejects signature/library verification failures without leaking details"
+        },
+        {
+          "name": "GoogleTokenVerifier rejects a token with an unexpected audience",
+          "status": "passed",
+          "title": "rejects a token with an unexpected audience"
+        },
+        {
+          "name": "GoogleTokenVerifier rejects an unexpected issuer and expired tokens",
+          "status": "passed",
+          "title": "rejects an unexpected issuer and expired tokens"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/social-conversation.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "safe conversational recovery classification recognizes a whole-message social act: Kaise ho bhai?",
+          "status": "passed",
+          "title": "recognizes a whole-message social act: Kaise ho bhai?"
+        },
+        {
+          "name": "safe conversational recovery classification recognizes a whole-message social act: Thik hai",
+          "status": "passed",
+          "title": "recognizes a whole-message social act: Thik hai"
+        },
+        {
+          "name": "safe conversational recovery classification recognizes a whole-message social act: Thanks",
+          "status": "passed",
+          "title": "recognizes a whole-message social act: Thanks"
+        },
+        {
+          "name": "safe conversational recovery classification does not classify substantive corrections or requests as social: Nahi, blue wale",
+          "status": "passed",
+          "title": "does not classify substantive corrections or requests as social: Nahi, blue wale"
+        },
+        {
+          "name": "safe conversational recovery classification does not classify substantive corrections or requests as social: Nahi, mujhe refund chahiye",
+          "status": "passed",
+          "title": "does not classify substantive corrections or requests as social: Nahi, mujhe refund chahiye"
+        },
+        {
+          "name": "safe conversational recovery classification uses validated semantics as advisory social routing and keeps a business request on the normal path",
+          "status": "passed",
+          "title": "uses validated semantics as advisory social routing and keeps a business request on the normal path"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector-credential-vault.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConnectorCredentialVault encrypts credentials with unique nonces and decrypts only with matching authenticated context",
+          "status": "passed",
+          "title": "encrypts credentials with unique nonces and decrypts only with matching authenticated context"
+        },
+        {
+          "name": "ConnectorCredentialVault fails closed when the encryption key is missing",
+          "status": "passed",
+          "title": "fails closed when the encryption key is missing"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/response-safety.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: Your refund was approved yesterday and will arrive tomorrow. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: Your refund was approved yesterday and will arrive tomorrow. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: I checked your account and your payment is processing. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: I checked your account and your payment is processing. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: I fetched your shipment record and tracking ID AB1234 shows it is delayed. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: I fetched your shipment record and tracking ID AB1234 shows it is delayed. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: Your refund should be credited tomorrow. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: Your refund should be credited tomorrow. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: Order 00-12345 is confirmed and will arrive Friday. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: Order 00-12345 is confirmed and will arrive Friday. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: आपका रिफंड स्वीकृत हो गया है और कल मिल जाएगा। [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: आपका रिफंड स्वीकृत हो गया है और कल मिल जाएगा। [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements does not classify a public policy quote plus a non-assertive limitation as a live lookup result",
+          "status": "passed",
+          "title": "does not classify a public policy quote plus a non-assertive limitation as a live lookup result"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements adds a required limitation when provider wording omitted it",
+          "status": "passed",
+          "title": "adds a required limitation when provider wording omitted it"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-base.faq-import.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [
+        "TS6133"
+      ],
+      "assertions": []
+    },
+    {
+      "path": "backend/test/csrf-origin.middleware.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "auth CSRF origin validation rejects a missing or foreign origin",
+          "status": "passed",
+          "title": "rejects a missing or foreign origin"
+        },
+        {
+          "name": "auth CSRF origin validation accepts the configured origin and safe methods",
+          "status": "passed",
+          "title": "accepts the configured origin and safe methods"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/platform-admin.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "PlatformOperatorGuard does not treat workspace membership as platform access",
+          "status": "passed",
+          "title": "does not treat workspace membership as platform access"
+        },
+        {
+          "name": "PlatformOperatorGuard requires an authenticated session before reading platform operator records",
+          "status": "passed",
+          "title": "requires an authenticated session before reading platform operator records"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/scope-splitting.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "validated mixed-scope question splitting accepts two distinct exact, non-overlapping spans of the original customer text",
+          "status": "passed",
+          "title": "accepts two distinct exact, non-overlapping spans of the original customer text"
+        },
+        {
+          "name": "validated mixed-scope question splitting rejects invented paraphrases, overlapping spans, and extra model authority fields",
+          "status": "passed",
+          "title": "rejects invented paraphrases, overlapping spans, and extra model authority fields"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/generic-rest-connector.adapter.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "GenericRestConnectorAdapter signed webhook gate accepts a timestamp-bound signature and rejects a tampered body",
+          "status": "passed",
+          "title": "accepts a timestamp-bound signature and rejects a tampered body"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector.registry.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConnectorRegistry capability gates keeps platform adapters unavailable when they are not registered",
+          "status": "passed",
+          "title": "keeps platform adapters unavailable when they are not registered"
+        },
+        {
+          "name": "ConnectorRegistry capability gates rejects resource sync unless the registered adapter declares the resource",
+          "status": "passed",
+          "title": "rejects resource sync unless the registered adapter declares the resource"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/request-id.middleware.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "requestIdMiddleware accepts UUID request IDs and replaces arbitrary token-like values before logging",
+          "status": "passed",
+          "title": "accepts UUID request IDs and replaces arbitrary token-like values before logging"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/auth-cookie-options.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "session cookie options uses a host-only HttpOnly strict cookie and Secure only in production",
+          "status": "passed",
+          "title": "uses a host-only HttpOnly strict cookie and Secure only in production"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/safe-outbound-http.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "connector outbound address policy rejects private or reserved address 127.0.0.1",
+          "status": "passed",
+          "title": "rejects private or reserved address 127.0.0.1"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address 10.0.0.2",
+          "status": "passed",
+          "title": "rejects private or reserved address 10.0.0.2"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address 172.16.0.1",
+          "status": "passed",
+          "title": "rejects private or reserved address 172.16.0.1"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address 192.168.1.1",
+          "status": "passed",
+          "title": "rejects private or reserved address 192.168.1.1"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address 169.254.169.254",
+          "status": "passed",
+          "title": "rejects private or reserved address 169.254.169.254"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address ::1",
+          "status": "passed",
+          "title": "rejects private or reserved address ::1"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address fc00::1",
+          "status": "passed",
+          "title": "rejects private or reserved address fc00::1"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address fe80::1",
+          "status": "passed",
+          "title": "rejects private or reserved address fe80::1"
+        },
+        {
+          "name": "connector outbound address policy rejects private or reserved address ::ffff:127.0.0.1",
+          "status": "passed",
+          "title": "rejects private or reserved address ::ffff:127.0.0.1"
+        },
+        {
+          "name": "connector outbound address policy permits public address 8.8.8.8",
+          "status": "passed",
+          "title": "permits public address 8.8.8.8"
+        },
+        {
+          "name": "connector outbound address policy permits public address 1.1.1.1",
+          "status": "passed",
+          "title": "permits public address 1.1.1.1"
+        },
+        {
+          "name": "connector outbound address policy permits public address 2606:4700:4700::1111",
+          "status": "passed",
+          "title": "permits public address 2606:4700:4700::1111"
+        }
+      ]
+    }
+  ]
+}

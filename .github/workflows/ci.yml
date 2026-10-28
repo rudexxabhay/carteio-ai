@@ -14,12 +14,13 @@ jobs:
           version: 9.15.0
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
+      - run: pnpm --filter @carteio/backend prisma:generate
+      - run: pnpm -r typecheck
       - run: pnpm lint
-      - run: pnpm test
+      - run: pnpm -r test
       - run: pnpm --filter @carteio/backend test:e2e
       - run: pnpm build

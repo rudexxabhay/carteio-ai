@@ -7,6 +7,8 @@ export interface Workspace {
   slug: string;
   websiteUrl: string | null;
   businessType: string | null;
+  timezone?: string;
+  locale?: string;
   status: string;
   role: WorkspaceRole;
   currentUserRole?: WorkspaceRole;
@@ -17,7 +19,7 @@ export interface WorkspacePage { workspaces: Workspace[]; page: number; pageSize
 export interface WorkspaceMember { id: string; name: string | null; role: WorkspaceRole; joinedAt: string; }
 export interface WorkspaceMembersPage { members: WorkspaceMember[]; page: number; pageSize: number; total: number; currentUserRole: WorkspaceRole; }
 export interface CreateWorkspaceInput { name: string; slug: string; websiteUrl?: string; businessType?: string; }
-export type UpdateWorkspaceInput = Partial<Pick<Workspace, 'name' | 'websiteUrl' | 'businessType'>>;
+export type UpdateWorkspaceInput = Partial<Pick<Workspace, 'name' | 'websiteUrl' | 'businessType' | 'timezone' | 'locale'>>;
 
 export function listWorkspaces(page = 1, signal?: AbortSignal) { return apiGet<WorkspacePage>(`/workspaces?page=${page}&pageSize=100`, signal); }
 export async function listAllWorkspaces(signal?: AbortSignal) {

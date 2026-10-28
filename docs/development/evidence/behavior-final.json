@@ -1,0 +1,131 @@
+{
+  "run": "H3",
+  "sourceReport": "/tmp/carteio-phase00-behavior-final.json",
+  "exitCode": 0,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 1,
+    "numPassedTestSuites": 1,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 21,
+    "numPassedTests": 21,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "backend/test/assistant.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AssistantService OWNER can create an assistant for the authorized organization",
+          "title": "OWNER can create an assistant for the authorized organization",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService ADMIN can create an assistant for the authorized organization",
+          "title": "ADMIN can create an assistant for the authorized organization",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService uses the effective environment provider for new assistants and ignores stale stored routes without changing records",
+          "title": "uses the effective environment provider for new assistants and ignores stale stored routes without changing records",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService returns explicit safe not-ready metadata when the environment provider configuration is missing",
+          "title": "returns explicit safe not-ready metadata when the environment provider configuration is missing",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService rejects member creation and preserves member read access",
+          "title": "rejects member creation and preserves member read access",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService scopes list and detail queries to the server-authorized tenant",
+          "title": "scopes list and detail queries to the server-authorized tenant",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService filters archived assistants within the authorized organization and validates list status values",
+          "title": "filters archived assistants within the authorized organization and validates list status values",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService requires manager access before archiving an assistant",
+          "title": "requires manager access before archiving an assistant",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService does not reactivate an assistant if archive wins the concurrent lifecycle update",
+          "title": "does not reactivate an assistant if archive wins the concurrent lifecycle update",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService persists updates and activation changes with tenant scope and audit events",
+          "title": "persists updates and activation changes with tenant scope and audit events",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService saves the full Bot Behavior fields and returns the persisted assistant configuration",
+          "title": "saves the full Bot Behavior fields and returns the persisted assistant configuration",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService persists assistant-level all-eligible workspace knowledge access only through owner-authorized updates",
+          "title": "persists assistant-level all-eligible workspace knowledge access only through owner-authorized updates",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService archives an active assistant without deleting its linked or historical records, and records the audit event",
+          "title": "archives an active assistant without deleting its linked or historical records, and records the audit event",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService restores an archived assistant as inactive and never reactivates it implicitly",
+          "title": "restores an archived assistant as inactive and never reactivates it implicitly",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService refuses permanent deletion while cascade relationships could erase retained records",
+          "title": "refuses permanent deletion while cascade relationships could erase retained records",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService allows only authorized managers to change fallback routing and rejects direct provider/model overrides",
+          "title": "allows only authorized managers to change fallback routing and rejects direct provider/model overrides",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService keeps fallback owner-approved and validates duplicates against the effective environment primary",
+          "title": "keeps fallback owner-approved and validates duplicates against the effective environment primary",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService rejects invalid create payload values",
+          "title": "rejects invalid create payload values",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService rejects client-supplied primary provider and model fields at the DTO boundary",
+          "title": "rejects client-supplied primary provider and model fields at the DTO boundary",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService persists Bot Behavior preferences and accepts automatic language as a future setting",
+          "title": "persists Bot Behavior preferences and accepts automatic language as a future setting",
+          "status": "passed"
+        },
+        {
+          "name": "AssistantService stores rules within the authorized assistant and blocks MEMBER mutations",
+          "title": "stores rules within the authorized assistant and blocks MEMBER mutations",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

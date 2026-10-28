@@ -1,0 +1,66 @@
+{
+  "run": "B1",
+  "sourceReport": "/tmp/carteio-phase00-backend-smoke-retry.json",
+  "exitCode": 0,
+  "selection": "unfiltered",
+  "reportedCounters": {
+    "numTotalTestSuites": 1,
+    "numPassedTestSuites": 1,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 8,
+    "numPassedTests": 8,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "backend/test/response-safety.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: Your refund was approved yesterday and will arrive tomorrow. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: Your refund was approved yesterday and will arrive tomorrow. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: I checked your account and your payment is processing. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: I checked your account and your payment is processing. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: I fetched your shipment record and tracking ID AB1234 shows it is delayed. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: I fetched your shipment record and tracking ID AB1234 shows it is delayed. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: Your refund should be credited tomorrow. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: Your refund should be credited tomorrow. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: Order 00-12345 is confirmed and will arrive Friday. [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: Order 00-12345 is confirmed and will arrive Friday. [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements rejects a detected personalized live-status claim: आपका रिफंड स्वीकृत हो गया है और कल मिल जाएगा। [S1]",
+          "status": "passed",
+          "title": "rejects a detected personalized live-status claim: आपका रिफंड स्वीकृत हो गया है और कल मिल जाएगा। [S1]"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements does not classify a public policy quote plus a non-assertive limitation as a live lookup result",
+          "status": "passed",
+          "title": "does not classify a public policy quote plus a non-assertive limitation as a live lookup result"
+        },
+        {
+          "name": "bounded response safety for unresolved live requirements adds a required limitation when provider wording omitted it",
+          "status": "passed",
+          "title": "adds a required limitation when provider wording omitted it"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "run": "F8",
+  "sourceReport": "/tmp/carteio-phase00-workspace-ui-final.json",
+  "exitCode": 0,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 2,
+    "numPassedTestSuites": 2,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": null,
+    "numTotalTests": 2,
+    "numPassedTests": 2,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "frontend/src/tests/phase00-workspace-isolation.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "Phase 00 active workspace route isolation removes the old tenant during authorization of the next workspace and preserves the owner role",
+          "title": "removes the old tenant during authorization of the next workspace and preserves the owner role",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 00 active workspace route isolation keeps both tenant dashboards hidden when the next workspace denies access",
+          "title": "keeps both tenant dashboards hidden when the next workspace denies access",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

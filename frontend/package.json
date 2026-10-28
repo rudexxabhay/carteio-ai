@@ -3,16 +3,20 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=24.11.0 <25"
+  },
   "scripts": {
     "dev": "vite --port 3000 --strictPort",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "test": "vitest run"
+    "test": "vitest run --maxWorkers=1 --minWorkers=1"
   },
   "dependencies": {
     "@carteio/shared-types": "workspace:*",
     "lucide-react": "^0.468.0",
+    "motion": "^13.4.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.1"
@@ -21,8 +25,11 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
@@ -31,9 +38,6 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
-    "vitest": "^2.1.8",
-    "@typescript-eslint/parser": "^8.19.1",
-    "@typescript-eslint/eslint-plugin": "^8.19.1",
-    "@types/node": "^22.10.5"
+    "vitest": "^2.1.8"
   }
 }

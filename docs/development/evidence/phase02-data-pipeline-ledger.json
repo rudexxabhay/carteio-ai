@@ -1,0 +1,119 @@
+{
+  "phase": "02",
+  "objective": "Data Ingestion, Normalization & Indexing",
+  "sourceStatus": "CODE_IMPLEMENTED",
+  "runtimeStatus": "RUNTIME_UNVERIFIED",
+  "inspectionDate": "2026-10-26",
+  "preservedRoadmapState": {
+    "phase00": "BLOCKED",
+    "phase00OriginalFailures": { "backend": 116, "frontend": 85, "total": 201 },
+    "phase00Ledger": "phase00-continuation-dispositions.json",
+    "phase01": "CODE_IMPLEMENTED; runtime unverified",
+    "phase01Ledger": "phase01-connectivity-ledger.json"
+  },
+  "pipelineMatrix": [
+    {
+      "pipeline": "Shopify commerce",
+      "status": "FIXED",
+      "sourcePath": "Shopify Admin GraphQL -> ShopifyConnectorAdapter.sync -> NormalizedCommerceRecord -> ConnectorSyncWorker.persistCommerceRecord -> organization/connection-scoped Prisma rows -> commerce read/tool services",
+      "findings": [
+        "Product, variant, collection, image, inventory, currency, timestamps and status fields are represented in the existing normalization and Prisma models.",
+        "Nested product/variant/image/collection pagination is completed within bounded limits; incomplete/looping cursors are rejected.",
+        "Idempotent upserts, source timestamps, tombstones and complete-full-snapshot deletion reconciliation are present.",
+        "Product summary price previously came from the first variant, which need not be the lowest. It now selects the lowest valid price and takes compare-at from that same variant using exact decimal comparison.",
+        "Working variant details and search/read service behavior are unchanged."
+      ],
+      "runtime": "No Shopify call, sync, database read/write or merchant verification was performed."
+    },
+    {
+      "pipeline": "Shopify sync history cursor",
+      "status": "FIXED",
+      "sourcePath": "ConnectorService.syncHistory -> existing guarded before/limit route -> frontend connector API -> Shopify integration detail",
+      "findings": [
+        "Backend already supplies stable before cursor, hasMore and nextCursor.",
+        "Frontend now accepts before, appends deduplicated older jobs, and exposes load-older control.",
+        "History load failures are surfaced; they are no longer rendered as an empty successful history response on the Shopify detail page."
+      ],
+      "runtime": "The new cursor tests were not executed."
+    },
+    {
+      "pipeline": "Website crawl and active index",
+      "status": "WIRED",
+      "sourcePath": "WebsiteCrawler.extractHtmlPage/extractWebsitePage -> canonicalized CrawlPage -> KnowledgePage -> source/page-attributed KnowledgeChunk -> activeIndexGeneration publication",
+      "findings": [
+        "HTML extraction preserves page text/structured FAQ content and canonical URLs; chunks retain source, page, version, generation and URL locator.",
+        "Existing source inspection shows duplicate URL handling, unchanged-page chunk reuse and old-page retention unless explicit authoritative removal evidence exists.",
+        "A Shipping Policy page can be represented by the crawler as an actual page with extracted content when present and reachable; no page content was fabricated.",
+        "Crawl was not invoked; real page reachability, rendering and extraction quality remain unverified."
+      ],
+      "runtime": "No live crawl, DNS access, renderer request or external website access was performed."
+    },
+    {
+      "pipeline": "FAQ import and persistence",
+      "status": "WIRED",
+      "sourcePath": "FAQ CSV/XLSX parser -> row-level validation/duplicate policy -> organization-scoped KnowledgeSource persistence -> queued indexing job -> active chunks",
+      "findings": [
+        "Existing parser validates supported headers, row bounds, malformed rows, duplicate rows and row-level errors.",
+        "Creation/import paths retain explicit visibility choices and owner-scoped public changes; default imported content remains restricted unless explicitly authorized.",
+        "No fixture was automatically published or made public."
+      ],
+      "runtime": "No database write or file import was executed."
+    },
+    {
+      "pipeline": "Manual text ingestion",
+      "status": "WIRED",
+      "sourcePath": "Guarded text create -> organization-scoped KnowledgeSource -> versioned processing job -> KnowledgeChunk -> active index generation",
+      "findings": [
+        "Source creation and text update queue versioned processing; readiness is keyed to sourceVersion and activeIndexGeneration.",
+        "Visibility and authorization are retained from existing KnowledgeSource contracts."
+      ],
+      "runtime": "No database write, embedding call or index operation was executed."
+    }
+  ],
+  "confirmedFixes": [
+    {
+      "id": "P02-SHOP-01",
+      "cause": "Shopify product summary price and compare-at were mapped from variants.nodes[0], even when a later variant was cheaper.",
+      "correction": "Select the lowest valid provider variant price by exact decimal comparison and retain the matching variant compare-at amount.",
+      "regressionTest": "backend/src/modules/workspaces/connectors/platform-commerce.adapters.spec.ts: lowest valid variant price and matching compare-at",
+      "executed": false
+    },
+    {
+      "id": "P02-SYNC-01",
+      "cause": "Frontend sync history ignored the existing backend before/nextCursor pagination contract.",
+      "correction": "Add cursor input to the client and a deduplicating load-older path in the Shopify integration detail; report history request failures instead of presenting them as empty history.",
+      "regressionTests": [
+        "backend/src/modules/workspaces/connectors/connector.service.spec.ts: stable next cursor for tenant-scoped sync history pages",
+        "frontend/src/tests/connector-sync-history.test.ts: requests next page using backend before cursor"
+      ],
+      "executed": false
+    }
+  ],
+  "changedFiles": [
+    "backend/src/modules/workspaces/connectors/shopify.adapter.ts",
+    "backend/src/modules/workspaces/connectors/platform-commerce.adapters.spec.ts",
+    "backend/src/modules/workspaces/connectors/connector.service.spec.ts",
+    "frontend/src/services/api/connectors.ts",
+    "frontend/src/pages/saas/ShopifyIntegrationDetailPage.tsx",
+    "frontend/src/tests/connector-sync-history.test.ts",
+    "docs/development/phase-register.md",
+    "docs/development/known-defects.md",
+    "docs/development/evidence/phase01-connectivity-ledger.json",
+    "docs/development/evidence/phase02-data-pipeline-ledger.json"
+  ],
+  "testExecution": {
+    "executed": false,
+    "reason": "Explicit Phase 02 instruction prohibits test execution, builds and type checks.",
+    "suggestedCommands": [
+      "cd backend && node node_modules/jest/bin/jest.js --runInBand src/modules/workspaces/connectors/platform-commerce.adapters.spec.ts src/modules/workspaces/connectors/connector.service.spec.ts src/modules/workspaces/connectors/connector-sync-worker.service.spec.ts src/modules/workspaces/website-sync.spec.ts src/modules/workspaces/website-crawler.spec.ts src/modules/workspaces/knowledge-indexing.spec.ts test/knowledge-processing.spec.ts test/knowledge-base.faq-import.spec.ts test/faq-import.spec.ts test/knowledge-base.service.spec.ts",
+      "cd frontend && node_modules/.bin/vitest run src/tests/connector-sync-history.test.ts src/tests/shopify-dashboard-regression.test.tsx src/tests/knowledge-base.test.tsx src/tests/knowledge-bases.test.tsx --pool=threads --maxWorkers=2 --minWorkers=1"
+    ]
+  },
+  "pendingDependencies": [
+    "Run focused offline tests and frontend/backend regression suites when authorized.",
+    "Approved non-production Shopify read-only verification for pagination, variants, inventory, prices and tombstones.",
+    "Approved website fixture/non-production runtime verification for Shipping Policy reachability, extracted content and generation lifecycle.",
+    "Isolated database runtime verification for Prisma persistence and constraints; no schema or migration change was needed or made."
+  ],
+  "nextPhaseReadiness": "Phase 03 is NOT_STARTED. This source-only Phase 02 implementation is not runtime verified, Phase 00 remains BLOCKED, and tests were not executed. Do not infer that assistant-wide data access was implemented; that remains Phase 03 scope."
+}

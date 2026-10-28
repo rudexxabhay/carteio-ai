@@ -1,0 +1,36 @@
+{
+  "run": "H5",
+  "sourceReport": "/tmp/carteio-phase00-flow-storage-retry.json",
+  "exitCode": 0,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 1,
+    "numPassedTestSuites": 1,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 2,
+    "numPassedTests": 2,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "backend/test/phase00-flow-storage.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Phase 00 saved graph round trip loads the same validated graph, node configuration and stable edge handles that were saved",
+          "title": "loads the same validated graph, node configuration and stable edge handles that were saved",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 00 saved graph round trip executes saved transform and knowledge settings before the assigned assistant and preserves the response and edge trace",
+          "title": "executes saved transform and knowledge settings before the assigned assistant and preserves the response and edge trace",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "run": "N1",
+  "sourceReport": "/tmp/carteio-phase00-added-regressions.json",
+  "exitCode": 0,
+  "selection": "unfiltered",
+  "reportedCounters": {
+    "numTotalTestSuites": 2,
+    "numPassedTestSuites": 2,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 14,
+    "numPassedTests": 14,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 2,
+  "files": [
+    {
+      "path": "backend/test/phase00-api-contracts.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Phase 00 browser-to-Nest contract protection knowledge.crawlWebsiteSource resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "knowledge.crawlWebsiteSource resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection knowledge.getWebsiteSourceDetails resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "knowledge.getWebsiteSourceDetails resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection knowledge.getAssistantKnowledge resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "knowledge.getAssistantKnowledge resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection knowledge-bases.listKnowledgeBases resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "knowledge-bases.listKnowledgeBases resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection knowledge-bases.getKnowledgeBase resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "knowledge-bases.getKnowledgeBase resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection knowledge-bases.getEffectiveKnowledge resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "knowledge-bases.getEffectiveKnowledge resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection assistants.getAssistant resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "assistants.getAssistant resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection assistants.updateAssistant resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "assistants.updateAssistant resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection assistants.getPlaygroundConversation resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "assistants.getPlaygroundConversation resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection workspaces.getWorkspace resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "workspaces.getWorkspace resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection flows.updateFlow resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "flows.updateFlow resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection flows.runFlow resolves to a session-guarded backend route",
+          "status": "passed",
+          "title": "flows.runFlow resolves to a session-guarded backend route"
+        },
+        {
+          "name": "Phase 00 browser-to-Nest contract protection preserves the backend owner role through the actual browser workspace client",
+          "status": "passed",
+          "title": "preserves the backend owner role through the actual browser workspace client"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/phase00-flow-storage.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Phase 00 saved graph round trip loads the same validated graph, node configuration and stable edge handles that were saved",
+          "status": "passed",
+          "title": "loads the same validated graph, node configuration and stable edge handles that were saved"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "phase": "01",
+  "objective": "API & Integration Connectivity",
+  "sourceStatus": "CODE_IMPLEMENTED",
+  "runtimeStatus": "RUNTIME_UNVERIFIED",
+  "inspectionDate": "2026-10-26",
+  "phase00CarryForward": {
+    "status": "BLOCKED",
+    "originalFailedAssertions": {
+      "backend": 116,
+      "frontend": 85,
+      "total": 201
+    },
+    "latestSavedRunsBeforeThisContinuation": {
+      "backend": { "passed": 813, "failed": 0, "exitCode": 0 },
+      "frontend": { "passed": 217, "failed": 26, "exitCode": 1 },
+      "targetedFrontend": { "passed": 97, "failed": 3, "exitCode": 1 }
+    },
+    "dispositionLedger": "phase00-continuation-dispositions.json",
+    "changesAfterSavedRunsExecuted": false
+  },
+  "apiMatrix": [
+    { "area": "Shopify OAuth, configured/granted scopes, tenant association and token vault", "status": "WIRED", "sourceFinding": "Active connector clients and guarded/callback routes align; configured scope grant/upgrade and tenant-scoped token handling exist.", "runtime": "OAuth callback, real merchant grants, token vault and shop ownership were not exercised." },
+    { "area": "Shopify products, variants, collections, prices, currency and inventory", "status": "WIRED", "sourceFinding": "Tenant-scoped commerce APIs and permission/scope filtering are implemented; product search client remains connected.", "runtime": "No live Shopify read or sync was performed." },
+    { "area": "Shopify authorized orders and AI tool permissions/contracts", "status": "WIRED", "sourceFinding": "Order access is permission-gated; supported operation and evidence contracts are source-present.", "runtime": "No merchant order or provider request was made." },
+    { "area": "Shopify sync schedule/history/retry", "status": "FIXED IN PHASE 02", "sourceFinding": "Sync scheduling/retry routes are connected; Phase 02 adds cursor input and load-older behavior using the existing before/hasMore/nextCursor backend contract.", "runtime": "Scheduling and actual sync state were not exercised." },
+    { "area": "Knowledge Sources, FAQ create/import, Knowledge Base CRUD, visibility and bulk actions", "status": "WIRED", "sourceFinding": "Active dashboard client methods match guarded backend routes and payload/response contracts in source.", "runtime": "No connected database behavior was exercised." },
+    { "area": "Website discovery/crawler, pages/chunks, search preview and assistant eligibility", "status": "WIRED", "sourceFinding": "Active routes and client methods are present; page/source visibility and eligibility remain authorization-scoped.", "runtime": "No crawl, index, retrieval or external website access was performed." },
+    { "area": "Assistant CRUD, provider status/configuration and Bot Behavior", "status": "WIRED", "sourceFinding": "Existing clients match guarded assistant/workspace routes; provider/model settings were not changed.", "runtime": "No live provider call or deployed workspace request was made." },
+    { "area": "Workspace membership, active workspace and owner/admin authorization", "status": "WIRED", "sourceFinding": "Workspace service resolves active membership and returns normalized role fields; ticket and integration operations retain guards.", "runtime": "No authenticated multi-tenant browser session was exercised." },
+    { "area": "Conversation create/history/read/internal notes and playground diagnostics", "status": "WIRED", "sourceFinding": "Existing guarded clients map to controller routes; the conversation-note route/persistence is already present from the authorized Phase 00 correction.", "runtime": "No deployed request or persisted conversation was exercised." },
+    { "area": "Public widget bootstrap/session/origin validation", "status": "WIRED", "sourceFinding": "Public config/bootstrap/session and origin validation routes exist alongside guarded workspace configuration routes.", "runtime": "No deployed host, proxy, CORS or browser session was exercised." },
+    { "area": "Agent Builder graph save/load and existing flow execution", "status": "WIRED", "sourceFinding": "Existing graph clients match guarded flow CRUD/run routes; no runtime feature was added.", "runtime": "No persistent graph or execution was exercised in this continuation." },
+    { "area": "Assistant contact configuration", "status": "PARTIAL", "sourceFinding": "Contact evidence is assembled from existing assistant/workspace/source details; no standalone contact-configuration API was identified in audited active routes.", "runtime": "No new API or configuration capability was invented." },
+    { "area": "Handoff routing policy configuration", "status": "NOT_IMPLEMENTED", "sourceFinding": "Dashboard reports routing controls unavailable; no persistence route is present in the audited contract.", "runtime": "No fake endpoint added." },
+    { "area": "Handoff ticket detail assignment and visitor identifier response", "status": "FIXED", "sourceFinding": "Clients now read assignee.id as returned by the API; detail omits raw conversation.externalSessionHash and retains redacted customerReference. Shared ticket response DTOs replace any.", "runtime": "Regression assertion added but not executed." },
+    { "area": "HTTP API error classification", "status": "WIRED", "sourceFinding": "Shared client retains HTTP status and response code/details; it distinguishes 401, 403, 5xx, network, timeout and invalid JSON/response. 400/404/409/429 retain their status and backend validation message.", "runtime": "No HTTP service was started." }
+  ],
+  "confirmedDefect": {
+    "id": "P01-TKT-01",
+    "cause": "Backend ticket detail selected an assignee relation with id, while both dashboard detail views read a nonexistent userId property. The same response spread the private externalSessionHash to the browser.",
+    "correction": "Clients use assignee.id; ticket API responses are typed; backend removes externalSessionHash from the returned conversation object while keeping the pre-existing abbreviated customerReference.",
+    "regressionTestAdded": "backend/src/modules/workspaces/ticketing.service.spec.ts: returns ticket detail with the assignee identity but without the visitor session hash",
+    "testExecuted": false,
+    "severity": "P1"
+  },
+  "changedFiles": [
+    "backend/src/modules/workspaces/ticketing.service.ts",
+    "backend/src/modules/workspaces/ticketing.service.spec.ts",
+    "frontend/src/services/api/saas.ts",
+    "frontend/src/pages/source/SourceTicketsPage.tsx",
+    "frontend/src/dashboard-source/pages.tsx",
+    "docs/development/phase-register.md",
+    "docs/development/known-defects.md",
+    "docs/development/evidence/phase01-connectivity-ledger.json"
+  ],
+  "tests": {
+    "addedOrUpdated": ["backend/src/modules/workspaces/ticketing.service.spec.ts"],
+    "executedInThisContinuation": false,
+    "reason": "Explicit Phase 01 instruction prohibits test execution, builds and type checks."
+  },
+  "manualVerificationCommands": [
+    "cd backend && node node_modules/jest/bin/jest.js --runInBand src/modules/workspaces/ticketing.service.spec.ts",
+    "cd frontend && node_modules/.bin/vitest run src/tests/tickets-page.test.tsx src/tests/phase00-workspace-isolation.test.tsx --pool=threads --maxWorkers=2 --minWorkers=1",
+    "cd backend && node node_modules/jest/bin/jest.js --runInBand test/phase00-api-contracts.spec.ts"
+  ],
+  "phase01Blockers": [
+    "No test, build or type-check execution was permitted; code/test changes are not validated by execution.",
+    "Shopify OAuth, data, sync and order behavior require an approved non-production/read-only merchant runtime.",
+    "Widget proxy/origin behavior, authenticated tenant switching and database persistence require an approved non-production runtime.",
+    "Shopify sync history pagination lacks client cursor support.",
+    "Assistant contact configuration and handoff routing policy do not have dedicated persistence APIs in the audited active routes."
+  ],
+  "phase02ReadinessAtPhase01Close": "NOT_STARTED. The subsequent Phase 02 source implementation is recorded in phase02-data-pipeline-ledger.json. Phase 00 remains BLOCKED and retains its unresolved dispositions; Phase 02 has not been runtime verified."
+}

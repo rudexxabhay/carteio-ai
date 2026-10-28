@@ -2,13 +2,19 @@
   "name": "carteio-ai",
   "private": true,
   "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=24.11.0 <25"
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter @carteio/frontend --filter @carteio/backend dev",
     "dev:frontend": "pnpm --filter @carteio/frontend dev",
     "dev:backend": "pnpm --filter @carteio/backend dev",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter @carteio/backend prisma:generate && pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @carteio/backend prisma:generate && pnpm -r test",
+    "test:backend": "pnpm --filter @carteio/backend exec jest --runInBand",
+    "test:frontend": "pnpm --filter @carteio/frontend exec vitest run --maxWorkers=1 --minWorkers=1",
+    "verify:tooling": "node --version && pnpm --version && pnpm --filter @carteio/backend exec tsc --version && pnpm --filter @carteio/backend exec jest --version && pnpm --filter @carteio/frontend exec vitest --version && pnpm --filter @carteio/backend exec prisma --version",
     "build": "pnpm -r build",
     "format:check": "prettier --check .",
     "format": "prettier --write ."

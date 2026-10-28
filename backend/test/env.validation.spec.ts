@@ -9,13 +9,22 @@ describe('environment configuration', () => {
   it('accepts the local defaults', () => {
     expect(validateEnvironment({}).PORT).toBe(5000);
     expect(validateEnvironment({}).HOST).toBe('127.0.0.1');
-    expect(validateEnvironment({})).toMatchObject({ AUTH_OTP_EXPIRES_MINUTES: 5, AUTH_OTP_MAX_ATTEMPTS: 5, AUTH_OTP_RESEND_COOLDOWN_SECONDS: 60 });
+    expect(validateEnvironment({})).toMatchObject({ AUTH_OTP_EXPIRES_MINUTES: 5, AUTH_OTP_MAX_ATTEMPTS: 5, AUTH_OTP_RESEND_COOLDOWN_SECONDS: 60, PLAYGROUND_USER_REQUESTS_PER_MINUTE: 30, PLAYGROUND_WORKSPACE_REQUESTS_PER_MINUTE: 120 });
+  });
+
+  it('keeps OpenRouter optional unless selected and pins its configurable API base to the official origin', () => {
+    expect(validateEnvironment({}).OPENROUTER_BASE_URL).toBe('https://openrouter.ai/api/v1');
+    expect(validateEnvironment({ OPENROUTER_API_KEY: 'router-key-not-returned' })).not.toHaveProperty('OPENROUTER_API_KEY');
+    expect(() => validateEnvironment({ OPENROUTER_BASE_URL: 'https://attacker.example/api/v1' })).toThrow(/OPENROUTER_BASE_URL/);
+    expect(validateEnvironment({ OPENROUTER_MODEL: 'vendor/model-x' }).OPENROUTER_MODEL).toBe('vendor/model-x');
   });
 
   it('validates passwordless email OTP limits', () => {
     expect(() => validateEnvironment({ AUTH_OTP_EXPIRES_MINUTES: '6' })).toThrow(/AUTH_OTP_EXPIRES_MINUTES/);
     expect(() => validateEnvironment({ AUTH_OTP_MAX_ATTEMPTS: '6' })).toThrow(/AUTH_OTP_MAX_ATTEMPTS/);
     expect(() => validateEnvironment({ AUTH_OTP_RESEND_COOLDOWN_SECONDS: '59' })).toThrow(/AUTH_OTP_RESEND_COOLDOWN_SECONDS/);
+    expect(() => validateEnvironment({ PLAYGROUND_USER_REQUESTS_PER_MINUTE: '0' })).toThrow(/PLAYGROUND_USER_REQUESTS_PER_MINUTE/);
+    expect(() => validateEnvironment({ PLAYGROUND_WORKSPACE_REQUESTS_PER_MINUTE: '1001' })).toThrow(/PLAYGROUND_WORKSPACE_REQUESTS_PER_MINUTE/);
     expect(() => validateEnvironment({ AUTH_OTP_HASH_SECRET: 'short' })).toThrow(/AUTH_OTP_HASH_SECRET/);
   });
 

@@ -1,0 +1,437 @@
+CARTEIO AI — PLAYGROUND CHAT HISTORY
+Assistant: Carteio
+Conversation: d346d808-2577-4a6a-95a7-9c5644c31e8d
+Exported: 2026-10-26T18:30:40.261Z
+[23:49] USER
+Kaise ho
+
+[23:49] CARTEIO AI
+Main theek hoon, aap kaise hain? 🙂
+Response origin: AI generated
+
+[23:50] USER
+Mai bhi thik hu
+
+[23:50] CARTEIO AI
+Badiya! Aaj main aapki kya madad kar sakta hoon? Kuch jewellery dekhna chahenge ya koi order ke baare mein puchhna hai? 😊
+Response origin: AI generated
+
+[23:52] USER
+shipping policy batao?
+
+[23:52] CARTEIO AI
+Main abhi is jawab ko verify nahi kar pa raha hoon. Kripya thodi der baad phir poochhein.
+Response origin: System response
+
+[23:55] USER
+Bhai mujhe kuch ache product dikhao
+
+[23:55] CARTEIO AI
+Haanji zaroor! Aap kis tarah ke products dekhna pasand karenge? Kuch khaas category jaise ki rings, necklaces, earrings, ya bracelets? Ya phir aapka koi budget hai? 😊
+Response origin: AI generated
+
+[23:56] USER
+english me bat kro bhai mujhse
+
+[23:56] CARTEIO AI
+Sure, I can help you in English! What kind of products are you looking for today? Are you interested in a specific category like rings, necklaces, earrings, or bracelets? Or do you have a budget in mind? 😊
+Response origin: AI generated
+
+[23:57] USER
+current weather bato
+
+[23:57] CARTEIO AI
+I can only help with products and policies related to Carteio jewellery. I can't provide information about the weather. Is there anything I can help you with regarding our jewellery or your orders?
+Response origin: AI generated
+
+[23:58] USER
+hinglish me baat kro bhai
+
+[23:58] CARTEIO AI
+Sure, let's switch to Hinglish! What can I help you with today regarding Carteio jewellery? 😊
+Response origin: AI generated
+
+CARTEIO AI — SAFE DIAGNOSTICS
+Message: fe47b443-6a8e-47ce-9cec-ffa418bcb1f6
+Trace: bfe65be6-d50f-4e52-9778-ea58f88394cc
+Duration: 14849 ms
+Final source: AI_GENERATED
+Knowledge retrieval: not attempted · 0 result(s) · 0 eligible source(s)
+Provider/model: openrouter · google/gemini-2.5-flash-lite
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 963 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 2265 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 3169 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 8464 ms · invalid_intent · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · validated_deterministic_social_recovery
+- KNOWLEDGE_RETRIEVAL_SKIPPED: completed · 0 ms · standalone_social_recovery
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 940 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 941 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: completed · 1897 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · PRODUCT_INTENT_NOT_DETECTED
+
+Message: 70b03738-02ad-44d4-9440-ba5ae4b8ee04
+Trace: 1fb86a26-fab1-4a54-86fc-1816498beae1
+Duration: 29028 ms
+Final source: AI_GENERATED
+Knowledge retrieval: attempted · 0 result(s) · 102 eligible source(s)
+Provider/model: openrouter · google/gemini-2.5-flash-lite
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 945 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 2536 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1523 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 6993 ms · invalid_intent · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · original_query_fallback
+- PRODUCT_ROUTING_DECISION: completed · 0 ms · product_intent_not_detected
+- RETRIEVAL_STARTED: completed · 0 ms
+- KNOWLEDGE_RETRIEVAL: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_RETRIEVAL: completed · 8493 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_BASE_ASSIGNMENT: completed · 0 ms
+- KNOWLEDGE_SOURCE_ELIGIBILITY: completed · 0 ms
+- RETRIEVAL_QUERY_PLANNING: completed · 0 ms
+- SOURCE_INDEX_READINESS: completed · 678 ms
+- LEXICAL_RETRIEVAL: completed · 331 ms
+- SEMANTIC_RETRIEVAL: skipped · 0 ms · SEMANTIC_RETRIEVAL_UNAVAILABLE
+- HYBRID_RANKING: skipped · 0 ms · NO_LEXICAL_MATCH
+- KNOWLEDGE_ELIGIBILITY: completed · 0 ms · eligible_sources_found
+- RETRIEVAL_COMPLETED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- EVIDENCE_SELECTION: started · 0 ms
+- EVIDENCE_SELECTION: completed · 0 ms
+- EVIDENCE_SELECTED: completed · 0 ms
+- CANDIDATE_FILTERING: skipped · 0 ms
+- EVIDENCE_REVALIDATED: started · 0 ms
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · SHOPIFY_SCOPE_SNAPSHOT_STALE
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1137 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 1139 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: completed · 1928 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · 0 result(s) · PRODUCT_INTENT_NOT_DETECTED
+- search_store_products: skipped · SHOPIFY_SCOPE_SNAPSHOT_STALE
+
+Message: fc814568-e913-4166-a0c5-353046b41a7c
+Trace: 9891658a-463b-4b24-9d4f-ac4220e147dd
+Duration: 41486 ms
+Final source: SYSTEM_RESPONSE
+Knowledge retrieval: attempted · 5 result(s) · 102 eligible source(s)
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 945 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 2522 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1541 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 5321 ms · invalid_intent · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · recovered_retrieval_queries
+- PRODUCT_ROUTING_DECISION: completed · 0 ms · product_intent_not_detected
+- RETRIEVAL_STARTED: completed · 0 ms
+- KNOWLEDGE_RETRIEVAL: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_RETRIEVAL: completed · 8259 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_BASE_ASSIGNMENT: completed · 0 ms
+- KNOWLEDGE_SOURCE_ELIGIBILITY: completed · 0 ms
+- RETRIEVAL_QUERY_PLANNING: completed · 0 ms
+- SOURCE_INDEX_READINESS: completed · 637 ms
+- LEXICAL_RETRIEVAL: completed · 346 ms
+- SEMANTIC_RETRIEVAL: skipped · 0 ms · SEMANTIC_RETRIEVAL_UNAVAILABLE
+- HYBRID_RANKING: completed · 0 ms
+- KNOWLEDGE_ELIGIBILITY: completed · 0 ms · eligible_sources_found
+- RETRIEVAL_COMPLETED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- EVIDENCE_SELECTION: started · 0 ms
+- EVIDENCE_SELECTION: completed · 24 ms
+- EVIDENCE_SELECTED: completed · 0 ms
+- CANDIDATE_FILTERING: skipped · 0 ms
+- EVIDENCE_REVALIDATED: started · 0 ms
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · SHOPIFY_SCOPE_SNAPSHOT_STALE
+- LLM_CONTEXT_ASSEMBLED: completed · 0 ms
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1910 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 1911 ms · openrouter · google/gemini-2.5-flash-lite
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- RESPONSE_VERIFICATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_VERIFICATION: failed · 20 ms · citation_unsupported_numeric_claim · CITATION_INVALID · openrouter · google/gemini-2.5-flash-lite
+- CITATION_RECOVERY: started · 0 ms · citation_unsupported_numeric_claim · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1880 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 1881 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_VERIFICATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_VERIFICATION: failed · 4 ms · citation_unsupported_numeric_claim · CITATION_INVALID · openrouter · google/gemini-2.5-flash-lite
+- CITATION_RECOVERY: failed · 6009 ms · citation_unsupported_numeric_claim · openrouter · google/gemini-2.5-flash-lite
+- GROUNDING_VALIDATED: failed · 0 ms · citation_unsupported_numeric_claim
+- TURN_PERSISTENCE: started · 0 ms
+- TURN_PERSISTENCE: completed · 1935 ms
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · 0 result(s) · PRODUCT_INTENT_NOT_DETECTED
+- search_store_products: skipped · SHOPIFY_SCOPE_SNAPSHOT_STALE
+
+Message: a31b9c7b-5d9e-4256-a098-9e804afaad74
+Trace: b832bf43-9b06-40c1-ac5a-8e6d841428d7
+Duration: 29502 ms
+Final source: AI_GENERATED
+Knowledge retrieval: attempted · 0 result(s) · 102 eligible source(s)
+Provider/model: openrouter · google/gemini-2.5-flash-lite
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 1003 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 2452 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1740 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 6937 ms · invalid_intent · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · recovered_retrieval_queries
+- PRODUCT_ROUTING_DECISION: completed · 0 ms · product_intent_not_detected
+- RETRIEVAL_STARTED: completed · 0 ms
+- KNOWLEDGE_RETRIEVAL: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_RETRIEVAL: completed · 8126 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_BASE_ASSIGNMENT: completed · 0 ms
+- KNOWLEDGE_SOURCE_ELIGIBILITY: completed · 0 ms
+- RETRIEVAL_QUERY_PLANNING: completed · 0 ms
+- SOURCE_INDEX_READINESS: completed · 638 ms
+- LEXICAL_RETRIEVAL: completed · 315 ms
+- SEMANTIC_RETRIEVAL: skipped · 0 ms · SEMANTIC_RETRIEVAL_UNAVAILABLE
+- HYBRID_RANKING: skipped · 0 ms · NO_LEXICAL_MATCH
+- KNOWLEDGE_ELIGIBILITY: completed · 0 ms · eligible_sources_found
+- RETRIEVAL_COMPLETED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- EVIDENCE_SELECTION: started · 0 ms
+- EVIDENCE_SELECTION: completed · 0 ms
+- EVIDENCE_SELECTED: completed · 0 ms
+- CANDIDATE_FILTERING: skipped · 0 ms
+- EVIDENCE_REVALIDATED: started · 0 ms
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · SHOPIFY_SCOPE_SNAPSHOT_STALE
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1249 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 1250 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: completed · 1821 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · 0 result(s) · PRODUCT_INTENT_NOT_DETECTED
+- search_store_products: skipped · SHOPIFY_SCOPE_SNAPSHOT_STALE
+
+Message: 5147bc46-8c89-4743-8d79-7cd591dac376
+Trace: a63ff8f8-7a0a-491d-966b-6c3ec77ae9d9
+Duration: 29558 ms
+Final source: AI_GENERATED
+Knowledge retrieval: attempted · 0 result(s) · 102 eligible source(s)
+Provider/model: openrouter · google/gemini-2.5-flash-lite
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 906 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 2463 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1531 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 7138 ms · invalid_answer_aspects · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · original_query_fallback
+- PRODUCT_ROUTING_DECISION: completed · 0 ms · product_intent_not_detected
+- RETRIEVAL_STARTED: completed · 0 ms
+- KNOWLEDGE_RETRIEVAL: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_RETRIEVAL: completed · 7940 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_BASE_ASSIGNMENT: completed · 0 ms
+- KNOWLEDGE_SOURCE_ELIGIBILITY: completed · 0 ms
+- RETRIEVAL_QUERY_PLANNING: completed · 0 ms
+- SOURCE_INDEX_READINESS: completed · 650 ms
+- LEXICAL_RETRIEVAL: completed · 322 ms
+- SEMANTIC_RETRIEVAL: skipped · 0 ms · SEMANTIC_RETRIEVAL_UNAVAILABLE
+- HYBRID_RANKING: skipped · 0 ms · NO_LEXICAL_MATCH
+- KNOWLEDGE_ELIGIBILITY: completed · 0 ms · eligible_sources_found
+- RETRIEVAL_COMPLETED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- EVIDENCE_SELECTION: started · 0 ms
+- EVIDENCE_SELECTION: completed · 0 ms
+- EVIDENCE_SELECTED: completed · 0 ms
+- CANDIDATE_FILTERING: skipped · 0 ms
+- EVIDENCE_REVALIDATED: started · 0 ms
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · SHOPIFY_SCOPE_SNAPSHOT_STALE
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1290 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 1291 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: completed · 1829 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · 0 result(s) · PRODUCT_INTENT_NOT_DETECTED
+- search_store_products: skipped · SHOPIFY_SCOPE_SNAPSHOT_STALE
+
+Message: 5747ec37-8846-46b4-8bb2-ddc38e5df1ef
+Trace: daa65258-b1ab-4b67-81a3-53d549a8780c
+Duration: 30862 ms
+Final source: AI_GENERATED
+Knowledge retrieval: attempted · 0 result(s) · 102 eligible source(s)
+Provider/model: openrouter · google/gemini-2.5-flash-lite
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 918 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 2663 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1331 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 5532 ms · invalid_answer_aspects · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · original_query_fallback
+- PRODUCT_ROUTING_DECISION: completed · 0 ms · product_intent_not_detected
+- RETRIEVAL_STARTED: completed · 0 ms
+- KNOWLEDGE_RETRIEVAL: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_RETRIEVAL: completed · 11260 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_BASE_ASSIGNMENT: completed · 0 ms
+- KNOWLEDGE_SOURCE_ELIGIBILITY: completed · 0 ms
+- RETRIEVAL_QUERY_PLANNING: completed · 0 ms
+- SOURCE_INDEX_READINESS: completed · 689 ms
+- LEXICAL_RETRIEVAL: completed · 354 ms
+- SEMANTIC_RETRIEVAL: skipped · 0 ms · SEMANTIC_RETRIEVAL_UNAVAILABLE
+- HYBRID_RANKING: skipped · 0 ms · NO_LEXICAL_MATCH
+- KNOWLEDGE_ELIGIBILITY: completed · 0 ms · eligible_sources_found
+- RETRIEVAL_COMPLETED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- EVIDENCE_SELECTION: started · 0 ms
+- EVIDENCE_SELECTION: completed · 0 ms
+- EVIDENCE_SELECTED: completed · 0 ms
+- CANDIDATE_FILTERING: skipped · 0 ms
+- EVIDENCE_REVALIDATED: started · 0 ms
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · SHOPIFY_SCOPE_SNAPSHOT_STALE
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1040 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 1041 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: completed · 2295 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · 0 result(s) · PRODUCT_INTENT_NOT_DETECTED
+- search_store_products: skipped · SHOPIFY_SCOPE_SNAPSHOT_STALE
+
+Message: 7d1669b0-c656-4ce6-842d-fdde33c803f2
+Trace: 4b582781-4a7b-49cd-86c6-380526e3c4b8
+Duration: 30823 ms
+Final source: AI_GENERATED
+Knowledge retrieval: attempted · 0 result(s) · 102 eligible source(s)
+Provider/model: openrouter · google/gemini-2.5-flash-lite
+Stages:
+- SECURITY_CONTEXT: started · 0 ms
+- MESSAGE_RECEIVED: completed · 0 ms
+- ASSISTANT_RESOLVED: completed · 0 ms
+- SECURITY_CONTEXT: completed · 1112 ms
+- SESSION_RESOLUTION: started · 0 ms
+- SESSION_RESOLUTION: completed · 3065 ms
+- CONVERSATION_CONTEXT: started · 0 ms
+- CONVERSATION_CONTEXT: completed · 0 ms
+- INTENT_INTERPRETATION: started · 0 ms
+- PROVIDER_SELECTION: started · 0 ms
+- PROVIDER_SELECTION: completed · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- STRUCTURED_OUTPUT_COMPATIBILITY: completed · 0 ms · json_mode_unverified_or_unsupported · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 1336 ms · openrouter · google/gemini-2.5-flash-lite
+- INTENT_INTERPRETATION: failed · 6986 ms · invalid_answer_aspects · PROVIDER_INVALID_RESPONSE · openrouter · google/gemini-2.5-flash-lite
+- INTERPRETATION_RECOVERY: completed · 0 ms · original_query_fallback
+- PRODUCT_ROUTING_DECISION: completed · 0 ms · product_intent_not_detected
+- RETRIEVAL_STARTED: completed · 0 ms
+- KNOWLEDGE_RETRIEVAL: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_RETRIEVAL: completed · 9365 ms · openrouter · google/gemini-2.5-flash-lite
+- KNOWLEDGE_BASE_ASSIGNMENT: completed · 0 ms
+- KNOWLEDGE_SOURCE_ELIGIBILITY: completed · 0 ms
+- RETRIEVAL_QUERY_PLANNING: completed · 1 ms
+- SOURCE_INDEX_READINESS: completed · 999 ms
+- LEXICAL_RETRIEVAL: completed · 309 ms
+- SEMANTIC_RETRIEVAL: skipped · 0 ms · SEMANTIC_RETRIEVAL_UNAVAILABLE
+- HYBRID_RANKING: skipped · 0 ms · NO_LEXICAL_MATCH
+- KNOWLEDGE_ELIGIBILITY: completed · 0 ms · eligible_sources_found
+- RETRIEVAL_COMPLETED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · PRODUCT_INTENT_NOT_DETECTED
+- EVIDENCE_SELECTION: started · 0 ms
+- EVIDENCE_SELECTION: completed · 0 ms
+- EVIDENCE_SELECTED: completed · 0 ms
+- CANDIDATE_FILTERING: skipped · 0 ms
+- EVIDENCE_REVALIDATED: started · 0 ms
+- EVIDENCE_REVALIDATED: completed · 0 ms
+- TOOL_EXECUTION: skipped · 0 ms · SHOPIFY_SCOPE_SNAPSHOT_STALE
+- ANSWER_GENERATION: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_REQUEST_STARTED: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- PROVIDER_RESPONSE_RECEIVED: completed · 980 ms · openrouter · google/gemini-2.5-flash-lite
+- ANSWER_GENERATION: completed · 982 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: started · 0 ms · openrouter · google/gemini-2.5-flash-lite
+- TURN_PERSISTENCE: completed · 2102 ms · openrouter · google/gemini-2.5-flash-lite
+- RESPONSE_PERSISTED: completed · 0 ms
+- FINAL_RESPONSE: completed · 0 ms
+Tools:
+- shopify_product_search: skipped · 0 result(s) · PRODUCT_INTENT_NOT_DETECTED
+- search_store_products: skipped · SHOPIFY_SCOPE_SNAPSHOT_STALE

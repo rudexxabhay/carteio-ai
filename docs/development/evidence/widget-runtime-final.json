@@ -1,0 +1,62 @@
+{
+  "run": "F7",
+  "sourceReport": "/tmp/carteio-phase00-widget-runtime-final.json",
+  "exitCode": 1,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 2,
+    "numPassedTestSuites": 0,
+    "numFailedTestSuites": 2,
+    "numRuntimeErrorTestSuites": null,
+    "numTotalTests": 7,
+    "numPassedTests": 5,
+    "numFailedTests": 2,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "frontend/src/tests/widget-runtime.test.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "public widget runtime appearance and avatar lifecycle keeps the host hidden until saved appearance is applied and shows the built-in icon without an avatar URL",
+          "title": "keeps the host hidden until saved appearance is applied and shows the built-in icon without an avatar URL",
+          "status": "passed"
+        },
+        {
+          "name": "public widget runtime appearance and avatar lifecycle uses the customer avatar after it loads and falls back to the icon when it errors",
+          "title": "uses the customer avatar after it loads and falls back to the icon when it errors",
+          "status": "failed"
+        },
+        {
+          "name": "public widget runtime appearance and avatar lifecycle shows only a neutral recovery control when appearance is not valid JSON",
+          "title": "shows only a neutral recovery control when appearance is not valid JSON",
+          "status": "failed"
+        },
+        {
+          "name": "public widget runtime appearance and avatar lifecycle marks the widget connected only after bootstrap returns valid signed-session credentials",
+          "title": "marks the widget connected only after bootstrap returns valid signed-session credentials",
+          "status": "passed"
+        },
+        {
+          "name": "public widget runtime appearance and avatar lifecycle does not claim connected for a malformed bootstrap response and keeps the saved design usable",
+          "title": "does not claim connected for a malformed bootstrap response and keeps the saved design usable",
+          "status": "passed"
+        },
+        {
+          "name": "public widget runtime appearance and avatar lifecycle keeps one host for repeated execution of a compatible versioned embed",
+          "title": "keeps one host for repeated execution of a compatible versioned embed",
+          "status": "passed"
+        },
+        {
+          "name": "public widget runtime appearance and avatar lifecycle routes the explicit raise-ticket shortcut through the existing AI conversation endpoint",
+          "title": "routes the explicit raise-ticket shortcut through the existing AI conversation endpoint",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

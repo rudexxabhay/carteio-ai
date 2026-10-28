@@ -1,17 +1,32 @@
-import { useEffect, useState } from 'react';
-import { Activity, BookOpen, Bot, Building2, ChevronDown, LayoutDashboard, LogOut, Settings, Users, Database } from 'lucide-react';
-import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { BrandLogo } from '../../components/common/BrandLogo';
-import { ThemeSwitcher } from '../../components/common/ThemeSwitcher';
+import { createContext, lazy, Suspense, useContext, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../app/providers/AuthProvider';
 import { useWorkspaces } from '../../app/providers/WorkspaceProvider';
 import { ApiError } from '../../services/api/client';
 import { getWorkspace, type Workspace } from '../../services/api/workspaces';
+import { AccessDenied, NetworkError, RouteError } from '../../components/common/ErrorStates';
+import { useTheme } from '../../app/providers/ThemeProvider';
+import './source-dashboard-layout.css';
 
 export type WorkspaceRouteContext = { workspace: Workspace; updateWorkspace: (workspace: Workspace) => void };
+const WorkspaceContext = createContext<WorkspaceRouteContext | null>(null);
+export function useWorkspaceRoute(): WorkspaceRouteContext {
+  const context = useContext(WorkspaceContext);
+  if (!context) throw new Error('Workspace content requires an authorized dashboard context.');
+  return context;
+}
+type WorkspaceFailure = { kind: 'network' | 'timeout' | 'not-found' | 'access' | 'invalid-response' | 'unknown'; message: string };
+function importSourceDashboard() { return import('../../dashboard-source/SourceDashboard'); }
+let sourceDashboardImport: ReturnType<typeof importSourceDashboard> | undefined;
+function preloadSourceDashboard() { sourceDashboardImport ??= importSourceDashboard(); return sourceDashboardImport; }
+const SourceDashboard = lazy(preloadSourceDashboard);
 
-function WorkspaceLoading() {
-  return <main className="workspace-loading" role="status" aria-live="polite"><span className="workspace-spinner"/>Loading workspace…</main>;
+export function WorkspaceLoading() {
+  const { mode } = useTheme();
+  return <main className="workspace-bootstrap" data-mode={mode} role="status" aria-label="Preparing your workspace" aria-busy="true">
+    <aside className="workspace-bootstrap-sidebar" aria-hidden="true"><i className="bootstrap-brand"/><i className="bootstrap-switcher"/><i className="bootstrap-nav active"/><i className="bootstrap-nav"/><i className="bootstrap-nav"/><i className="bootstrap-nav"/><i className="bootstrap-nav"/><i className="bootstrap-profile"/></aside>
+    <section className="workspace-bootstrap-main" aria-hidden="true"><header><i/><i/><i/></header><div className="workspace-bootstrap-content"><span className="bootstrap-eyebrow">CARTEIO AI</span><i className="bootstrap-title"/><i className="bootstrap-description"/><div className="bootstrap-metrics"><i/><i/><i/><i/></div><div className="bootstrap-panels"><i/><i/></div><p>Preparing your workspace…</p></div></section>
+  </main>;
 }
 
 export function DashboardLayout() {
@@ -19,71 +34,48 @@ export function DashboardLayout() {
   const { user, logout, googleAuthState, setGoogleAuthState } = useAuth();
   const { workspaces, remember } = useWorkspaces();
   const navigate = useNavigate();
-  const [result, setResult] = useState<{ slug: string; workspace: Workspace | null; error: string | null }>({ slug: '', workspace: null, error: null });
-  const [logoutError, setLogoutError] = useState('');
-  const updateWorkspace = (next: Workspace) => setResult({ slug, workspace: next, error: null });
+  const [result, setResult] = useState<{ slug: string; workspace: Workspace | null; error: WorkspaceFailure | null }>({ slug: '', workspace: null, error: null });
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => { void preloadSourceDashboard().catch(() => undefined); }, []);
 
   useEffect(() => {
     const controller = new AbortController();
-    getWorkspace(slug, controller.signal).then((workspace) => {
+    getWorkspace(slug, controller.signal).then(workspace => {
       if (!controller.signal.aborted) { setResult({ slug, workspace, error: null }); remember(slug); }
-    }).catch((cause) => {
-      if (!controller.signal.aborted) setResult({ slug, workspace: null, error: cause instanceof ApiError && cause.status === 404 ? 'This workspace is unavailable or you are no longer a member.' : 'We could not open this workspace. Please try again.' });
+    }).catch(cause => {
+      if (controller.signal.aborted) return;
+      const error: WorkspaceFailure = cause instanceof ApiError
+        ? cause.status === 404 ? { kind: 'not-found', message: 'This workspace does not exist, or your membership has ended.' }
+          : cause.status === 401 || cause.status === 403 ? { kind: 'access', message: 'Your session or workspace access could not be confirmed.' }
+            : cause.kind === 'network' ? { kind: 'network', message: 'Carteio could not reach the server. Check your connection and try again.' }
+              : cause.kind === 'timeout' ? { kind: 'timeout', message: 'The workspace request took too long. Retry the request.' }
+                : cause.kind === 'invalid-response' ? { kind: 'invalid-response', message: 'The server response could not be read. Please retry.' }
+                  : { kind: 'unknown', message: 'The workspace could not be loaded. Retry or choose another workspace.' }
+        : { kind: 'unknown', message: 'The workspace could not be loaded. Retry or choose another workspace.' };
+      setResult({ slug, workspace: null, error });
     });
     return () => controller.abort();
-  }, [slug, remember]);
+  }, [slug, remember, retry]);
 
   const workspace = result.slug === slug ? result.workspace : null;
   const error = result.slug === slug ? result.error : null;
-
-  useEffect(() => {
-    if (workspace && googleAuthState === 'DASHBOARD_NAVIGATING') setGoogleAuthState('READY');
-  }, [workspace, googleAuthState, setGoogleAuthState]);
-
-  async function signOut() {
-    setLogoutError('');
-    try { await logout(); navigate('/login', { replace: true }); }
-    catch { setLogoutError('We could not safely end your session. Please try again.'); }
-  }
+  useEffect(() => { if (workspace && googleAuthState === 'DASHBOARD_NAVIGATING') setGoogleAuthState('READY'); }, [workspace, googleAuthState, setGoogleAuthState]);
 
   if (!workspace && !error) return <WorkspaceLoading/>;
-  if (!workspace) return <main className="workspace-message"><span className="workspace-message-icon"><Building2 size={22}/></span><h1>Workspace unavailable</h1><p>{error || 'You may no longer have access to this workspace.'}</p><Link className="button button-primary" to="/workspaces">Choose a workspace</Link></main>;
+  if (!workspace) { const State = error?.kind === 'access' ? AccessDenied : error?.kind === 'network' || error?.kind === 'timeout' ? NetworkError : RouteError; return <main className="source-workspace-error"><State title={error?.kind === 'not-found' ? 'Workspace unavailable' : error?.kind === 'access' ? 'Access could not be verified' : 'Workspace could not load'} message={error?.message ?? 'Retry or choose another workspace.'} action={{ label: 'Try again', onClick: () => { setResult({ slug, workspace: null, error: null }); setRetry(value => value + 1); } }} secondary={<Link className="carteio-error-secondary" to="/workspaces">Choose workspace</Link>}/><small>Workspace content stays protected until access is confirmed.</small></main>; }
 
-  return <div className="saas-shell">
-    <aside className="saas-sidebar">
-      <Link className="brand" to="/" aria-label="Carteio AI home"><BrandLogo/></Link>
-      <div className="sidebar-workspace-identity"><span className="workspace-avatar">{workspace.name.slice(0, 1).toUpperCase()}</span><span><strong>{workspace.name}</strong><small>{workspace.role} workspace</small></span></div>
-      <span className="saas-nav-label">WORKSPACE</span>
-      <nav className="saas-nav" aria-label="Workspace navigation">
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}`} end><LayoutDashboard size={17}/> Overview</NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/assistants`}><Bot size={17}/> AI Assistants</NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/knowledge`}><Database size={17}/> Knowledge Base</NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/team`}><Users size={17}/> Team</NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/settings`}><Settings size={17}/> Settings</NavLink>
-      </nav>
-      <div className="saas-sidebar-bottom"><div className="sidebar-note"><Activity size={16}/><span><strong>{user?.name || user?.email}</strong><small>{user?.emailVerified ? 'Verified account' : 'Account'}</small></span></div><Link to="/docs" className="saas-help-link"><BookOpen size={15}/> Help & documentation</Link></div>
-    </aside>
-    <div className="saas-main">
-      <header className="saas-header">
-        <div className="saas-mobile-brand"><Link className="brand" to="/" aria-label="Carteio AI home"><BrandLogo/></Link></div>
-        <label className="workspace-switcher-label" htmlFor="workspace-switcher">Workspace</label>
-        <div className="workspace-switcher-wrap"><Building2 size={16}/><select id="workspace-switcher" aria-label="Switch workspace" value={slug} onChange={(event) => { const next = workspaces.find((item) => item.slug === event.target.value); if (next) { remember(next.slug); navigate(`/workspace/${encodeURIComponent(next.slug)}`); } }}>
-          {workspaces.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
-        </select><ChevronDown size={14}/></div>
-        <div className="saas-header-spacer"/>
-        <ThemeSwitcher/>
-        <details className="account-menu"><summary aria-label="Open account menu"><span className="account-avatar">{(user?.name || user?.email || 'U').slice(0, 1).toUpperCase()}</span><span className="account-menu-name">{user?.name || user?.email}</span><ChevronDown size={14}/></summary><div className="account-menu-panel"><strong>{user?.name || 'Your account'}</strong><small>{user?.email}</small><button type="button" onClick={() => void signOut()}><LogOut size={15}/> Sign out</button></div></details>
-      </header>
-      <nav className="saas-mobile-nav" aria-label="Workspace navigation">
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}`} end><LayoutDashboard size={16}/><span>Overview</span></NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/assistants`}><Bot size={16}/><span>Assistants</span></NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/knowledge`}><Database size={16}/><span>Knowledge</span></NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/team`}><Users size={16}/><span>Team</span></NavLink>
-        <NavLink to={`/workspace/${encodeURIComponent(slug)}/settings`}><Settings size={16}/><span>Settings</span></NavLink>
-      </nav>
-      <main className="saas-content">{logoutError && <div className="workspace-form-error" role="alert">{logoutError}</div>}<Outlet context={{ workspace, updateWorkspace } satisfies WorkspaceRouteContext}/></main>
-    </div>
-  </div>;
+  const updateWorkspace = (updated: Workspace) => {
+    if (updated.id !== workspace.id || updated.slug !== slug) return;
+    setResult(current => current.slug === slug ? { ...current, workspace: updated, error: null } : current);
+  };
+  return <WorkspaceContext.Provider value={{ workspace, updateWorkspace }}><Suspense fallback={<WorkspaceLoading/>}><SourceDashboard
+      workspace={workspace}
+      workspaces={workspaces}
+      userName={user?.name || ''}
+      userEmail={user?.email}
+      onLogout={async () => { await logout(); navigate('/login', { replace: true }); }}
+      onSwitchWorkspace={nextSlug => { remember(nextSlug); navigate(`/workspace/${encodeURIComponent(nextSlug)}`); }}
+      onWorkspaceSaved={updateWorkspace}
+    /></Suspense></WorkspaceContext.Provider>;
 }
-
-export function useWorkspaceRoute() { return useOutletContext<WorkspaceRouteContext>(); }

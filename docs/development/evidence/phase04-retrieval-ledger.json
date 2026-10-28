@@ -1,0 +1,222 @@
+{
+  "phase": "04",
+  "sourceStatus": "CODE_IMPLEMENTED",
+  "runtimeStatus": "RUNTIME_UNVERIFIED",
+  "inspectionDate": "2026-10-26",
+  "carryForward": {
+    "phase00": {
+      "status": "BLOCKED",
+      "historicalFailures": {
+        "backend": 116,
+        "frontend": 85,
+        "total": 201
+      },
+      "latestSavedCompleteRuns": {
+        "backend": {
+          "passed": 813,
+          "failed": 0
+        },
+        "frontend": {
+          "passed": 217,
+          "failed": 26
+        },
+        "targetedFrontend": {
+          "passed": 97,
+          "failed": 3
+        }
+      },
+      "historicalLatestDisposition": {
+        "passingInSavedPerFileEvidence": 181,
+        "repairAwaitingRerun": 11,
+        "unresolvedLatestFailure": 9,
+        "causeClassificationUnresolved": 47
+      },
+      "ledger": "phase00-continuation-dispositions.json"
+    },
+    "phase01": {
+      "status": "CODE_IMPLEMENTED",
+      "runtimeUnverified": true,
+      "ledger": "phase01-connectivity-ledger.json"
+    },
+    "phase02": {
+      "status": "CODE_IMPLEMENTED",
+      "runtimeUnverified": true,
+      "ledger": "phase02-data-pipeline-ledger.json"
+    },
+    "phase03": {
+      "status": "CODE_IMPLEMENTED",
+      "runtimeUnverified": true,
+      "ledger": "phase03-assistant-access-ledger.json"
+    }
+  },
+  "sourceTrace": [
+    {
+      "boundary": "Question, context and multilingual planning",
+      "files": [
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+        "backend/src/modules/workspaces/retrieval-query-plan.ts"
+      ],
+      "finding": "Existing interpretation retains original wording, model-written source-language/English equivalents and bounded same-session context. Planner rejects invented identifier expansions. Reused without changing prompts or response generation."
+    },
+    {
+      "boundary": "Authorization",
+      "files": [
+        "backend/src/modules/workspaces/knowledge-base.service.ts",
+        "backend/src/modules/workspaces/knowledge-retrieval-policy.ts",
+        "backend/src/modules/workspaces/knowledge-processing.service.ts"
+      ],
+      "finding": "Existing active assistant/organization checks, public visibility policy, effective source resolution, connector permissions and verified website gates retained. Lexical/semantic SQL retain tenant/source/current version/current generation filters."
+    },
+    {
+      "boundary": "Indexing and vectors",
+      "files": [
+        "backend/src/modules/workspaces/knowledge-indexing.ts",
+        "backend/src/modules/workspaces/knowledge-processing.service.ts"
+      ],
+      "finding": "Existing optional OpenAI text-embedding-3-small / 1536-dimensional adapter is used by FAQ/TEXT and extracted WEBSITE chunk indexing and by query embedding. Existing schema constrains vector/profile compatibility; no new provider or migration introduced."
+    },
+    {
+      "boundary": "Evidence context",
+      "files": [
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts"
+      ],
+      "finding": "Existing bounded evidence selection retains chunk/source/page/version/hash/generation attribution and existing public evidence revalidation. No generation, grounding, Shopify tool or citation logic changed."
+    }
+  ],
+  "retrievalMatrix": [
+    {
+      "component": "lexical",
+      "status": "FIXED",
+      "details": "Unicode/whitespace normalization, case-insensitive variant deduplication, 40-candidate pool and bounded lexical fallback; existing English/simple full-text search retained."
+    },
+    {
+      "component": "semantic",
+      "status": "FIXED",
+      "runtime": "CONFIGURATION_AND_INDEX_UNVERIFIED",
+      "details": "Existing adapter/vector path retained, configurable relevance floor, dimension codes, profile diagnostics and safe SQL failure fallback."
+    },
+    {
+      "component": "hybrid",
+      "status": "FIXED",
+      "details": "Existing reciprocal-rank fusion now receives the bounded candidate pools before final result truncation; chunk IDs deduplicated."
+    },
+    {
+      "component": "multilingual",
+      "status": "WIRED",
+      "runtime": "LANGUAGE_QUALITY_UNVERIFIED",
+      "details": "Reuses model-generated variants, original multilingual input and contextual planning; fixture tests establish source wiring only, not real provider semantic quality."
+    },
+    {
+      "component": "indexing",
+      "status": "WIRED",
+      "runtime": "VECTORS_AND_MIGRATION_STATE_UNVERIFIED",
+      "details": "Existing generation publication and profile constraints retained; pre-existing lexical chunks need explicit reindexing to acquire vectors."
+    },
+    {
+      "component": "evidence selection",
+      "status": "WIRED",
+      "runtime": "UNVERIFIED",
+      "details": "Existing bounded evidence context, attribution and active-generation revalidation retained."
+    }
+  ],
+  "confirmedDefects": [
+    "P04-RAG-01",
+    "P04-RAG-02",
+    "P04-RAG-03",
+    "P04-RAG-04",
+    "P04-RAG-05",
+    "P04-RAG-06"
+  ],
+  "filesChanged": [
+    "backend/src/modules/workspaces/knowledge-processing.service.ts",
+    "backend/src/modules/workspaces/knowledge-indexing.ts",
+    "backend/test/knowledge-processing.spec.ts",
+    "backend/test/knowledge-indexing.spec.ts",
+    "backend/test/retrieval-query-plan.spec.ts",
+    "backend/.env.example",
+    "docs/development/phase-register.md",
+    "docs/development/known-defects.md",
+    "docs/development/evidence/phase04-retrieval-ledger.json"
+  ],
+  "testExecution": {
+    "executed": false,
+    "buildsExecuted": false,
+    "typechecksExecuted": false,
+    "updated": [
+      "backend/test/knowledge-processing.spec.ts",
+      "backend/test/knowledge-indexing.spec.ts",
+      "backend/test/retrieval-query-plan.spec.ts"
+    ],
+    "coverageAdded": [
+      "Unicode/case/whitespace deduplication",
+      "English/Hindi/Hinglish/mixed query variants to existing semantic adapter with attributed English fixture results",
+      "contextual multi-turn query plan",
+      "fusion promotes shared candidates below initial result limit",
+      "weak/nonfinite semantic rejection",
+      "lexical fallback on vector SQL failure",
+      "explicit query/provider dimension errors",
+      "missing credentials/unsupported profile/invalid threshold configuration",
+      "active-generation scoped profile diagnostics and genuine semantic miss",
+      "URL-only FAQ versus attributed extracted-page fixture",
+      "foreign assistant rejection"
+    ],
+    "existingCoverageRetained": [
+      "public/restricted source filtering",
+      "tenant and permission boundaries",
+      "active-generation SQL constraints",
+      "FAQ/website lexical publication on embedding failure",
+      "Shopify commerce permission/search contracts"
+    ],
+    "limitation": "Database/vector search and embedding adapters in new retrieval tests are offline fixtures. They do not establish PostgreSQL execution, provider language quality or live policy contents."
+  },
+  "manualVerification": {
+    "futureOfflineCommandFromBackend": "node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/knowledge-processing.spec.ts test/knowledge-indexing.spec.ts test/retrieval-query-plan.spec.ts test/knowledge-base.service.spec.ts test/knowledge-website-publication.spec.ts src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts",
+    "configurationRequired": [
+      "No environment values changed. After explicit approval configure KNOWLEDGE_SEMANTIC_ENABLED=true, KNOWLEDGE_EMBEDDING_PROVIDER=openai, KNOWLEDGE_EMBEDDING_MODEL=text-embedding-3-small and a valid OPENAI_API_KEY for the existing optional adapter. Do not change generation-provider/model settings.",
+      "Optional KNOWLEDGE_SEMANTIC_MIN_SIMILARITY defaults to 0.3; valid finite range is 0..1. Calibrate against approved multilingual relevant/irrelevant fixtures before deployment.",
+      "Review existing migrations 20261011120000_phase_08_index_foundation, 20261011130000_phase_08a_embedding_profiles and 20261011140000_phase_08_lexical_and_optional_semantic. They establish pgvector(1536), profile constraints and optional lexical-only vectors. No migration executed or newly required by this change."
+    ],
+    "authorizedRuntimeSteps": [
+      "After separately approving paid embedding use, restart the existing backend/worker with the approved configuration. Confirm source visibility and correct assistant access policy.",
+      "For approved FAQ/TEXT sources, authenticated POST /api/v1/workspaces/{slug}/knowledge/{sourceId}/reindex queues existing indexing. GET the matching /processing endpoint and verify processingStatus READY, semanticIndexStatus READY and current active chunks. This operation creates provider requests only after explicit opt-in.",
+      "Website reindex uses the existing crawler; requires separate crawl/provider authorization and must not be run under this continuation. Confirm extracted KnowledgePage content and current-generation chunks rather than a saved FAQ hyperlink.",
+      "After paid-query approval, authenticated POST /api/v1/workspaces/{slug}/knowledge/search-preview with {assistantId, query, limit} for English, Hindi and Hinglish questions, unrelated questions and contextual Playground/widget follow-ups. Inspect source/page IDs, generation, relevance and explicit unavailable codes. Repeat tenant/restricted-source negative checks."
+    ],
+    "notExecuted": true
+  },
+  "rollback": {
+    "checkpoint": "/tmp/carteio-phase04-source-checkpoint-20261026",
+    "method": "Compare the saved per-file pre-edit copies with current files; selectively reverse Phase 04 edits while retaining unrelated modifications. Do not git reset/restore/clean. No database rollback is needed because no migrations or data operations occurred.",
+    "limitation": "The /tmp checkpoint is ephemeral."
+  },
+  "safety": {
+    "testsOrServersStarted": false,
+    "realProviderRequests": false,
+    "liveCrawlsOrShopifyOperations": false,
+    "migrationOrDatabaseMutation": false,
+    "secretsChanged": false,
+    "gitCommitPushOrDestructiveOperation": false
+  },
+  "pending": [
+    "Phase 00 gate remains BLOCKED and its 201 historical failures retain their original evidence.",
+    "All Phase 01–03 unexecuted regression/runtime dependencies remain carried.",
+    "Run new/affected offline tests only when permitted; verify PostgreSQL SQL/profile grouping and deployed migration state in an approved environment.",
+    "Real configured/indexed multilingual semantic retrieval and threshold quality remain unverified.",
+    "Actual Shipping Policy contents/index presence remain unknown; fixtures are explicitly synthetic."
+  ],
+  "phase05Readiness": "NOT_STARTED. Existing query/evidence contracts are prepared for continued work; do not treat unexecuted Phase 04 tests or source inspection as verified retrieval quality or Phase 00 closure.",
+  "sourceReview": {
+    "method": "Read selective checkpoint diffs and affected caller/contracts; no test runner, build or typecheck invoked.",
+    "preEditManifest": "/tmp/carteio-phase04-source-checkpoint-20261026/manifest.json",
+    "changedFileHashes": {
+      "backend/src/modules/workspaces/knowledge-processing.service.ts": "20de54d1af0188f9a9113e321587c87877cc36fb6f9fbfc613ec46d012d7223a",
+      "backend/src/modules/workspaces/knowledge-indexing.ts": "bb094fb6f38e2db14d70ab70d052fbc2592f7fac2947eb3ef956f291002e6e54",
+      "backend/test/knowledge-processing.spec.ts": "26313ea7723d467a6e0214612c7e9f89e417504af1568b1424d4b315656e9398",
+      "backend/test/knowledge-indexing.spec.ts": "1ee852c4070dbfcfaf72de9fe3566594f98b01ad73ba159c24489706ce46fc6b",
+      "backend/test/retrieval-query-plan.spec.ts": "50644b2c077fe455de90a96d2272268bb782bc1da1036513c854a933d1cf19d8",
+      "backend/.env.example": "3a369b39a0685be9c6c7aa78f9af4fba8c1306f349df82abe1d1516b4ddec830",
+      "docs/development/phase-register.md": "0ff5c6e4a2a0c013ecff420a68f35421eb1205778dae6d170578bb7e96dfd037",
+      "docs/development/known-defects.md": "df16ee7a77ae6f43a4773352c56efee2a6c84aa73a7c567f90d753bf0d557203"
+    }
+  }
+}

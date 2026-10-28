@@ -1,0 +1,1290 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, FileSpreadsheet, Globe2, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
+import { Badge, Btn, Card, PageHeader, Stat, FilterInput, SectionHeader, TableWrap, Notice, Bars, Progress, QuickLink, ViewAll, CircleIcon, AddButton, Empty } from './ui';
+import { sections, type PageId } from './data';
+import { useOverviewData } from './use-overview-data';
+import { ApiError } from '../services/api/client';
+import { getOrders, getProducts, getProduct, getSales, getBillingUsage, getConversations, getConversation, markConversationRead, addConversationNote, getTickets, getTicket, assignTicket, updateTicket, addTicketNote, replyToTicket, type Order, type Product, type SalesSummary, type BillingUsage, type InboxConversation, type InboxDetail, type TicketDetail, type TicketMessage, type TicketPage } from '../services/api/saas';
+import { getConnectors, getConnectorPermissions, getConnectorSyncHistory, queueConnectorSync, beginShopifyInstall, beginShopifyScopeUpgrade, disconnectConnector, refreshShopifyPermissions, retryConnectorSync, updateConnectorPermission, verifyConnector, type ConnectorInstance, type ConnectorPermissions, type SyncJob } from '../services/api/connectors';
+import { ShopifyPermissionsPanel } from '../pages/saas/ShopifyPermissionsPanel';
+import { KNOWLEDGE_SECTION_CARDS, SHOPIFY_CATALOG_TAB } from '../pages/knowledge/knowledge-sections';
+import type { SourcePage, KnowledgeSection } from '../services/api/knowledge';
+import './knowledge-sections.css';
+import { KnowledgePdfPanel } from './KnowledgePdfPanel';
+
+import '../pages/saas/connectors-page.css';
+import { archiveAssistant, createAssistant as createAssistantApi, getAssistant, getAssistantTrainingOverview, listAssistants, restoreAssistant, sendPlaygroundMessage, sendPlaygroundMessageStream, setAssistantActive, updateAssistant, type Assistant, type AssistantInput, type AssistantTrainingOverview, type PlaygroundChatReply, type PlaygroundTrace, type PlaygroundLiveEvent, type ResponseTone, type ResponseStyle } from '../services/api/assistants';
+import { activateCustomerKnowledge, archiveKnowledge, attachKnowledge, createFaqSource, createTextSource, getKnowledgeProcessing, getKnowledgeSource, listKnowledge, reindexKnowledge, restoreKnowledge, listWebsitePages, createWebsiteSource, crawlWebsiteSource, getWebsiteSourceDetails, updateWebsiteSyncSettings, type KnowledgeSource, type ProcessingDetails, type WebsitePagesResponse, type WebsiteSourceDetails } from '../services/api/knowledge';
+import { getWidgetConfig, saveWidgetConfig, type WidgetConfig } from '../services/api/widget';
+import { getWorkspace, listWorkspaceMembers, updateWorkspace, type WorkspaceMember } from '../services/api/workspaces';
+import { createKnowledgeBase, getEffectiveKnowledge, importKnowledgeBaseFaqs, listKnowledgeBases, previewKnowledgeBaseFaqImport, type FaqImportPreview, type FaqImportResult, type KnowledgeBase, type EffectiveKnowledge } from '../services/api/knowledge-bases';
+import { getWidgetApiOrigin, getWidgetHostingOrigin, isWidgetApiOriginConfigurationValid } from '../config';
+import { sourceAssistantAccessStatus, type SourceAssistantAccessStatus } from './knowledge-access';
+import { ChatflowBuilder } from './ChatflowBuilder';
+import { playgroundSourceLabel } from './playground-provenance';
+import { formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundHistory, PLAYGROUND_EXPORT_MAX_BYTES, PLAYGROUND_EXPORT_MAX_MESSAGES, type CopyableChatMessage } from '../pages/training/playground-copy';
+const KnowledgeCatalog = React.lazy(async () => {
+    await import('../pages/knowledge/knowledge-bases.css');
+    const module = await import('../pages/knowledge/BusinessDataVisibility');
+    return { default: module.BusinessDataVisibility };
+});
+type Props = { go: (p: PageId) => void; notify: (s: string) => void; workspaceSlug?: string; workspaceRole?: string; recordId?: string; recordConnectionId?: string; preferredAssistantId?: string; workspaceData?: { name: string; websiteUrl: string | null; businessType: string | null; timezone?: string; locale?: string }; onWorkspaceSaved?: (value: any) => void; openProduct?: (externalId: string, integrationId?: string) => void; openOrder?: (externalId: string) => void; openAssistant?: (id: string) => void; createAssistant?: () => void; openKnowledge?: (id: string) => void; openTicket?: (id: string) => void; openCrawl?: (id: string) => void; openShopify?: (id: string) => void };
+function TinyBadge({ status }: { status: string }) { const tone: 'green' | 'amber' | 'neutral' = /Active|Indexed|Paid|Delivered|Healthy|Connected|Visible|Synced|Enabled|Approved|Ready|Resolved/i.test(status) ? 'green' : /Pending|Draft|Unassigned|Processing|High|Review|Needs/i.test(status) ? 'amber' : 'neutral'; const darkStatus = /Failed|Error|Disconnected|Rejected|Blocked|Disabled|Inactive|Overdue/i.test(status) ? 'status-failed' : /Processing|Queued|Crawling/i.test(status) ? 'status-processing' : ''; return <Badge tone={tone} className={darkStatus}>{status}</Badge> }
+function connectorIsActive(connector: ConnectorInstance | null | undefined) { return Boolean(connector && typeof connector.state === 'string' && connector.state.toUpperCase() === 'CONNECTED'); }
+const shopifyAssistantSelectionKey = (slug: string, connectorId: string) => `carteio:shopify-assistant:${slug}:${connectorId}`;
+function readShopifyAssistantSelection(slug: string, connectorId: string) { try { return sessionStorage.getItem(shopifyAssistantSelectionKey(slug, connectorId)) ?? ''; } catch { return ''; } }
+function writeShopifyAssistantSelection(slug: string, connectorId: string, assistantId: string) { try { sessionStorage.setItem(shopifyAssistantSelectionKey(slug, connectorId), assistantId); } catch { /* Permission values remain server-authoritative. */ } }
+function connectorStateLabel(state: string) { return (typeof state === 'string' ? state : 'UNKNOWN').replaceAll('_', ' ').toLowerCase().replace(/^./, value => value.toUpperCase()); }
+const SHOPIFY_VERIFICATION_STALE_AFTER_MS = 120_000;
+function connectorStateTone(state: string): 'green' | 'amber' | 'blue' | 'neutral' { const normalized = typeof state === 'string' ? state.toUpperCase() : 'UNKNOWN'; return normalized === 'CONNECTED' ? 'green' : normalized === 'CONNECTING' ? 'blue' : ['DEGRADED', 'DISCONNECTED', 'ERROR', 'REVOKED'].includes(normalized) ? 'amber' : 'neutral'; }
+function shopifyConnectionLabel(connector: ConnectorInstance | null | undefined) {
+    if (!connector) return 'Not connected';
+    if (connector.state === 'CONNECTING' && Number.isFinite(Date.parse(connector.updatedAt)) && Date.now() - Date.parse(connector.updatedAt) >= SHOPIFY_VERIFICATION_STALE_AFTER_MS) return 'Verification did not finish';
+    if (connector.state === 'DRAFT' && connector.hasCredentials) return 'Credentials available · verification required';
+    if (connector.state === 'DRAFT') return 'Setup not authorized';
+    return connectorStateLabel(connector.state);
+}
+function shopifyConnectionTone(connector: ConnectorInstance | null | undefined): 'green' | 'amber' | 'blue' | 'neutral' {
+    if (connector?.state === 'CONNECTING' && Number.isFinite(Date.parse(connector.updatedAt)) && Date.now() - Date.parse(connector.updatedAt) >= SHOPIFY_VERIFICATION_STALE_AFTER_MS) return 'amber';
+    return connector ? connectorStateTone(connector.state) : 'neutral';
+}
+function normalizeShopifyDomain(value: string): string | null {
+    const input = value.trim();
+    if (!input || /[\s\\]/.test(input)) return null;
+    try {
+        const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(input) ? input : `https://${input}`;
+        const parsed = new URL(candidate);
+        if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash || !['', '/'].includes(parsed.pathname)) return null;
+        const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+        return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.myshopify\.com$/.test(host) ? host : null;
+    } catch { return null; }
+}
+function connectorShopDomain(connector: ConnectorInstance): string | null {
+    const configuration: unknown = connector.configuration;
+    if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration) || !('shopDomain' in configuration)) return null;
+    const shopDomain: unknown = configuration.shopDomain;
+    return typeof shopDomain === 'string' ? normalizeShopifyDomain(shopDomain) : null;
+}
+function ShopifyLoadingSkeleton({ details = false }: { details?: boolean }) {
+    return <div className="shopify-loading-stack" role="status" aria-label="Loading Shopify connection" aria-busy="true">
+        <Card className="shopify-hero shopify-skeleton-card"><span className="shopify-skeleton-icon"/><div className="shopify-skeleton-copy"><i className="shopify-skeleton-line shopify-skeleton-eyebrow"/><i className="shopify-skeleton-line shopify-skeleton-heading"/><i className="shopify-skeleton-line shopify-skeleton-description"/></div><i className="shopify-skeleton-status"/></Card>
+        {details && <><div className="metrics-grid shopify-skeleton-metrics">{[0,1,2,3].map(index => <Card className="shopify-skeleton-metric" key={index}><i className="shopify-skeleton-line"/><i className="shopify-skeleton-line"/><i className="shopify-skeleton-line"/></Card>)}</div><Card className="shopify-skeleton-management"><i className="shopify-skeleton-line shopify-skeleton-heading"/><i className="shopify-skeleton-line shopify-skeleton-description"/><i className="shopify-skeleton-row"/><i className="shopify-skeleton-row"/></Card></>}
+    </div>;
+}
+function PageTabs({ tabs }: { tabs: string[] }) { const [tab, setTab] = useState(tabs[0]); return <div className="tabs">{tabs.map(t => <button key={t} onClick={() => setTab(t)} className={tab === t ? 'active' : ''}>{t}</button>)}</div> }
+function Metrics({ items }: { items: { label: string; value: string; change: string; icon?: LucideIcon; positive?: boolean }[] }) { return <div className="metrics-grid">{items.map(it => <Stat key={it.label} {...it} />)}</div> }
+function ChartBlock({ title = 'Sales & conversations', desc = 'Time series from authorized data when available', values, go }: { title?: string; desc?: string; values?: number[]; go?: () => void }) { return <Card className="chart-panel"><SectionHeader title={title} desc={desc} action={<div className="select-like">Date range unavailable <ChevronDown size={14} /></div>} />{!values?.length ? <Empty title="Trend data unavailable" desc="The existing API provides totals but no time-series data." /> : <Bars values={values} />}{go && <ViewAll onClick={go} text="View analytics" />}</Card> }
+function Overview({ go, workspaceSlug = '' }: Props) {
+    const data = useOverviewData(workspaceSlug);
+    const summary = data.summary;
+    const commerce = summary?.commerce;
+    const sales = summary?.sales;
+    const assistantData = summary?.assistants.status === 'success' ? summary.assistants.data : undefined;
+    const knowledgeData = summary?.knowledge.status === 'success' ? summary.knowledge.data : undefined;
+    const formatMoney = (amount: string | null, currency: string | null) => {
+        if (amount === null) return '—';
+        const value = Number(amount);
+        if (!Number.isFinite(value)) return '—';
+        if (!currency) return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(value); }
+        catch { return `${currency} ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value)}`; }
+    };
+    const totals = sales?.status === 'AVAILABLE' ? sales.currencyTotals ?? [] : [];
+    const salesValue = totals.length === 1 ? formatMoney(totals[0]!.netSales, totals[0]!.currency) : totals.length > 1 ? 'Multiple' : '—';
+    const salesHint = sales?.status === 'AVAILABLE' ? totals.length > 1 ? `${totals.length} currencies · last 30 days` : 'Net sales · last 30 days' : sales?.status === 'PERMISSION_REQUIRED' ? 'Requires workspace billing role' : 'No verified sales total';
+    const orderCount = commerce?.orderCount ?? null;
+    const countText = (value: number | null | undefined, failed = false) => data.loading ? 'Loading…' : failed ? 'Unavailable' : value === undefined || value === null ? '—' : value.toLocaleString();
+    const shopifyConnector = data.connectors?.find(item => /shopify/i.test(item.connectorId) || /shopify/i.test(item.connectorType));
+    const connectedShopify = connectorIsActive(shopifyConnector);
+    const shopifyStatus = data.loading ? 'Checking' : data.failed.connectors ? 'Unavailable' : shopifyConnector ? shopifyConnectionLabel(shopifyConnector) : 'Not connected';
+    const progressValue = (part: number | undefined, total: number | undefined) => part === undefined || total === undefined ? null : total === 0 ? 0 : Math.round(Math.max(0, Math.min(1, part / total)) * 100);
+    const readinessValues = [
+        { label: 'Active products', value: progressValue(commerce?.activeProductCount, commerce?.productCount) },
+        { label: 'Ready knowledge sources', value: progressValue(knowledgeData?.ready, knowledgeData?.total) },
+        { label: 'Active assistants', value: progressValue(assistantData?.active, assistantData?.total) },
+    ];
+    const readiness = readinessValues.filter(item => item.value !== null) as Array<{ label: string; value: number }>;
+    return <><PageHeader eyebrow="Unified Overview" title="Your business at a glance" desc="Everything happening across your store, AI assistants and customer support." action={<Btn secondary onClick={() => go('analytics')}>View analytics <ArrowUpRight size={16} /></Btn>} /><div className="top-chip"><Badge tone={shopifyConnectionTone(shopifyConnector)}>{connectedShopify ? <CircleCheck size={12} /> : <AlertCircle size={12} />} Shopify · {shopifyStatus}</Badge>{connectedShopify && <Badge>Last sync · {shopifyConnector?.lastSuccessfulSyncAt ? new Date(shopifyConnector.lastSuccessfulSyncAt).toLocaleString() : 'Not reported'}</Badge>}</div>
+        <Metrics items={[{ label: 'Net sales', value: salesValue, change: salesHint, icon: ShoppingBag, positive: sales?.status === 'AVAILABLE' }, { label: 'Orders', value: countText(orderCount, data.failed.summary || summary?.commerce?.status === 'ERROR'), change: 'Authorized synced order records', icon: ShoppingCart, positive: false }, { label: 'Conversations', value: countText(data.conversations?.total, data.failed.conversations), change: data.failed.conversations ? 'Conversation data unavailable' : 'Workspace conversation records', icon: MessageSquare, positive: false }, { label: 'AI resolution', value: 'Unavailable', change: 'Metric not provided by current API', icon: Bot, positive: false }]} />
+        <div className="two-col major"><ChartBlock title="Sales & conversations" desc="Trend series are unavailable from the current API" values={[]} go={() => go('analytics')} /><Card><SectionHeader title="AI operations" desc="Current authorized workspace status" /><div className="operation-list"><button onClick={() => go('handoff')}><span>Open handoff cases</span><Badge tone={data.failed.openTickets ? 'neutral' : 'amber'}>{countText(data.openTickets?.total, data.failed.openTickets)}</Badge></button><button onClick={() => go('knowledge')}><span>Knowledge sources</span><Badge tone={knowledgeData ? 'green' : 'neutral'}>{knowledgeData ? `${knowledgeData.ready} ready · ${knowledgeData.failed} failed` : 'Unavailable'}</Badge></button><button onClick={() => go('assistants')}><span>Active assistants</span><Badge>{assistantData ? countText(assistantData.active) : 'Unavailable'}</Badge></button><button onClick={() => go('integrations')}><span>Shopify integration</span><Badge tone={shopifyConnectionTone(shopifyConnector)}>{shopifyStatus}</Badge></button></div></Card></div>
+        <div className="two-col major"><Card><SectionHeader title="Products in your catalog" desc="Recently synced products" action={<ViewAll onClick={() => go('products')} />} />{data.products.length ? <div className="top-products">{data.products.map(product => <button onClick={() => go('products')} className="mini-product" key={product.id}><div className="product-art">{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={24} aria-label="No product image" />}</div><strong title={product.name}>{product.name}</strong><small>{product.price == null ? 'Price unavailable' : formatMoney(String(product.price), product.currency)}{product.sku ? ` · ${product.sku}` : ''}</small></button>)}</div> : <Empty title={data.loading ? 'Loading products' : data.failed.products ? 'Products unavailable' : 'No products synced'} desc={data.failed.products ? 'Could not load products for this workspace.' : 'Products appear here after an authorized commerce sync.'} />}</Card><Card><SectionHeader title="Workspace data status" desc="Values calculated from available records" />{readiness.length ? readiness.map(({ label, value }) => <Progress key={label} label={label} value={value} />) : <Empty title={data.loading ? 'Loading workspace metrics' : 'Metrics unavailable'} desc="The existing APIs do not provide these counts yet." />}{data.failed.summary && <Notice tone="amber">Some workspace summary data could not be loaded.</Notice>}</Card></div></>
+}
+function Products({ go, workspaceSlug = '', workspaceRole = '', openProduct }: Props) {
+    const [search, setSearch] = useState('');
+    const [filter, setFilter] = useState('All products');
+    const [page, setPage] = useState(1);
+    const [result, setResult] = useState<Awaited<ReturnType<typeof getProducts>> | null>(null);
+    const [resultConnectionId, setResultConnectionId] = useState('');
+    const [connectors, setConnectors] = useState<ConnectorInstance[]>([]);
+    const [selectedConnectorId, setSelectedConnectorId] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [connectorLoading, setConnectorLoading] = useState(true);
+    const [connectorError, setConnectorError] = useState('');
+    const [error, setError] = useState('');
+    const [syncing, setSyncing] = useState(false);
+    const [notice, setNotice] = useState('');
+    const [retry, setRetry] = useState(0);
+    const canManage = workspaceRole === 'owner' || workspaceRole === 'admin';
+    useEffect(() => {
+        if (connectorLoading) return;
+        const controller = new AbortController();
+        setLoading(true); setError('');
+        const connectionId = connectors.find(item => item.id === selectedConnectorId)?.integrationConnectionId ?? '';
+        if (!connectionId) {
+            // This screen is the Shopify catalog. Never turn a missing Shopify
+            // link into an unfiltered workspace-wide commerce query.
+            setResult(null);
+            setResultConnectionId('');
+            setLoading(false);
+            return () => controller.abort();
+        }
+        getProducts(workspaceSlug, page, search, controller.signal, connectionId || undefined).then(value => { if (!controller.signal.aborted) { setResult(value); setResultConnectionId(connectionId); } })
+            .catch(cause => { if (!controller.signal.aborted) setError(cause instanceof ApiError ? cause.message : 'Products could not be loaded.'); })
+            .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, page, search, retry, connectorLoading, connectors, selectedConnectorId]);
+    useEffect(() => {
+        const controller = new AbortController();
+        setConnectorLoading(true); setConnectorError('');
+        getConnectors(workspaceSlug, controller.signal).then(value => { if (!controller.signal.aborted) {
+            const shops = value.items.filter(item => /shopify/i.test(item.connectorId) || /shopify/i.test(item.connectorType));
+            setConnectors(shops);
+            setSelectedConnectorId(current => current && shops.some(item => item.id === current) ? current : (shops.find(item => item.state === 'CONNECTED') ?? shops[0])?.id ?? '');
+        } })
+            .catch(() => { if (!controller.signal.aborted) setConnectorError('Shopify connection status could not be refreshed.'); })
+            .finally(() => { if (!controller.signal.aborted) setConnectorLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, retry]);
+    async function syncProducts() {
+        if (!connector || !['CONNECTED', 'CONNECTED_WITH_WARNINGS', 'SYNCING'].includes(connector.state) || !canManage || syncing) return;
+        setSyncing(true); setNotice('');
+        try {
+            const job = await queueConnectorSync(workspaceSlug, connector.id, 'PRODUCTS', 'FULL');
+            setNotice(`Product sync job ${job.state.toLowerCase()}.`);
+            setRetry(value => value + 1);
+        } catch (cause) { setNotice(cause instanceof ApiError ? cause.message : 'The product sync job could not be queued.'); }
+        finally { setSyncing(false); }
+    }
+    const connector = connectors.find(item => item.id === selectedConnectorId) ?? null;
+    const selectedConnectionId = connector?.integrationConnectionId ?? '';
+    const visibleResult = resultConnectionId === selectedConnectionId ? result : null;
+    const rows: Product[] = visibleResult?.items ?? [];
+    const connected = connector?.state === 'CONNECTED' || connector?.state === 'CONNECTED_WITH_WARNINGS' || connector?.state === 'SYNCING';
+    return <><PageHeader eyebrow="Commerce / Products" title="Product catalog" desc="View synced products, variants, inventory and knowledge availability." action={<div className="action-line">{loading && visibleResult && <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>Updating products…</span>}<Btn disabled={!connector || !connected || !canManage || syncing} onClick={() => void syncProducts()}><RefreshCw size={16} />{syncing ? 'Queueing sync…' : 'Sync products'}</Btn></div>} /><Card className="connect-strip"><div><Badge tone={shopifyConnectionTone(connector)}>{connectorLoading ? 'Checking Shopify connection…' : connectorError ? 'Shopify status unavailable' : connector ? `${connector.displayName} · ${shopifyConnectionLabel(connector)}` : 'No Shopify store connected'}</Badge><span>{connector?.lastSuccessfulSyncAt ? `Last successful sync: ${new Date(connector.lastSuccessfulSyncAt).toLocaleString()}` : 'Not synced yet'}</span>{connector?.latestSyncJob?.resourceType === 'PRODUCTS' && <span>Latest product sync: {connector.latestSyncJob.state} · {connector.latestSyncJob.itemCount.toLocaleString()} records</span>}</div><div className="action-line"><Badge>{visibleResult ? `${visibleResult.total.toLocaleString()} products` : loading ? 'Loading products…' : 'Product count unavailable'}</Badge><Btn secondary disabled={connectorLoading || (Boolean(connectorError) && !connector)} onClick={() => connectorError && !connector ? setRetry(value => value + 1) : go('shopify')}>{connectorError && !connector ? 'Retry Shopify status' : connected ? 'Manage sync' : 'Connect Shopify'}</Btn></div></Card>
+        {connectors.length > 1 && <label className="field"><span>Shopify store</span><select aria-label="Shopify store" value={connector?.id ?? ''} onChange={event => { setSelectedConnectorId(event.target.value); setPage(1); }}>{connectors.map(item => <option key={item.id} value={item.id}>{item.displayName} · {shopifyConnectionLabel(item)}</option>)}</select></label>}
+        {connectorError && <Notice tone="amber"><span>{connector ? `${connectorError} Showing the last loaded connector state.` : `${connectorError} No connection state is assumed.`} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></span></Notice>}
+        <div className="filter-line"><FilterInput value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder="Search by product name or SKU..." /><div className="filter-pills">{['All products', 'Indexed', 'Not indexed'].map(value => <button key={value} type="button" className={'filter-pill ' + (filter === value ? 'active' : '')} disabled={value !== 'All products'} title={value === 'All products' ? undefined : 'AI indexing status is not exposed by the current product API.'} onClick={() => setFilter(value)}>{value}</button>)}</div></div>
+        {notice && <Notice tone="blue">{notice}</Notice>}
+        {loading && !visibleResult && <p role="status" aria-live="polite">Loading authorized products…</p>}
+        {error && <Notice tone="amber"><span>{visibleResult ? `Could not refresh products. Showing the last loaded results. ${error}` : error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></span></Notice>}
+        {!connectorLoading && !connectorError && !connector && <Card className="major"><Empty title="No Shopify store connected" desc="Connect a Shopify store before loading its product catalog."/><Btn secondary onClick={() => go('integrations')}>Open integrations</Btn></Card>}
+        {connector && !connector.integrationConnectionId && <Card className="major"><Empty title="Shopify catalog is unavailable" desc="This connector has no linked commerce record. Review its connection before loading catalog data."/><Btn secondary onClick={() => go('shopify')}>Review Shopify connection</Btn></Card>}
+        {visibleResult && <Card className="table-card"><TableWrap><thead><tr><th>Product</th><th>SKU</th><th>Price</th><th>Stock</th><th>AI index</th><th>Visibility</th><th /></tr></thead><tbody>{rows.map(product => <tr className="selectable" key={product.id} onClick={() => openProduct?.(product.externalId, product.connection.id)}><td><div className="product-table-cell">{product.imageUrl ? <div className="product-art"><img src={product.imageUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div> : <div className="product-art"><Package size={24} /></div>}<strong>{product.name}</strong></div></td><td>{product.sku || product.variants?.[0]?.sku || '—'}</td><td className="semi">{formatProductMoney(product.price, product.currency)}</td><td>{product.inventory === null ? 'Not provided' : product.inventory.toLocaleString()} {product.inventory === 0 && <Badge tone="amber">Out</Badge>}</td><td><Badge tone="neutral">Unavailable</Badge></td><td><Badge tone="neutral">{product.availabilityStatus || product.rawStatus || 'Unavailable'}</Badge></td><td><ChevronRight size={16} /></td></tr>)}</tbody></TableWrap>{rows.length === 0 && <Empty title={visibleResult.availability === 'NOT_CONNECTED' ? 'Connect a store to see products' : visibleResult.availability === 'SYNC_PENDING' ? 'Product sync is in progress' : visibleResult.availability === 'PERMISSION_REQUIRED' ? 'Product access is not enabled' : 'No products available'} desc={visibleResult.availability === 'SYNC_PENDING' ? 'The authorized catalog is being synchronized. Check the Shopify sync status for its latest job.' : visibleResult.availability === 'PERMISSION_REQUIRED' ? 'Review Shopify granted scopes and workspace data permissions in the Shopify integration.' : visibleResult.availability === 'NO_DATA' ? 'The Products API returned no visible records for the current workspace permissions. Review product access and sync status.' : 'Products appear after an authorized store connection and catalog sync.'} />}{visibleResult.availability === 'NO_DATA' && rows.length === 0 && connector?.lastSuccessfulSyncAt && <p className="shopify-domain-hint">Last recorded successful sync: {new Date(connector.lastSuccessfulSyncAt).toLocaleString()}. This does not guarantee products remain visible under current permissions.</p>}<div className="table-footer"><span>Showing {rows.length ? `${(page - 1) * visibleResult.pageSize + 1}–${Math.min(page * visibleResult.pageSize, visibleResult.total)} of ` : ''}{visibleResult.total.toLocaleString()} products · AI index status unavailable</span><div className="action-line"><button type="button" className="text-link" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button><span>Page {page}</span><button type="button" className="text-link" disabled={page * visibleResult.pageSize >= visibleResult.total} onClick={() => setPage(value => value + 1)}>Next</button></div></div></Card>}
+    </>
+}
+function formatProductMoney(value: Product['price'], currency: Product['currency']) {
+    if (value === null || !currency || !Number.isFinite(Number(value))) return 'Unavailable';
+    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value)); }
+    catch { return `${currency} ${Number(value).toLocaleString()}`; }
+}
+function ProductDetail({ go, workspaceSlug = '', recordId = '', recordConnectionId }: Props) {
+    const [product, setProduct] = useState<Product | null>(null);
+    const [variantId, setVariantId] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [retry, setRetry] = useState(0);
+    useEffect(() => {
+        if (!recordId || recordId === 'source-preview') { setProduct(null); setLoading(false); setError('Product identifier is unavailable. Open a product from the catalog.'); return; }
+        const controller = new AbortController();
+        setLoading(true); setError(''); setProduct(null);
+        getProduct(workspaceSlug, recordId, recordConnectionId, controller.signal).then(page => {
+            if (controller.signal.aborted) return;
+            const found = page.items.find(item => item.externalId === recordId) ?? null;
+            setProduct(found); setVariantId(found?.variants?.[0]?.externalId ?? '');
+        }).catch(cause => { if (!controller.signal.aborted) setError(cause instanceof ApiError ? cause.message : 'Product details could not be loaded.'); })
+            .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, recordId, recordConnectionId, retry]);
+    const selected = product?.variants?.find(item => item.externalId === variantId);
+    const price = selected?.price ?? product?.price ?? null;
+    const currency = selected?.currency ?? product?.currency ?? null;
+    const selectedInventory = selected ? selected.inventory : product?.inventory ?? null;
+    return <><PageHeader eyebrow="Commerce / Products / Detail" title={product?.name ?? 'Product details'} desc="Shopify product metadata, variants and authorized commerce fields." action={<Btn secondary onClick={() => go('products')}>Back to products</Btn>} />
+        {loading && <p role="status">Loading authorized product data…</p>}
+        {!loading && error && <Notice tone="amber">{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></Notice>}
+        {!loading && !error && !product && <Card><Empty title="Product details unavailable" desc="This product is not present in the current workspace catalog." /></Card>}
+        {product && <><div className="two-col product-detail-grid"><Card className="product-gallery"><div className="product-art featured-product">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={28} />}</div><div className="gallery-thumbs">{product.imageUrl ? <div className="product-art"><img src={product.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div> : <div className="product-art"><Package size={20} /></div>}</div></Card><Card className="product-describe"><Badge tone={product.connection.state === 'CONNECTED' ? 'green' : 'neutral'}>{product.connection.state.replaceAll('_', ' ')}</Badge><h2>{product.name}</h2><h2 className="price">{formatProductMoney(price, currency)}</h2><p>{product.description || 'Product description is not available from the authorized product record.'}</p><hr />{[['Shopify product ID', product.externalId], ['SKU', selected?.sku || product.sku || 'Unavailable'], ['Collection', product.category || 'Unavailable'], ['Stock', selectedInventory === null ? 'Not provided' : String(selectedInventory)], ['Variants', product.variants?.length ? String(product.variants.length) : 'Unavailable']].map(([label, value]) => <div className="detail-row" key={label}><span>{label}</span><strong>{value}</strong></div>)}{product.variants?.length ? <div className="field"><span>Preview selected variant</span><div className="filter-pills">{product.variants.map(item => <button type="button" key={item.externalId} className={'filter-pill ' + (item.externalId === variantId ? 'active' : '')} onClick={() => setVariantId(item.externalId)}>{item.title}</button>)}</div></div> : <p>Variant records are unavailable.</p>}</Card></div>
+        <div className="two-col major"><Card><SectionHeader title="What your AI knows" desc="Grounded product information from authorized data" action={<Badge tone="neutral">AI index status unavailable</Badge>} /><div className="detail-row bordered"><strong>Grounded description</strong><span>{product.description ? 'Product title, description and variant details' : 'No product description is available.'}</span></div><div className="detail-row bordered"><strong>Available fields</strong><span>Only merchant-authorized price, inventory and category fields are shown.</span></div><div className="detail-row bordered"><strong>Merchant policies</strong><span>Assistant policy sources are managed in Knowledge Base.</span></div></Card><Card><SectionHeader title="Ask about this product" desc="Test a grounded question in Playground" /><p>No sample answer is shown. Start a Playground session to test this product.</p><Btn secondary onClick={() => go('playground')}>Test in Playground <ArrowRight size={16} /></Btn></Card></div></>}
+    </>
+}
+function Sales({ workspaceSlug = '', openOrder }: Props) {
+    const [sales, setSales] = useState<SalesSummary | null>(null);
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [ordersError, setOrdersError] = useState('');
+    const [retry, setRetry] = useState(0);
+    useEffect(() => {
+        const controller = new AbortController();
+        setLoading(true); setError(''); setOrdersError(''); setSales(null); setOrders([]);
+        Promise.allSettled([getSales(workspaceSlug, controller.signal), getOrders(workspaceSlug, 1, '', controller.signal)]).then(([salesResult, ordersResult]) => {
+            if (controller.signal.aborted) return;
+            if (salesResult.status === 'fulfilled') setSales(salesResult.value);
+            else setError(salesResult.reason instanceof ApiError ? salesResult.reason.message : 'Sales totals could not be loaded.');
+            if (ordersResult.status === 'fulfilled') setOrders(ordersResult.value.items);
+            else setOrdersError(ordersResult.reason instanceof ApiError ? ordersResult.reason.message : 'Recent orders could not be loaded.');
+        }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, retry]);
+    const totals = sales?.currencyTotals ?? [];
+    const primary = totals.length === 1 ? totals[0] : null;
+    const ordersCount = totals.reduce((count, item) => count + item.orderCount, 0);
+    const average = primary && primary.orderCount > 0 && primary.netSales !== null ? primary.netSales / primary.orderCount : null;
+    const salesValue = primary ? formatProductMoney(primary.netSales, primary.currency) : totals.length > 1 ? 'Multiple currencies' : 'Unavailable';
+    const totalOrders = sales?.availability === 'AVAILABLE' ? String(ordersCount) : 'Unavailable';
+    return <><PageHeader eyebrow="Commerce / Sales" title="Sales & orders" desc="Monitor Shopify sales, fulfillment activity and authorized order data." action={<Btn secondary disabled title="Order export is not available in the existing frontend API."><Download size={16} /> Export unavailable</Btn>} />
+        <div className="top-chip"><Badge tone={sales?.availability === 'AVAILABLE' ? 'green' : 'neutral'}>{loading ? 'Loading sales status…' : sales?.availability.replaceAll('_', ' ') || 'Sales status unavailable'}</Badge>{sales?.availability === 'PERMISSION_REQUIRED' && <Badge tone="amber">Sales totals require workspace owner/admin access.</Badge>}</div>
+        {loading && <p role="status">Loading authorized sales and orders…</p>}
+        {!loading && error && <Notice tone="amber">{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></Notice>}
+        {!loading && !error && <><Metrics items={[{ label: 'Net sales', value: salesValue, change: primary ? 'Paid-order aggregate · last 30 days' : totals.length > 1 ? 'Currency totals shown separately' : 'No verified sales aggregate', icon: ShoppingBag, positive: false }, { label: 'Paid orders', value: totalOrders, change: sales?.availability === 'AVAILABLE' ? 'Authorized sales summary' : 'No verified order total', icon: ShoppingCart, positive: false }, { label: 'Average order', value: average === null ? 'Unavailable' : formatProductMoney(average, primary?.currency ?? null), change: primary ? 'Calculated within a single currency' : 'Requires a single-currency sales total', icon: TrendingUp, positive: false }, { label: 'Conversion', value: 'Unavailable', change: 'Conversion attribution is not provided by the current API', positive: false, icon: ChartNoAxesCombined }]} />
+            <div className="two-col major"><ChartBlock title="Revenue trend" desc="Historical time-series data is not available from the current sales API." values={[]} /><Card><SectionHeader title="Authorized sales by currency" />{totals.length ? <div className="order-breakdown">{totals.map((item, index) => <div key={`${item.currency ?? 'unknown'}-${index}`}><span>{item.currency || 'Currency unavailable'}</span><Badge tone="neutral">{item.orderCount} paid orders</Badge><strong>{formatProductMoney(item.netSales, item.currency)}</strong></div>)}</div> : <Empty title="Sales totals unavailable" desc={sales?.availability === 'NO_DATA' ? 'No authorized paid order totals were returned.' : 'The current workspace API did not return sales totals.'} />}</Card></div>
+            <Card className="major"><SectionHeader title="Recent Shopify orders" desc="Authorized order data returned by the workspace API" action={<ViewAll onClick={() => setRetry(value => value + 1)} text="Refresh orders" />} />{ordersError ? <Notice tone="amber">{ordersError} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></Notice> : orders.length ? <TableWrap><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Fulfillment</th><th>Status</th><th /></tr></thead><tbody>{orders.slice(0, 5).map(order => <tr className="selectable" key={order.id} onClick={() => openOrder?.(order.externalId)}><td className="link-cell">{order.displayReference || 'Reference unavailable'}</td><td>Unavailable in authorized response</td><td>{order._count.lines}</td><td className="semi">{formatProductMoney(order.total, order.currency)}</td><td>{order.fulfillmentStatus || 'Unavailable'}</td><td>{order.financialStatus || 'Unavailable'}</td><td><ChevronRight size={16} /></td></tr>)}</tbody></TableWrap> : <Empty title="No authorized orders" desc="Orders appear after the connected store synchronizes permitted records." />}</Card></>}
+    </>;
+}
+function OrderDetail({ go, workspaceSlug = '', recordId = '' }: Props) {
+    const [order, setOrder] = useState<Order | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [retry, setRetry] = useState(0);
+    useEffect(() => {
+        if (!recordId || recordId === 'source-preview') { setOrder(null); setLoading(false); setError('Order identifier is unavailable. Open an order from Sales & Orders.'); return; }
+        const controller = new AbortController();
+        setLoading(true); setError(''); setOrder(null);
+        getOrders(workspaceSlug, 1, recordId, controller.signal).then(page => { if (!controller.signal.aborted) setOrder(page.items.find(item => item.externalId === recordId) ?? null); })
+            .catch(cause => { if (!controller.signal.aborted) setError(cause instanceof ApiError ? cause.message : 'Order details could not be loaded.'); })
+            .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, recordId, retry]);
+    return <><PageHeader eyebrow="Commerce / Orders / Details" title={order?.displayReference || (order ? `Order ${order.externalId}` : 'Order details')} desc="Authorized read-only order context for customer support." action={<Btn secondary onClick={() => go('sales')}>Back to orders</Btn>} />
+        {loading && <p role="status">Loading authorized order details…</p>}
+        {!loading && error && <Notice tone="amber">{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></Notice>}
+        {!loading && !error && !order && <Card><Empty title="Order details unavailable" desc="This order is not present in the authorized workspace response." /></Card>}
+        {order && <><div className="top-chip"><Badge tone="neutral">Payment: {order.financialStatus || 'Unavailable'}</Badge><Badge tone="neutral">Fulfillment: {order.fulfillmentStatus || 'Unavailable'}</Badge></div><div className="two-col major"><Card><SectionHeader title="Order summary" />{[['Order number', order.displayReference || order.externalId], ['Placed on', order.orderedAt ? new Date(order.orderedAt).toLocaleString() : 'Unavailable'], ['Order total', formatProductMoney(order.total, order.currency)], ['Fulfillment', order.fulfillmentStatus || 'Unavailable'], ['Tracking', 'Unavailable in the current order response']].map(([key, value]) => <div className="detail-row bordered" key={key}><span>{key}</span><strong>{value}</strong></div>)}</Card><Card><SectionHeader title="Customer context" /><p>Customer identity is unavailable in the authorized order response.</p><Notice tone="amber">Only merchant-authorized order fields are shown.</Notice><Btn secondary onClick={() => go('conversations')}>Related conversation</Btn></Card></div><Card className="major"><SectionHeader title="Line items" />{order.lines?.length ? order.lines.map((line, index) => <div className="line-item" key={`${line.externalId}-${index}`}><div className="product-art"><Package size={22} /></div><div><strong>{line.name}</strong><span>{line.sku || 'SKU unavailable'} · Qty {line.quantity}</span></div><strong>{formatProductMoney(line.total, line.currency)}</strong></div>) : <Empty title="Line items unavailable" desc="The order endpoint returned no line item records." />}</Card></>}
+    </>;
+}
+function Assistants({ go, notify, workspaceSlug = '', workspaceRole = '', recordId = '', openAssistant, createAssistant }: Props) {
+    const [q, setQ] = useState('');
+    const [status, setStatus] = useState<'ALL' | 'ACTIVE' | 'DRAFT' | 'INACTIVE' | 'ARCHIVED'>('ALL');
+    const [assistants, setAssistants] = useState<Assistant[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [retry, setRetry] = useState(0);
+    const [creating, setCreating] = useState(false);
+    const [newName, setNewName] = useState('');
+    const [newDescription, setNewDescription] = useState('');
+    const [newPurpose, setNewPurpose] = useState('');
+    const [busyId, setBusyId] = useState('');
+    const manager = workspaceRole === 'owner' || workspaceRole === 'admin';
+    useEffect(() => {
+        if (!workspaceSlug) { setLoading(false); setError('Workspace context is unavailable.'); return; }
+        const controller = new AbortController();
+        setLoading(true); setError(''); setAssistants([]);
+        listAssistants(workspaceSlug, 1, controller.signal, status).then(result => {
+            if (!controller.signal.aborted) setAssistants(result.assistants);
+        }).catch(reason => {
+            if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistants could not be loaded.');
+        }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, status, retry]);
+    const filtered = assistants.filter(a => `${a.name} ${a.description ?? ''} ${a.businessPurpose ?? ''}`.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+    const statusTabs: Array<[typeof status, string]> = [['ALL', 'All assistants'], ['ACTIVE', 'Active'], ['DRAFT', 'Draft'], ['INACTIVE', 'Inactive'], ['ARCHIVED', 'Archived']];
+    async function create() {
+        if (!newName.trim() || creating) return;
+        setCreating(true); setError('');
+        const input: AssistantInput = { name: newName.trim(), description: newDescription.trim(), businessPurpose: newPurpose.trim(), systemInstructions: '', defaultLanguage: 'English', responseTone: 'professional', responseStyle: 'balanced', fallbackMessage: 'I do not have enough authorized information to answer that.', greetingMessage: null, escalationMessage: null };
+        try { const assistant = await createAssistantApi(workspaceSlug, input); notify('Assistant created.'); openAssistant?.(assistant.id); }
+        catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Assistant could not be created.'); }
+        finally { setCreating(false); }
+    }
+    async function toggleActive(assistant: Assistant) {
+        if (busyId) return;
+        setBusyId(assistant.id); setError('');
+        try { await setAssistantActive(workspaceSlug, assistant.id, assistant.status !== 'active'); setRetry(value => value + 1); }
+        catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Assistant status could not be changed.'); }
+        finally { setBusyId(''); }
+    }
+    async function archive(assistant: Assistant) {
+        if (!manager || busyId || !window.confirm(`Archive “${assistant.name}”?`)) return;
+        setBusyId(assistant.id); setError('');
+        try { await archiveAssistant(workspaceSlug, assistant.id); setRetry(value => value + 1); notify('Assistant archived.'); }
+        catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Assistant could not be archived.'); }
+        finally { setBusyId(''); }
+    }
+    async function restore(assistant: Assistant) {
+        if (!manager || busyId) return;
+        setBusyId(assistant.id); setError('');
+        try { await restoreAssistant(workspaceSlug, assistant.id); setRetry(value => value + 1); notify('Assistant restored.'); }
+        catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Assistant could not be restored.'); }
+        finally { setBusyId(''); }
+    }
+    return <><PageHeader eyebrow="Train AI / Assistants" title="AI assistants" desc="Create, test, deploy and manage your business AI experiences." action={manager && createAssistant ? <AddButton onClick={createAssistant}>Create assistant</AddButton> : undefined} />
+        {recordId === 'new' && manager && <Card className="major"><SectionHeader title="Create assistant" desc="Create a workspace assistant using the existing assistant API."/><label className="field"><span>Name</span><input value={newName} onChange={event => setNewName(event.target.value)} required/></label><label className="field"><span>Description</span><input value={newDescription} onChange={event => setNewDescription(event.target.value)}/></label><label className="field"><span>Business purpose</span><textarea value={newPurpose} onChange={event => setNewPurpose(event.target.value)}/></label><div className="action-line"><Btn disabled={creating || !newName.trim()} onClick={() => void create()}>{creating ? 'Creating…' : 'Create assistant'}</Btn><Btn secondary onClick={() => go('assistants')}>Cancel</Btn></div></Card>}
+        <div className="filter-line"><FilterInput value={q} onChange={setQ} placeholder="Search your assistants..." /><div className="filter-pills">{statusTabs.map(([value, label]) => <button type="button" key={value} className={'filter-pill ' + (status === value ? 'active' : '')} onClick={() => setStatus(value)}>{label}</button>)}</div><button type="button" className="text-link" onClick={() => setRetry(n => n + 1)} aria-label="Refresh assistants"><RefreshCw size={15}/></button></div>
+        {loading && <Empty title="Loading assistants…" desc="Fetching assistants for this workspace."/>}
+        {!loading && error && <Notice tone="amber"><span>{error} <button type="button" className="text-link" onClick={() => setRetry(n => n + 1)}>Retry</button></span></Notice>}
+        {!loading && !error && filtered.length === 0 && <Empty title={q ? 'No matching assistants' : 'No assistants yet'} desc={q ? 'Try another search.' : 'Create an assistant to configure its authorized business experience.'}/>}
+        {!loading && !error && filtered.length > 0 && <div className="assistant-grid">{filtered.map(assistant => <Card key={assistant.id} className="assistant-card"><div className="assistant-head"><CircleIcon icon={Bot} large/><TinyBadge status={assistant.status}/></div><h3>{assistant.name}</h3><p>{assistant.description || assistant.businessPurpose || 'No description provided'}</p><hr/><div className="assistant-footer"><span>Knowledge count unavailable</span><span>Chat count unavailable</span></div><div className="action-line"><button className="text-link" type="button" onClick={() => openAssistant ? openAssistant(assistant.id) : go('behavior')}>Manage assistant <ArrowRight size={15}/></button>{manager && (assistant.status === 'archived' ? <button className="text-link" type="button" disabled={busyId === assistant.id} onClick={() => void restore(assistant)}>Restore</button> : <><button className="text-link" type="button" disabled={busyId === assistant.id} onClick={() => void toggleActive(assistant)}>{busyId === assistant.id ? 'Saving…' : assistant.status === 'active' ? 'Deactivate' : 'Activate'}</button><button className="text-link" type="button" disabled={busyId === assistant.id} onClick={() => void archive(assistant)}>Archive</button></>)}</div></Card>)}</div>}
+        {!manager && <p className="page-footer">Assistant creation is available to workspace owners and admins.</p>}
+    </>;
+}
+function Train({ go, workspaceSlug = '' }: Props) {
+    const [assistants, setAssistants] = useState<Assistant[]>([]); const [assistantId, setAssistantId] = useState(''); const [overview, setOverview] = useState<AssistantTrainingOverview | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setAssistants([]); setOverview(null); setAssistantId(''); setLoading(true); setError(''); listAssistants(workspaceSlug, 1, controller.signal).then(result => { if (!controller.signal.aborted) { setAssistants(result.assistants); setAssistantId(result.assistants[0]?.id ?? ''); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistant configuration could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    useEffect(() => { if (!workspaceSlug || !assistantId) { setOverview(null); return; } const controller = new AbortController(); setOverview(null); getAssistantTrainingOverview(workspaceSlug, assistantId, controller.signal).then(value => { if (!controller.signal.aborted) setOverview(value); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Training status could not be loaded.'); }); return () => controller.abort(); }, [workspaceSlug, assistantId, retry]);
+    const completed = overview ? [overview.behaviorConfigured, overview.readyCount > 0, Boolean(overview.assistant.effectiveProviderConfiguration?.ready), (overview.playgroundReadyCount ?? 0) > 0, overview.activeRuleCount > 0].filter(Boolean).length : null;
+    return <><PageHeader eyebrow="Train AI / Command Center" title="Train your AI" desc="Training configuration and readiness for a real workspace assistant." action={<label className="field"><span>AI assistant</span><select value={assistantId} onChange={event => setAssistantId(event.target.value)} disabled={loading || assistants.length === 0}><option value="">{loading ? 'Loading…' : 'No assistants available'}</option>{assistants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}/>
+        {error && <Notice tone="amber">{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></Notice>}
+        {!loading && !error && assistants.length === 0 && <Empty title="No assistants to train" desc="Create an assistant before configuring training."/>}
+        {overview && <><Card className="train-hero"><div className="eyebrow">AI TRAINING WORKSPACE</div><h2>{overview.assistant.name}</h2><p>{overview.assistant.description || overview.assistant.businessPurpose || 'No business purpose is configured.'}</p><div className="hero-bottom"><Badge>{completed} readiness conditions met · API reports {overview.totalKnowledge} knowledge records</Badge><Btn onClick={() => go('playground')}>Open Playground <ArrowRight size={16}/></Btn></div></Card><div className="train-grid">{sections.map((section,index) => <Card key={section.id} className="train-card"><Badge>{`STEP 0${index+1}`}</Badge><CircleIcon icon={section.icon}/><h3>{section.title}</h3><p>{section.id==='behavior' ? (overview.behaviorConfigured ? 'Behavior is configured' : 'Behavior is not yet configured') : section.id==='knowledge' ? `${overview.readyCount} ready · ${overview.processingCount} processing · ${overview.failedCount} failed` : section.desc}</p><hr/><button className="text-link" onClick={() => go(section.id)}>Configure <ArrowRight size={16}/></button></Card>)}</div><Notice tone="amber">Training readiness is based only on fields returned by the assistant training API; no publish state is exposed.</Notice></>}
+        {loading && <Empty title="Loading assistant training status…"/>}
+    </>;
+}
+function Behavior({ go, notify, workspaceSlug = '', preferredAssistantId = '' }: Props) {
+    const [assistants, setAssistants] = useState<Assistant[]>([]); const [assistantId, setAssistantId] = useState(preferredAssistantId); const [assistant, setAssistant] = useState<Assistant | null>(null); const [instructions, setInstructions] = useState(''); const [tone, setTone] = useState<ResponseTone>('professional'); const [style, setStyle] = useState<ResponseStyle>('balanced'); const [language, setLanguage] = useState(''); const [purpose, setPurpose] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setAssistants([]); setAssistantId(''); setLoading(true); listAssistants(workspaceSlug, 1, controller.signal).then(result => { if (!controller.signal.aborted) { setAssistants(result.assistants); const requested = result.assistants.find(item => item.id === preferredAssistantId); setAssistantId(requested?.id ?? result.assistants[0]?.id ?? ''); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistants could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, preferredAssistantId, retry]);
+    useEffect(() => { if (!workspaceSlug || !assistantId) { setAssistant(null); return; } const controller = new AbortController(); setAssistant(null); setError(''); getAssistant(workspaceSlug, assistantId, controller.signal).then(result => { if (!controller.signal.aborted) { setAssistant(result); setInstructions(result.systemInstructions ?? ''); setTone(result.responseTone); setStyle(result.responseStyle); setLanguage(result.defaultLanguage); setPurpose(result.businessPurpose ?? ''); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistant behavior could not be loaded.'); }); return () => controller.abort(); }, [workspaceSlug, assistantId, retry]);
+    async function save() { if (!assistant || busy) return; setBusy(true); setError(''); try { const updated = await updateAssistant(workspaceSlug, assistant.id, { systemInstructions: instructions, responseTone: tone, responseStyle: style, defaultLanguage: language, businessPurpose: purpose }); setAssistant(updated); notify('Assistant behavior saved.'); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Assistant behavior could not be saved.'); } finally { setBusy(false); } }
+    return <><PageHeader eyebrow="Train AI / Bot Behavior" title="Bot Behavior" desc="Edit saved response instructions, tone, length and language for an authorized assistant." action={<div className="action-line"><label className="field"><span>Assistant</span><select value={assistantId} onChange={event => setAssistantId(event.target.value)} disabled={loading}>{assistants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><Btn disabled={!assistant || busy} onClick={() => void save()}><Check size={16}/>{busy ? 'Saving…' : 'Save behavior'}</Btn></div>}/>{error && <Notice tone="amber">{error}</Notice>}{loading && <Empty title="Loading assistant settings…"/>}{!loading && !assistant && !error && <Empty title="No assistant selected" desc="Create or select an assistant before editing its behavior."/>}
+        {assistant && <><div className="tabs-wrapper"><PageTabs tabs={['Personality','Business scope','Conversation','Escalation','AI Provider']}/></div><div className="two-col content-sidebar"><Card className="form-card"><SectionHeader title="Response behavior" desc={`Saved settings for ${assistant.name}.`}/><label className="field field-wide"><span>Business role & instructions</span><textarea value={instructions} onChange={event => setInstructions(event.target.value)}/></label><label className="field"><span>Business purpose</span><input value={purpose} onChange={event => setPurpose(event.target.value)}/></label><div className="field"><span>Tone of voice</span><div className="filter-pills">{(['professional','friendly','casual','supportive','concise','empathetic'] as ResponseTone[]).map(value => <button type="button" key={value} onClick={() => setTone(value)} className={'filter-pill '+(tone===value?'active':'')}>{value}</button>)}</div></div><div className="field"><span>Reply length</span><div className="filter-pills">{(['short','balanced','detailed'] as ResponseStyle[]).map(value => <button type="button" key={value} onClick={() => setStyle(value)} className={'filter-pill '+(style===value?'active':'')}>{value}</button>)}</div></div><label className="field"><span>Default language</span><input value={language} onChange={event => setLanguage(event.target.value)}/></label><Btn disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save behavior'}</Btn></Card><Card className="preview-card"><SectionHeader title="Saved assistant configuration" desc="Preview uses actual saved configuration values, not a sample model response."/><div className="detail-row bordered"><span>Status</span><strong>{assistant.status}</strong></div><div className="detail-row bordered"><span>Provider readiness</span><strong>{assistant.effectiveProviderConfiguration?.status ?? 'Unavailable'}</strong></div><div className="detail-row bordered"><span>Response tone</span><strong>{tone}</strong></div><div className="detail-row bordered"><span>Response style</span><strong>{style}</strong></div><div className="detail-row bordered"><span>Default language</span><strong>{language || '—'}</strong></div><Notice tone="amber">Memory controls and routing preferences are not part of the existing assistant configuration API.</Notice><button className="text-link" type="button" onClick={() => go('playground')}>Test this assistant in Playground <ArrowRight size={15}/></button></Card></div></>}
+    </>;
+}
+type PlaygroundPageMessage = { id: string; role: 'visitor' | 'assistant' | 'error'; text: string; createdAt: number; sources?: PlaygroundChatReply['sources']; provenance?: PlaygroundChatReply['provenance']; diagnostics?: PlaygroundTrace; requestId?: string; streamRequestId?: string; errorCode?: string; retryText?: string; retryTurnId?: string };
+type LiveTraceStatus = 'CONNECTING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'DISCONNECTED' | 'DISABLED';
+function isPlaygroundTrace(value: unknown): value is PlaygroundTrace {
+    if (typeof value !== 'object' || value === null) return false;
+    const trace = value as Partial<PlaygroundTrace>;
+    return typeof trace.traceId === 'string' && Array.isArray(trace.events) && Array.isArray(trace.evidence) && Array.isArray(trace.tools) && typeof trace.retrieval === 'object' && trace.retrieval !== null;
+}
+function Playground({ workspaceSlug = '', workspaceRole = '' }: Props) {
+    const [assistants, setAssistants] = useState<Assistant[]>([]);
+    const [assistantId, setAssistantId] = useState('');
+    const [value, setValue] = useState('');
+    const [messages, setMessages] = useState<PlaygroundPageMessage[]>([]);
+    const [liveEvents, setLiveEvents] = useState<Record<string, PlaygroundLiveEvent[]>>({});
+    const [liveStatus, setLiveStatus] = useState<Record<string, LiveTraceStatus>>({});
+    const [sessionId, setSessionId] = useState<string>();
+    const [loading, setLoading] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [error, setError] = useState('');
+    const [inspectorTab, setInspectorTab] = useState<'trace' | 'events' | 'knowledge' | 'tools'>('trace');
+    const [captureNextTurn, setCaptureNextTurn] = useState(false);
+    const [followEvents, setFollowEvents] = useState(true);
+    const [eventFilter, setEventFilter] = useState<'all' | 'errors'>('all');
+    const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+    const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+    const [copyFeedback, setCopyFeedback] = useState('');
+    const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+    const composer = useRef<HTMLTextAreaElement | null>(null);
+    const streamAbort = useRef<AbortController | null>(null);
+    const historyCopyLock = useRef(false);
+    const historyCopyGeneration = useRef(0);
+    const historyCopyController = useRef<AbortController | null>(null);
+    const isWorkspaceAdmin = ['OWNER', 'ADMIN'].includes(workspaceRole.toUpperCase());
+    useEffect(() => {
+        if (!workspaceSlug) return;
+        historyCopyGeneration.current++;
+        historyCopyController.current?.abort(); historyCopyController.current = null; historyCopyLock.current = false;
+        const controller = new AbortController();
+        setAssistants([]); setAssistantId(''); setMessages([]); setLiveEvents({}); setLiveStatus({}); setSessionId(undefined); setError(''); setCopyFeedback(''); setCopiedMessageId(null); setSelectedMessageId(null);
+        listAssistants(workspaceSlug, 1, controller.signal, 'ACTIVE').then(result => {
+            if (!controller.signal.aborted) { setAssistants(result.assistants); setAssistantId(result.assistants[0]?.id ?? ''); }
+        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistants could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        setLoading(true);
+        return () => { controller.abort(); historyCopyGeneration.current++; historyCopyController.current?.abort(); };
+    }, [workspaceSlug]);
+    useEffect(() => { const input = composer.current; if (!input) return; input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 112)}px`; }, [value]);
+    useEffect(() => () => streamAbort.current?.abort(), []);
+    function newSession() { historyCopyGeneration.current++; historyCopyController.current?.abort(); historyCopyController.current = null; historyCopyLock.current = false; setCopyFeedback(''); setCopiedMessageId(null); streamAbort.current?.abort(); streamAbort.current = null; setSessionId(undefined); setMessages([]); setLiveEvents({}); setLiveStatus({}); setValue(''); setError(''); setSelectedMessageId(null); setMobileInspectorOpen(false); }
+    function appendLiveEvent(traceId: string, event: PlaygroundLiveEvent) {
+        setLiveEvents(current => {
+            const existing = current[traceId] ?? [];
+            if (existing.some(item => item.sequence === event.sequence)) return current;
+            if (existing.length && event.sequence <= existing[existing.length - 1]!.sequence) return current;
+            return { ...current, [traceId]: [...existing, event].slice(-100) };
+        });
+    }
+    async function send(event?: React.FormEvent, submittedText?: string, retryTurnId?: string) {
+        event?.preventDefault();
+        const question = (submittedText ?? value).trim();
+        if (!question || sending || !assistantId || !workspaceSlug) return;
+        const diagnosticCapture = import.meta.env.DEV && isWorkspaceAdmin && captureNextTurn;
+        setCaptureNextTurn(false);
+        const turnId = retryTurnId || crypto.randomUUID();
+        const requestId = crypto.randomUUID();
+        const visitorId = crypto.randomUUID();
+        const controller = new AbortController(); streamAbort.current = controller;
+        setValue(''); setSending(true); setError(''); setLiveStatus(current => ({ ...current, [requestId]: 'CONNECTING' }));
+        setMessages(current => [...current, { id: visitorId, role: 'visitor', text: question, requestId, createdAt: Date.now() }]);
+        setSelectedMessageId(visitorId);
+        try {
+            const reply = await sendPlaygroundMessageStream(workspaceSlug, assistantId, question, sessionId, turnId, controller.signal, requestId, {
+                onReady: () => setLiveStatus(current => ({ ...current, [requestId]: 'RUNNING' })),
+                onEvent: traceEvent => appendLiveEvent(requestId, traceEvent),
+                onTerminal: terminal => setLiveStatus(current => ({ ...current, [requestId]: terminal.status === 'SUCCEEDED' ? 'COMPLETED' : terminal.status === 'CANCELLED' ? 'CANCELLED' : 'FAILED' })),
+            }, diagnosticCapture);
+            setSessionId(reply.sessionId);
+            const messageId = reply.messageId || crypto.randomUUID();
+            setLiveStatus(current => ({ ...current, [requestId]: 'COMPLETED' }));
+            setMessages(current => [...current, { id: messageId, role: 'assistant', text: reply.reply, sources: reply.sources, provenance: reply.provenance, diagnostics: reply.diagnostics, requestId: reply.diagnostics?.traceId || requestId, streamRequestId: requestId, createdAt: reply.createdAt ? new Date(reply.createdAt).getTime() : Date.now() }]);
+            setSelectedMessageId(messageId);
+        } catch (reason) {
+            if (reason instanceof ApiError && reason.code === 'PLAYGROUND_LIVE_TRACE_DISABLED') {
+                setLiveStatus(current => ({ ...current, [requestId]: 'DISABLED' }));
+                try {
+                    const reply = await sendPlaygroundMessage(workspaceSlug, assistantId, question, sessionId, turnId, undefined, requestId, diagnosticCapture);
+                    setSessionId(reply.sessionId);
+                    const messageId = reply.messageId || crypto.randomUUID();
+                    setMessages(current => [...current, { id: messageId, role: 'assistant', text: reply.reply, sources: reply.sources, provenance: reply.provenance, diagnostics: reply.diagnostics, requestId: reply.diagnostics?.traceId || requestId, streamRequestId: requestId, createdAt: reply.createdAt ? new Date(reply.createdAt).getTime() : Date.now() }]);
+                    setSelectedMessageId(messageId);
+                    return;
+                } catch (fallbackReason) { reason = fallbackReason; }
+            }
+            const errorText = reason instanceof ApiError ? reason.message : 'The AI response could not be loaded.';
+            const failedId = crypto.randomUUID();
+            setError(errorText);
+            if (reason instanceof DOMException && reason.name === 'AbortError') setLiveStatus(current => ({ ...current, [requestId]: 'CANCELLED' }));
+            else if (reason instanceof ApiError && reason.code === 'PLAYGROUND_STREAM_INCOMPLETE') setLiveStatus(current => ({ ...current, [requestId]: 'DISCONNECTED' }));
+            else setLiveStatus(current => ({ ...current, [requestId]: 'FAILED' }));
+            setMessages(current => [...current, { id: failedId, role: 'error', text: errorText, requestId: reason instanceof ApiError ? reason.requestId || requestId : requestId, errorCode: reason instanceof ApiError ? reason.code : undefined, diagnostics: reason instanceof ApiError && isPlaygroundTrace(reason.details) ? reason.details : undefined, retryText: question, retryTurnId: turnId, createdAt: Date.now() }]);
+            setSelectedMessageId(failedId);
+        } finally { if (streamAbort.current === controller) streamAbort.current = null; setSending(false); }
+    }
+    const selectedMessage = messages.find(message => message.id === selectedMessageId);
+    const selectedTraceId = selectedMessage?.diagnostics?.traceId || selectedMessage?.requestId;
+    const selectedTrace = selectedMessage?.diagnostics;
+    const selectedEvents = selectedTrace?.events ?? (selectedTraceId ? liveEvents[selectedTraceId] ?? [] : []);
+    const selectedLiveStatus = selectedTrace ? (selectedTrace.events.some(item => item.outcome === 'FAILED' || item.outcome === 'TIMED_OUT') ? 'FAILED' : selectedTrace.events.some(item => item.outcome === 'CANCELLED') ? 'CANCELLED' : 'COMPLETED') : selectedTraceId ? liveStatus[selectedTraceId] ?? 'DISCONNECTED' : 'IDLE';
+    const selectedAssistant = assistants.find(item => item.id === assistantId);
+    const provider = selectedAssistant?.effectiveProviderConfiguration;
+    const providerLabel = provider?.provider && provider.model ? `${provider.provider} · ${provider.model}` : `Provider ${provider?.status?.toLowerCase().replaceAll('_', ' ') ?? 'status unavailable'}`;
+    const copyableMessages: CopyableChatMessage[] = messages.filter(message => message.role === 'visitor' || message.role === 'assistant').map(message => ({ id: message.id, role: message.role, content: message.text, createdAt: message.createdAt, provenance: message.provenance, sources: message.sources, diagnostics: message.diagnostics, requestId: message.requestId, liveEvents: message.streamRequestId ? liveEvents[message.streamRequestId] : message.requestId ? liveEvents[message.requestId] : undefined }));
+    const hasTraceData = copyableMessages.some(message => message.diagnostics || message.liveEvents?.length);
+    async function copyMessage(message: PlaygroundPageMessage, event: React.MouseEvent<HTMLButtonElement>) {
+        event.stopPropagation();
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(formatPlaygroundMessage({ content: message.text }));
+            setCopiedMessageId(message.id); setCopyFeedback(''); window.setTimeout(() => setCopiedMessageId(current => current === message.id ? null : current), 1800);
+        } catch { setCopyFeedback('Clipboard access failed. Allow clipboard access and try again.'); }
+    }
+    async function copyHistory(includeDiagnostics = false) {
+        if (!isWorkspaceAdmin || historyCopyLock.current || sending || !copyableMessages.length) return;
+        if (includeDiagnostics && !hasTraceData) return;
+        const generation = historyCopyGeneration.current;
+        const capturedAssistantId = assistantId;
+        const capturedSessionId = sessionId;
+        const controller = new AbortController();
+        historyCopyController.current = controller; historyCopyLock.current = true; setCopyFeedback('Preparing conversation…');
+        try {
+            const history = capturedSessionId
+                ? await loadCompletePlaygroundHistory({ workspaceSlug, assistantId: capturedAssistantId, conversationId: capturedSessionId, signal: controller.signal, localMessages: copyableMessages })
+                : { messages: copyableMessages, incomplete: false };
+            if (controller.signal.aborted || generation !== historyCopyGeneration.current || capturedAssistantId !== assistantId || capturedSessionId !== sessionId) return;
+            let output = formatPlaygroundHistory({ assistantName: selectedAssistant?.name || 'Carteio AI', conversationId: capturedSessionId ?? null, messages: history.messages, incomplete: history.incomplete, maxBytes: includeDiagnostics ? Math.floor(PLAYGROUND_EXPORT_MAX_BYTES / 2) : PLAYGROUND_EXPORT_MAX_BYTES, maxMessages: PLAYGROUND_EXPORT_MAX_MESSAGES });
+            if (includeDiagnostics) {
+                const diagnostics = formatPlaygroundDiagnostics(history.messages, Math.floor(PLAYGROUND_EXPORT_MAX_BYTES / 2) - 1024);
+                if (diagnostics) output += `\n\nCARTEIO AI — SAFE DIAGNOSTICS\n${diagnostics}`;
+            }
+            if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+            await navigator.clipboard.writeText(output);
+            if (generation === historyCopyGeneration.current && capturedAssistantId === assistantId && capturedSessionId === sessionId) setCopyFeedback(history.incomplete ? 'Copied · export incomplete at the safe limit.' : 'Copied.');
+        } catch (reason) {
+            if (controller.signal.aborted || generation !== historyCopyGeneration.current) return;
+            setCopyFeedback(reason instanceof ApiError && (reason.status === 401 || reason.status === 403) ? 'History export requires authorized workspace access.' : reason instanceof Error && reason.message.includes('Clipboard') ? 'Clipboard access failed. Allow clipboard access and try again.' : 'Conversation history could not be loaded. Try again.');
+        } finally {
+            if (historyCopyController.current === controller) historyCopyController.current = null;
+            if (generation === historyCopyGeneration.current) historyCopyLock.current = false;
+        }
+    }
+    function onComposerKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (value.trim() && !sending) { const question = value; setValue(''); void send(undefined, question); } }
+    }
+    return <section className="playground-page" aria-label="AI Playground">
+        <header className="playground-page-header"><div><small>AI DEVELOPMENT / PLAYGROUND</small><h1>Playground</h1></div><div className="playground-controls"><label><span>Assistant</span><select aria-label="Select assistant" value={assistantId} disabled={loading || assistants.length === 0} onChange={e => { setAssistantId(e.target.value); newSession(); }}><option value="">{loading ? 'Loading…' : 'No active assistant'}</option>{assistants.map(assistant => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></label><span className={`playground-connection ${provider?.ready ? 'is-ready' : 'is-pending'}`} title={providerLabel}><i/>{providerLabel}</span><span className="playground-dev-indicator">{import.meta.env.DEV ? 'Developer mode' : selectedTrace ? 'Trace available' : 'Trace status unknown'}</span><button type="button" className="playground-compact-button" onClick={newSession}><RotateCcw size={14}/> New chat</button>{isWorkspaceAdmin && <button type="button" className="playground-compact-button" onClick={() => { setMobileInspectorOpen(value => !value); setInspectorTab('trace'); if (!selectedMessageId) setSelectedMessageId(messages.at(-1)?.id ?? null); }} aria-label="Show execution inspector" aria-expanded={mobileInspectorOpen}><Activity size={15}/> Inspector</button>}</div></header>
+        <div className="playground-grid"><section className="chat-card" aria-label="Assistant chat"><header className="playground-chat-head"><div><strong>Conversation</strong><small>{sessionId ? `Session ${sessionId.slice(0, 8)}` : 'New Playground session'}</small></div><div className="playground-chat-head-actions"><Badge tone={sending ? 'amber' : assistantId ? 'green' : 'amber'}>{sending ? 'Running' : assistantId ? 'Ready' : 'Unavailable'}</Badge>{isWorkspaceAdmin && <><button type="button" className="playground-copy-icon" title="Copy entire conversation" aria-label="Copy entire conversation" disabled={sending || !copyableMessages.length || historyCopyLock.current} onClick={() => void copyHistory()}><Copy size={13}/></button><button type="button" disabled={sending || !copyableMessages.length || historyCopyLock.current} onClick={() => void copyHistory()}>Copy History</button>{hasTraceData && <button type="button" disabled={sending || historyCopyLock.current} onClick={() => void copyHistory(true)}>Copy Chat + Diagnostics</button>}</>}{sending && <button type="button" onClick={() => streamAbort.current?.abort()} aria-label="Cancel current message">Cancel</button>}</div></header>{copyFeedback && <small className="playground-copy-feedback" role="status">{copyFeedback}</small>}<div className="playground-chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text">{!messages.length ? <div className="playground-empty-state"><Bot size={22}/><strong>{loading ? 'Loading assistants…' : 'Start a conversation'}</strong><span>Messages go to the selected assistant in this workspace.</span></div> : messages.map(message => <article key={message.id} className={`playground-chat-message ${message.role}${selectedMessageId === message.id ? ' is-selected' : ''}`} onClick={() => setSelectedMessageId(message.id)}><small>{message.role === 'visitor' ? 'YOU' : message.role === 'error' ? 'REQUEST FAILED' : 'CARTEIO AI'}</small><p>{message.text}</p><footer><span>{message.role === 'assistant' ? playgroundSourceLabel(message) : ''}</span><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{(message.role === 'visitor' || message.role === 'assistant') && <button type="button" className="playground-message-copy" aria-label={`Copy ${message.role === 'visitor' ? 'user' : 'assistant'} message`} title="Copy message" onClick={event => void copyMessage(message, event)}>{copiedMessageId === message.id ? 'Copied' : <Copy size={11}/>}</button>}{isWorkspaceAdmin && <button type="button" aria-label={`Inspect ${message.role} message trace`} onClick={event => { event.stopPropagation(); setSelectedMessageId(message.id); setInspectorTab('trace'); if (window.matchMedia('(max-width: 820px)').matches) setMobileInspectorOpen(true); }}><Activity size={12}/></button>}</footer>{message.role === 'assistant' && message.sources?.length ? <details className="playground-inline-citations"><summary>{message.sources.length} source citation(s)</summary>{message.sources.map(source => <span key={source.reference}>[{source.reference}] {source.title}</span>)}</details> : null}{message.role === 'error' && message.retryText && <button type="button" className="playground-retry-button" onClick={event => { event.stopPropagation(); void send(undefined, message.retryText, message.retryTurnId); }}>Retry</button>}</article>)}{sending && <div className="playground-running" role="status"><i/> Receiving actual backend events…</div>}</div>{error && <Notice tone="amber">{error}</Notice>}<form className="playground-composer" onSubmit={event => void send(event)}><textarea ref={composer} value={value} onChange={event => setValue(event.target.value)} onKeyDown={onComposerKeyDown} rows={1} placeholder="Ask this assistant…" aria-label="Message the assistant" disabled={!assistantId || sending}/><button type="submit" aria-label="Send message" disabled={!assistantId || sending || !value.trim()}><Send size={16}/></button></form><small className="playground-composer-hint">Enter to send · Shift+Enter for a new line</small></section>
+        <aside className={`playground-inspector${mobileInspectorOpen ? ' is-mobile-open' : ''}`} aria-label="Developer Inspector"><header className="playground-inspector-title"><div><strong>Developer Inspector</strong><small>{selectedTraceId ? `Trace ${selectedTraceId.slice(0, 8)} · ${selectedLiveStatus.toLowerCase()}` : 'Select a message to inspect execution'}</small></div><span>{isWorkspaceAdmin ? 'Authorized role' : 'Read only'}</span><button type="button" className="playground-inspector-close" onClick={() => setMobileInspectorOpen(false)} aria-label="Close Inspector">×</button></header>{isWorkspaceAdmin ? <><nav className="playground-inspector-tabs" role="tablist" aria-label="Inspector tabs">{([['trace','Live Flow'],['events','Events'],['knowledge','Knowledge'],['tools','LLM & Tools']] as const).map(([key,label]) => <button key={key} type="button" role="tab" aria-selected={inspectorTab === key} className={inspectorTab === key ? 'active' : ''} onClick={() => setInspectorTab(key as typeof inspectorTab)}>{label}</button>)}</nav><div className="playground-inspector-content" key={`${inspectorTab}:${selectedTraceId || 'none'}`}>
+            {import.meta.env.DEV && <label><input type="checkbox" checked={captureNextTurn} disabled={sending} onChange={event => setCaptureNextTurn(event.target.checked)}/>Capture validation metadata for the next message</label>}
+            {selectedTrace?.developmentCapture && <PlaygroundDevelopmentCapture capture={selectedTrace.developmentCapture}/>}
+            {inspectorTab === 'trace' && <PlaygroundLiveFlow message={selectedMessage} traceId={selectedTraceId} events={selectedEvents} status={selectedLiveStatus}/>}
+            {inspectorTab === 'events' && <PlaygroundEventConsole events={selectedEvents} traceId={selectedTraceId} status={selectedLiveStatus} follow={followEvents} setFollow={setFollowEvents} filter={eventFilter} setFilter={setEventFilter}/>}
+            {inspectorTab === 'knowledge' && (selectedTrace ? <><PlaygroundSourcesPanel message={selectedMessage} trace={selectedTrace}/><PlaygroundQueryPlanPanel trace={selectedTrace}/></> : <PlaygroundTracePanel message={selectedMessage} trace={undefined} sending={sending}/>) }
+            {inspectorTab === 'tools' && <PlaygroundLlmTools trace={selectedTrace} events={selectedEvents} providerLabel={providerLabel} message={selectedMessage}/>}
+          </div></> : <div className="playground-inspector-content"><Empty title="Owner/admin access required" desc={`Current workspace role: ${workspaceRole || 'unavailable'}. Backend access checks remain enforced.`}/></div>}</aside>
+      </div>
+    </section>;
+}
+function PlaygroundDevelopmentCapture({ capture }: { capture: NonNullable<PlaygroundTrace['developmentCapture']> }) {
+    if (Date.parse(capture.expiresAt) <= Date.now()) return null;
+    return <details><summary>Development validation metadata</summary><p>Metadata only. Raw provider output and drafts are not captured.</p><pre>{JSON.stringify(capture.checks.slice(0, 16), null, 2)}</pre></details>;
+}
+function PlaygroundTracePanel({ message, trace, sending }: { message?: PlaygroundPageMessage; trace?: PlaygroundTrace; sending: boolean }) {
+    if (!message) return <div className="playground-inspector-empty"><Activity size={20}/><strong>Select a message</strong><span>Each response keeps its own diagnostics.</span></div>;
+    if (!trace) return <div className="playground-inspector-empty"><Activity size={20}/><strong>Trace unavailable</strong><span>{sending ? 'Execution stages are not streamed; only a final server trace can be shown.' : message.role === 'error' ? `The request failed without a trace payload${message.errorCode ? ` (${message.errorCode})` : ''}. Request ID: ${message.requestId || 'unavailable'}` : 'This response has no trace payload, or diagnostics are disabled on the backend.'}</span></div>;
+    return <div className="playground-trace-view"><div className="playground-trace-id"><span>Trace ID</span><code>{trace.traceId}</code><button type="button" aria-label="Copy trace ID" onClick={() => void navigator.clipboard?.writeText(trace.traceId)}><Copy size={13}/></button></div><div className="playground-trace-summary"><span>Latency <strong>{trace.totalLatencyMs} ms</strong></span><span>Final source <strong>{trace.finalSource.replaceAll('_',' ')}</strong></span>{trace.usage?.totalTokens !== undefined && <span>Tokens <strong>{trace.usage.totalTokens}</strong></span>}</div><ol>{trace.events.map((event,index) => <li key={`${event.operation}:${event.at}:${index}`}><i className={`trace-status trace-${event.status}`}/><div><strong>{event.operation.replaceAll('_',' ')}</strong><small>{event.status}{event.durationMs ? ` · ${event.durationMs} ms` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.errorCategory ? ` · ${event.errorCategory}` : ''}{event.provider ? ` · ${event.provider}${event.model ? ` / ${event.model}` : ''}` : ''}</small></div></li>)}</ol></div>;
+}
+type FlowNodeStatus = 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED' | 'CANCELLED' | 'UNKNOWN';
+function flowNodeStatus(events: PlaygroundLiveEvent[], operations: string[], terminal: boolean): FlowNodeStatus {
+    const event = [...events].reverse().find(item => operations.includes(item.operation));
+    if (!event) return 'IDLE';
+    if (event.outcome === 'STARTED') return terminal ? 'UNKNOWN' : 'RUNNING';
+    if (event.outcome === 'COMPLETED') return 'SUCCEEDED';
+    if (event.outcome === 'FAILED' || event.outcome === 'TIMED_OUT') return 'FAILED';
+    if (event.outcome === 'CANCELLED') return 'CANCELLED';
+    if (event.outcome === 'SKIPPED') return 'SKIPPED';
+    return 'UNKNOWN';
+}
+function PlaygroundLiveFlow({ message, traceId, events, status }: { message?: PlaygroundPageMessage; traceId?: string; events: PlaygroundLiveEvent[]; status: string }) {
+    if (!message || !traceId) return <div className="playground-inspector-empty"><Activity size={18}/><strong>Select a message</strong><span>Execution nodes appear only from actual backend events.</span></div>;
+    if (!events.length && status === 'DISABLED') return <div className="playground-inspector-empty"><Activity size={18}/><strong>Trace unavailable</strong><span>Live diagnostics are disabled by the backend environment flag. Agent Builder flow not active for this conversation.</span></div>;
+    if (!events.length) return <div className="playground-inspector-empty"><Activity size={18}/><strong>{status === 'CONNECTING' ? 'Connecting to trace…' : status === 'FAILED' ? 'No trace events received' : 'Trace unavailable'}</strong><span>Historical messages without trace data are not filled with generated execution steps. Agent Builder flow not active for this conversation.</span></div>;
+    const terminal = ['DISCONNECTED', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(status);
+    const nodes: Array<{ label: string; operations: string[] }> = [
+        { label: 'Message accepted', operations: ['MESSAGE_RECEIVED'] },
+        { label: 'Assistant and session', operations: ['ASSISTANT_RESOLVED', 'SESSION_RESOLUTION'] },
+        { label: 'Conversation history', operations: ['CONVERSATION_CONTEXT'] },
+        { label: 'Provider configuration', operations: ['PROVIDER_SELECTION'] },
+        { label: 'Intent interpretation', operations: ['INTENT_INTERPRETATION', 'INTERPRETATION_RECOVERY', 'PRODUCT_ROUTING_DECISION', 'STRUCTURED_OUTPUT_COMPATIBILITY'] },
+        { label: 'Knowledge eligibility and retrieval', operations: ['KNOWLEDGE_BASE_ASSIGNMENT', 'KNOWLEDGE_SOURCE_ELIGIBILITY', 'KNOWLEDGE_ELIGIBILITY', 'RETRIEVAL_STARTED', 'RETRIEVAL_QUERY_PLANNING', 'SOURCE_INDEX_READINESS', 'LEXICAL_RETRIEVAL', 'SEMANTIC_RETRIEVAL', 'HYBRID_RANKING', 'KNOWLEDGE_RETRIEVAL', 'KNOWLEDGE_RETRIEVAL_SKIPPED', 'RETRIEVAL_COMPLETED'] },
+        { label: 'Evidence selection and validation', operations: ['CANDIDATE_FILTERING', 'EVIDENCE_SELECTED', 'EVIDENCE_SELECTION', 'EVIDENCE_REVALIDATED'] },
+        { label: 'Evidence context assembly', operations: ['LLM_CONTEXT_ASSEMBLED'] },
+        { label: 'Authorized tools', operations: ['TOOL_EXECUTION'] },
+        { label: 'LLM generation', operations: ['ANSWER_GENERATION', 'PROVIDER_REQUEST_STARTED', 'PROVIDER_RESPONSE_RECEIVED'] },
+        { label: 'Grounding validation', operations: ['GROUNDING_VALIDATED', 'RESPONSE_VERIFICATION'] },
+        { label: 'Citation recovery', operations: ['CITATION_RECOVERY'] },
+        { label: 'Response persistence', operations: ['RESPONSE_PERSISTED', 'TURN_PERSISTENCE'] },
+    ];
+    return <div className="playground-live-flow"><div className="playground-flow-disclaimer"><strong>Orchestrator execution</strong><span>Agent Builder flow not active for this conversation.</span></div><div className="playground-flow-node-list">{nodes.map((node, index) => { const nodeStatus = flowNodeStatus(events, node.operations, terminal); const event = [...events].reverse().find(item => node.operations.includes(item.operation)); return <React.Fragment key={node.label}>{index > 0 && <div className="playground-flow-edge" aria-hidden="true">↓</div>}<article className={`playground-flow-node status-${nodeStatus.toLowerCase()}`}><i aria-hidden="true"/><div><strong>{node.label}</strong><small>{nodeStatus}{event?.durationMs ? ` · ${event.durationMs} ms` : ''}{event?.reason ? ` · ${event.reason}` : ''}{event?.errorCategory ? ` · ${event.errorCategory}` : ''}</small></div></article></React.Fragment>; })}</div>{status === 'DISCONNECTED' && <p className="playground-incomplete-note">Stream disconnected. Confirmed stages are retained; unfinished stage status is unknown.</p>}{status === 'CANCELLED' && <p className="playground-incomplete-note">Request cancelled. Confirmed stages are retained; unfinished stage status is unknown.</p>}{status === 'RUNNING' && <p className="playground-incomplete-note">Live events reflect recorded backend stages; no published flow or specialist agent was executed.</p>}</div>;
+}
+function PlaygroundEventConsole({ events, traceId, status, follow, setFollow, filter, setFilter }: { events: PlaygroundLiveEvent[]; traceId?: string; status: string; follow: boolean; setFollow: (value: boolean) => void; filter: 'all' | 'errors'; setFilter: (value: 'all' | 'errors') => void }) {
+    const list = useRef<HTMLDivElement | null>(null);
+    useEffect(() => { if (follow && list.current) list.current.scrollTop = list.current.scrollHeight; }, [events, follow]);
+    const shown = filter === 'errors' ? events.filter(item => ['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(item.outcome)) : events;
+    return <div className="playground-event-console"><div className="playground-event-actions"><code>{traceId ?? 'No trace selected'}</code><button type="button" disabled={!traceId} onClick={() => traceId && void navigator.clipboard?.writeText(traceId)}>Copy ID</button><label><input type="checkbox" checked={follow} onChange={event => setFollow(event.target.checked)}/> Follow</label><select aria-label="Filter trace events" value={filter} onChange={event => setFilter(event.target.value as 'all' | 'errors')}><option value="all">All events</option><option value="errors">Errors</option></select></div><div ref={list} className="playground-event-list" onScroll={event => { const target = event.currentTarget; if (target.scrollHeight - target.scrollTop - target.clientHeight < 16) setFollow(true); else setFollow(false); }} role="log" aria-label="Backend execution events">{shown.map(event => <details key={`${event.sequence}:${event.operation}`} className={`playground-event event-${event.outcome.toLowerCase()}`}><summary><time>{new Date(event.at).toISOString().slice(11, 23)}</time><strong>{event.operation}{event.tool ? ` · ${event.tool}` : ''}</strong><span>[{event.outcome.toLowerCase()}]{event.durationMs ? ` ${event.durationMs}ms` : ''}</span></summary><pre>{JSON.stringify({ sequence: event.sequence, stage: event.operation, outcome: event.outcome, durationMs: event.durationMs, tool: event.tool, reason: event.reason, errorCategory: event.errorCategory, provider: event.provider, model: event.model, purpose: event.purpose, callIndex: event.callIndex, requestDispatched: event.requestDispatched, retryReason: event.retryReason, usage: event.usage, resultCount: event.resultCount, evidenceCount: event.evidenceCount }, null, 2)}</pre></details>)}{!shown.length && <p className="playground-console-empty">{status === 'RUNNING' ? 'Waiting for backend events…' : filter === 'errors' ? 'No recorded errors.' : 'No trace events for this message.'}</p>}</div>{status === 'DISCONNECTED' && <p className="playground-incomplete-note">Stream disconnected before terminal completion.</p>}</div>;
+}
+function PlaygroundLlmTools({ trace, events, providerLabel, message }: { trace?: PlaygroundTrace; events: PlaygroundLiveEvent[]; providerLabel: string; message?: PlaygroundPageMessage }) {
+    const providerEvents = events.filter(item => ['PROVIDER_SELECTION', 'PROVIDER_REQUEST_STARTED', 'PROVIDER_RESPONSE_RECEIVED', 'ANSWER_GENERATION', 'INTENT_INTERPRETATION', 'INTERPRETATION_RECOVERY', 'PRODUCT_ROUTING_DECISION'].includes(item.operation));
+    const tools = trace?.tools ?? [];
+    const providerCalls = trace?.providerCalls ?? [];
+    return <div className="playground-llm-tools">
+      <section><h4>Provider</h4><p>Configured route: <strong>{providerLabel}</strong></p><p>Provider attempts: <strong>{trace?.providerCallCount ?? providerCalls.length}</strong> · requests dispatched: <strong>{trace?.providerRequestCount ?? providerCalls.filter(call => call.requestDispatched).length}</strong> · retries: <strong>{providerCalls.filter(call => call.retryReason).length}</strong></p>{providerCalls.length ? providerCalls.map(call => <article key={call.callIndex}><strong>#{call.callIndex} · {call.purpose.replaceAll('_', ' ')}</strong><small>{call.outcome} · {call.provider} / {call.model} · {call.durationMs}ms · {call.requestDispatched ? 'request dispatched' : 'not dispatched'}{call.retryReason ? ` · retry: ${call.retryReason.replaceAll('_', ' ')}` : ''}{call.errorCategory ? ` · ${call.errorCategory}` : ''}</small>{call.usage && <small>Tokens: input {call.usage.inputTokens ?? '—'} · output {call.usage.outputTokens ?? '—'} · total {call.usage.totalTokens ?? '—'}</small>}</article>) : providerEvents.length ? providerEvents.map((event, index) => <article key={`${event.sequence}:${index}`}><strong>{event.operation.replaceAll('_', ' ')}{event.purpose ? ` · ${event.purpose.replaceAll('_', ' ')}` : ''}</strong><small>{event.outcome} · {event.provider ? `${event.provider}${event.model ? ` / ${event.model}` : ''}` : 'Provider identity unavailable'}{event.durationMs ? ` · ${event.durationMs}ms` : ''}{event.errorCategory ? ` · ${event.errorCategory}` : ''}</small></article>) : <small>{message ? 'No provider invocation event has been observed for this message.' : 'Select a message to inspect provider calls.'}</small>}{trace?.usage && <p>Turn tokens: input {trace.usage.inputTokens ?? '—'} · output {trace.usage.outputTokens ?? '—'} · total {trace.usage.totalTokens ?? '—'}</p>}</section>
+      {trace?.assistantConfiguration && <section><h4>Assistant behavior</h4><p>Configuration {shortDiagnosticId(trace.assistantConfiguration.id)} · version {trace.assistantConfiguration.version ?? 'unavailable'} · loaded {trace.assistantConfiguration.loaded ? 'yes' : 'no'}.</p><p>Saved section lengths: {Object.entries(trace.assistantConfiguration.sectionLengths).map(([key, length]) => `${key} ${length}`).join(' · ') || 'none reported'} characters.</p><p>Prompt assembly {trace.promptAssembly?.completed ? 'completed' : 'not completed'} · platform layer {trace.promptAssembly?.platformInstructionsIncluded ? 'included' : 'not confirmed'} · assistant behavior {trace.promptAssembly?.assistantBehaviorIncluded ? 'included' : 'not included'} · outbound request {trace.promptAssembly?.outboundProviderRequestDispatched ? 'dispatched' : 'not confirmed'} · behavior sent {trace.promptAssembly?.assistantBehaviorSentToProvider ? 'yes' : 'no'} · provider calls [{trace.promptAssembly?.providerCallIndexes?.join(', ') ?? ''}] · behavior calls [{trace.promptAssembly?.assistantBehaviorCallIndexes?.join(', ') ?? ''}] · Agent Builder node instructions {trace.promptAssembly?.agentBuilderNodeInstructionsIncluded ? 'included' : 'not included in this execution'}.</p><p>Included behavior sections: {trace.promptAssembly?.assistantBehaviorSectionCount ?? 0}. Configuration content and protected prompts are withheld.</p>{trace.configuredFacts && <p>Support contacts: configured {trace.configuredFacts.configured ? 'yes' : 'no'} · selected {trace.configuredFacts.selected ? 'yes' : 'no'} · revalidated {trace.configuredFacts.revalidated ? 'yes' : 'no'} · supplied to provider {trace.configuredFacts.supplied ? 'yes' : 'no'}{trace.configuredFacts.excludedReason ? ` · ${trace.configuredFacts.excludedReason}` : ''}{trace.configuredFacts.sourceId ? ` · assistant source ${shortDiagnosticId(trace.configuredFacts.sourceId)}` : ''}.</p>}</section>}
+      {trace?.commerceReadiness && <section><h4>Shopify AI readiness</h4><p>Connection {trace.commerceReadiness.connectionStatus} · grant snapshot {trace.commerceReadiness.scopeSnapshotStatus} · catalog operation {trace.commerceReadiness.eligible ? 'eligible' : trace.commerceReadiness.reason ?? 'unavailable'} · {trace.commerceReadiness.recordCount} query-ready product(s).</p><p>Relevant granted scopes: {trace.commerceReadiness.relevantGrantedScopes.join(', ') || 'none reported'} · assistant-enabled operations: {trace.commerceReadiness.assistantEnabledOperations.join(', ') || 'none reported'} · data source: {trace.commerceReadiness.dataSource.replaceAll('_', ' ').toLowerCase()}.</p></section>}
+      <section><h4>Tools</h4>{tools.length ? tools.map((tool, index) => <article key={`${tool.tool}:${index}`}><strong>{tool.tool}</strong><small>{tool.outcome}{tool.resultCount !== undefined ? ` · ${tool.resultCount} result(s)` : ''}{tool.reason ? ` · ${tool.reason}` : ''}{tool.durationMs !== undefined ? ` · ${tool.durationMs}ms` : ''}{tool.dataSource ? ` · ${tool.dataSource.replaceAll('_', ' ').toLowerCase()}` : ''}</small>{tool.input && <small>Input (redacted): {tool.input}</small>}</article>) : <small>{events.some(item => item.operation.startsWith('TOOL_')) ? 'Tool execution events received.' : 'No tool invocation recorded for this response.'}</small>}</section>
+      <p>Hidden model reasoning and raw prompts are not exposed. Final source: {trace?.finalSource?.replaceAll('_', ' ') ?? 'not available until completion'}{message?.role === 'assistant' && !providerEvents.some(event => event.operation === 'PROVIDER_REQUEST_STARTED') ? ' · No recorded provider request in this message trace.' : ''}</p>
+    </div>;
+}
+function PlaygroundQueryPlanPanel({ trace }: { trace: PlaygroundTrace }) {
+    const queries = trace.retrieval.executedQueries ?? [];
+    if (!queries.length) return null;
+    return <section className="playground-diagnostics-list" aria-label="Executed Knowledge queries"><strong>Executed Knowledge queries</strong>{queries.map((item, index) => <p key={`${item.origin}-${index}`}><code>{item.query}</code> · {item.origin} · target language {item.languageTarget ?? 'unknown'}</p>)}</section>;
+}
+function PlaygroundSourcesPanel({ message, trace }: { message?: PlaygroundPageMessage; trace?: PlaygroundTrace }) {
+    if (!message) return <div className="playground-inspector-empty"><BookOpen size={20}/><strong>Select an assistant response</strong><span>Retrieved and cited evidence is shown here.</span></div>;
+    if (!trace) return <div className="playground-source-list">{message.sources?.length ? message.sources.map(source => <article key={source.reference}><strong>[{source.reference}] {source.title}</strong><small>{source.type}{source.locator ? ` · ${source.locator}` : ''}</small></article>) : <p>Source unavailable: this message has no diagnostic evidence payload.</p>}</div>;
+    const retrieval = trace.retrieval;
+    return <div className="playground-source-list"><p>Knowledge retrieval {retrieval.attempted ? 'attempted' : 'not attempted'} · audience {retrieval.audience ?? 'not evaluated'} · {retrieval.mode} · {retrieval.resultCount} result(s) from {retrieval.eligibleSourceCount} eligible source(s) · {retrieval.eligibilityStatus}</p>{retrieval.queryHash && <small>Original query fingerprint: {retrieval.queryHash}</small>}{retrieval.queryVariantHashes?.length ? <small>Bounded query variant fingerprints: {retrieval.queryVariantHashes.map(hash => hash.slice(0, 8)).join(', ')}</small> : null}{retrieval.attempted && <section className="playground-diagnostics-list" aria-label="Backend retrieval diagnostics"><p>Query plan: {retrieval.queryPlanningMode ?? 'unknown'} · customer language {retrieval.customerLanguage ?? 'unknown'} · response language {trace.languageHandling?.responseLanguage ?? 'unknown'} · script {trace.languageHandling?.script ?? 'unknown'} · source language hints {retrieval.sourceLanguageHintCount ?? 'unknown'} · query variants {retrieval.queryVariantCount ?? 'unknown'}.</p><p>Effective source candidates: {retrieval.assignedSourceCount ?? 'unknown'} · eligible after public/connector checks: {retrieval.eligibleSourceCount} · excluded by those checks: {retrieval.rejectedSourceCount ?? 'unknown'} · index ready: {retrieval.indexReadySourceCount ?? 'unknown'}.</p>{retrieval.rejectionReasons?.map(item => <p key={item.reason}>Excluded: {item.reason} · {item.count}</p>)}{retrieval.sourceIndexStates?.map(item => <p key={item.sourceId}>Source {shortDiagnosticId(item.sourceId)} · version {item.sourceVersion} · active generation {item.activeGeneration ?? 'none'} · {item.processingStatus} · {item.ready ? 'ready' : 'not ready'}</p>)}<p>Index: {retrieval.activeIndexChunkCount ?? 'unknown'} chunks in active generations · methods {(retrieval.methodsAttempted ?? []).join(', ') || 'none reported'}.</p><p>Candidates: lexical {retrieval.lexicalCandidateCount ?? 'unknown'} · semantic {retrieval.semanticCandidateCount ?? 'unknown'} · ranked {retrieval.rankedCandidateCount ?? 'unknown'} · filtered {retrieval.filteredCandidateCount ?? 'unknown'} · selected {retrieval.selectedEvidenceCount ?? retrieval.resultCount}.</p>{retrieval.retrievalReason && <p>Retrieval reason: <strong>{retrieval.retrievalReason}</strong></p>}{retrieval.semanticUnavailableCode && <p>Semantic retrieval status: <strong>{retrieval.semanticUnavailableCode}</strong></p>}</section>}{trace.evidence.length ? trace.evidence.map(item => <details key={item.reference}><summary><strong>[{item.reference}] {item.title}</strong><span>{item.cited ? 'Cited / validated' : item.suppliedToProvider ? 'Sent to provider' : item.selectedForContext ? 'Selected, not confirmed sent' : item.retrieved ? 'Retrieved only' : 'Unavailable'}</span></summary><small>{item.sourceType} · source {shortDiagnosticId(item.sourceId)} · page {item.pageId ? shortDiagnosticId(item.pageId) : 'n/a'} · chunk {shortDiagnosticId(item.chunkId)}{item.indexGeneration ? ` · generation ${item.indexGeneration}` : ''}{item.rankingPosition ? ` · rank ${item.rankingPosition}` : ''}{item.score !== undefined ? ` · ${item.scoreMethod || 'retrieval'} score ${item.score}` : ''}{item.sourceVersion ? ` · version ${item.sourceVersion}` : ''}</small><small>Retrieved {item.retrieved ? 'yes' : 'no'} · selected {item.selectedForContext ? 'yes' : 'no'} · revalidated {item.revalidated ? 'yes' : 'no'} · supplied {item.suppliedToProvider ? 'yes' : 'no'} · cited {item.cited ? 'yes' : 'no'}{item.contentHash ? ` · hash ${item.contentHash.slice(0, 16)}` : ''}</small>{item.locator && <a href={item.locator} target="_blank" rel="noreferrer">{item.locator}</a>}<p>{item.excerpt || 'No excerpt returned.'}</p></details>) : <p>No authorized evidence was returned. {retrieval.retrievalReason ? `Reason: ${retrieval.retrievalReason}.` : ''}</p>}</div>;
+}
+function shortDiagnosticId(value: string) { return value.length > 12 ? `${value.slice(0,8)}…${value.slice(-4)}` : value; }
+function Knowledge({ go, notify, workspaceSlug = '', workspaceRole = '', openKnowledge }: Props) {
+    const [q, setQ] = useState('');
+    const [createType, setCreateType] = useState<'faq' | 'text' | 'website' | 'import' | null>(null);
+    const [activeSection, setActiveSection] = useState<KnowledgeSection | 'home' | 'all' | 'unclassified' | typeof SHOPIFY_CATALOG_TAB>('home');
+    const [newSourceSection, setNewSourceSection] = useState<KnowledgeSection>('BUSINESS_INTRODUCTION');
+    const [sourceStatusFilter, setSourceStatusFilter] = useState('');
+    const [sourcePage, setSourcePage] = useState(1);
+    const [websiteUrl, setWebsiteUrl] = useState('');
+    const [websiteVisibility, setWebsiteVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('PUBLIC_REFERENCE');
+    const [accessOpen, setAccessOpen] = useState(false);
+    const [activationAccess, setActivationAccess] = useState<EffectiveKnowledge | null>(null);
+    const [activationAccessError, setActivationAccessError] = useState('');
+    const [sourceLoadError, setSourceLoadError] = useState('');
+    const [question, setQuestion] = useState('');
+    const [answer, setAnswer] = useState('');
+    const [faqVisibility, setFaqVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('INTERNAL_RESTRICTED');
+    const [textVisibility, setTextVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('INTERNAL_RESTRICTED');
+    const [title, setTitle] = useState('');
+    const [content, setContent] = useState('');
+    const [creating, setCreating] = useState(false);
+    const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
+    const [knowledgeBaseId, setKnowledgeBaseId] = useState('');
+    const [knowledgeBasesLoading, setKnowledgeBasesLoading] = useState(true);
+    const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState('');
+    const [creatingKnowledgeBase, setCreatingKnowledgeBase] = useState(false);
+    const [excelFile, setExcelFile] = useState<File | null>(null);
+    const [excelPreview, setExcelPreview] = useState<FaqImportPreview | null>(null);
+    const [excelResult, setExcelResult] = useState<FaqImportResult | null>(null);
+    const [excelLoading, setExcelLoading] = useState(false);
+    const [excelImporting, setExcelImporting] = useState(false);
+    const [excelError, setExcelError] = useState('');
+    const [duplicatePolicy, setDuplicatePolicy] = useState<'SKIP_EXISTING' | 'REJECT_DUPLICATES'>('SKIP_EXISTING');
+    const [importVisibility, setImportVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('INTERNAL_RESTRICTED');
+    const [selectedVisibilityIds, setSelectedVisibilityIds] = useState<string[]>([]);
+    const [activationAssistants, setActivationAssistants] = useState<Assistant[]>([]);
+    const [activationAssistantId, setActivationAssistantId] = useState('');
+    const [visibilitySaving, setVisibilitySaving] = useState(false);
+    const [visibilityResult, setVisibilityResult] = useState<{ changedToPublic: number; alreadyPublic: number; blocked: number; blockedReasons?: Record<string, number> } | null>(null);
+    const [authoritativeWorkspaceRole, setAuthoritativeWorkspaceRole] = useState<string | null>(null);
+    const [roleCheckError, setRoleCheckError] = useState('');
+    const previewSequence = React.useRef(0);
+    const excelFileInput = React.useRef<HTMLInputElement | null>(null);
+    const [sourceResult, setSourceResult] = useState<SourcePage | null>(null);
+    const [pdfSourceId, setPdfSourceId] = useState<string | null>(null);
+    const [addKnowledgeOpen, setAddKnowledgeOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    useEffect(() => { const timer = setTimeout(() => { setSourcePage(1); setSearchQuery(q); }, 250); return () => clearTimeout(timer); }, [q]);
+    const [sourcesList, setSourcesList] = useState<KnowledgeSource[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [retry, setRetry] = useState(0);
+    useEffect(() => {
+        previewSequence.current += 1; setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelLoading(false); setExcelImporting(false); setExcelError('');
+        setSelectedVisibilityIds([]); setVisibilityResult(null); setActivationAssistants([]); setActivationAssistantId('');
+        setKnowledgeBases([]); setKnowledgeBaseId(''); setActiveSection('home'); setNewSourceSection('BUSINESS_INTRODUCTION'); setCreateType(null);
+        setQ(''); setSourceResult(null); setPdfSourceId(null); setSourceStatusFilter(''); setSourcePage(1); setAccessOpen(false); setWebsiteUrl('');
+        if (excelFileInput.current) excelFileInput.current.value = '';
+    }, [workspaceSlug]);
+    useEffect(() => {
+        if (!workspaceSlug) { setAuthoritativeWorkspaceRole(null); setRoleCheckError('Workspace context is unavailable.'); return; }
+        const controller = new AbortController(); setAuthoritativeWorkspaceRole(null); setRoleCheckError('');
+        getWorkspace(workspaceSlug, controller.signal).then(workspace => {
+            if (!controller.signal.aborted) setAuthoritativeWorkspaceRole((workspace.currentUserRole ?? workspace.role).trim().toLowerCase());
+        }).catch(reason => {
+            if (!controller.signal.aborted) setRoleCheckError(reason instanceof ApiError ? reason.message : 'Workspace role could not be verified.');
+        });
+        return () => controller.abort();
+    }, [workspaceSlug, retry]);
+    useEffect(() => {
+        if (!workspaceSlug) { setSourcesList([]); setLoading(false); setError('Workspace context is unavailable.'); return; }
+        const controller = new AbortController(); setLoading(true); setSourceLoadError(''); setSourcesList([]);
+        listKnowledge(workspaceSlug, controller.signal, { page: sourcePage, pageSize: 20, search: searchQuery, section: activeSection === 'unclassified' ? 'UNCLASSIFIED' : KNOWLEDGE_SECTION_CARDS.find(item => item.id === activeSection)?.id, processingStatus: sourceStatusFilter.toUpperCase() }).then(result => { if (!controller.signal.aborted) { setSourcesList(result.sources); setSourceResult(result); } }).catch(reason => { if (!controller.signal.aborted) setSourceLoadError(reason instanceof ApiError ? reason.message : 'Knowledge sources could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, retry, activeSection, sourcePage, searchQuery, sourceStatusFilter]);
+    useEffect(() => {
+        if (!workspaceSlug) { setKnowledgeBases([]); setKnowledgeBaseId(''); setKnowledgeBasesLoading(false); return; }
+        const controller = new AbortController(); setKnowledgeBasesLoading(true);
+        listKnowledgeBases(workspaceSlug, { page: 1, pageSize: 100, status: 'ACTIVE', sort: 'name', direction: 'asc' }, controller.signal).then(result => {
+            if (controller.signal.aborted) return;
+            setKnowledgeBases(result.knowledgeBases);
+            setKnowledgeBaseId(current => result.knowledgeBases.some(base => base.id === current) ? current : result.knowledgeBases[0]?.id ?? '');
+        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Knowledge bases could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setKnowledgeBasesLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, retry]);
+    useEffect(() => {
+        if (!workspaceSlug) { setActivationAssistants([]); setActivationAssistantId(''); return; }
+        const controller = new AbortController();
+        listAssistants(workspaceSlug, 1, controller.signal, 'ALL').then(result => {
+            if (controller.signal.aborted) return;
+            const available = result.assistants.filter(item => item.status.toLowerCase() === 'active');
+            setActivationAssistants(available);
+            setActivationAssistantId(current => available.some(item => item.id === current) ? current : available[0]?.id ?? '');
+        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistant list could not be loaded for customer knowledge activation.'); });
+        return () => controller.abort();
+    }, [workspaceSlug, retry]);
+    useEffect(() => {
+        setActivationAccess(null); setActivationAccessError('');
+        if (!accessOpen || !workspaceSlug || !activationAssistantId) return;
+        const controller = new AbortController();
+        getEffectiveKnowledge(workspaceSlug, activationAssistantId, controller.signal)
+            .then(result => { if (!controller.signal.aborted) setActivationAccess(result); })
+            .catch(reason => { if (!controller.signal.aborted) setActivationAccessError(reason instanceof ApiError ? reason.message : 'Assistant access could not be loaded.'); });
+        return () => controller.abort();
+    }, [accessOpen, workspaceSlug, activationAssistantId, retry]);
+    const searchedSources = sourcesList;
+    const visibleSources = sourcesList;
+    const sourcePageCount = sourceResult?.pageCount ?? 1;
+    const currentSourcePage = sourcePage;
+    const pagedSources = sourcesList;
+    const countSources = (section?: string | null, status?: string) => (sourceResult?.counts ?? []).filter(group =>
+      (section === undefined || group.section === section) && (!status || group.status === status)).reduce((sum, group) => sum + group.count, 0);
+    const selectedSection = KNOWLEDGE_SECTION_CARDS.find(section => section.id === activeSection);
+    const reviewableFaqs = searchedSources.filter(source => source.type === 'faq' && source.status === 'registered' && source.visibility === 'INTERNAL_RESTRICTED');
+    const publicFaqCount = sourcesList.filter(source => source.type === 'faq' && source.visibility === 'PUBLIC_REFERENCE').length;
+    const restrictedFaqCount = sourcesList.filter(source => source.type === 'faq' && source.visibility === 'INTERNAL_RESTRICTED').length;
+    const ready = countSources(undefined, 'ready');
+    const pending = countSources(undefined, 'queued') + countSources(undefined, 'processing');
+    const failed = countSources(undefined, 'failed');
+    const isWorkspaceOwner = authoritativeWorkspaceRole === 'owner';
+    const isWorkspaceManager = ['owner', 'admin'].includes(workspaceRole.trim().toLowerCase());
+    function selectSection(section: typeof activeSection) {
+        if (creating || excelImporting || excelLoading) return;
+        if (createType && !window.confirm('Close the source editor and switch sections? Unsaved form values are kept; the selected import file will be cleared.')) return;
+        clearExcelSelection(); setCreateType(null); setPdfSourceId(null); setAddKnowledgeOpen(false); setQ(''); setSearchQuery(''); setSourceStatusFilter(''); setActiveSection(section); setSourcePage(1);
+        const selected = KNOWLEDGE_SECTION_CARDS.find(item => item.id === section);
+        if (selected) setNewSourceSection(selected.id);
+    }
+    async function createSource(event: React.FormEvent) {
+        event.preventDefault();
+        if (!workspaceSlug || creating || !isWorkspaceManager) return;
+        setCreating(true);
+        setError('');
+        try {
+            const created = createType === 'faq'
+                ? await createFaqSource(workspaceSlug, { question: question.trim(), answer: answer.trim(), visibility: faqVisibility, knowledgeSection: newSourceSection })
+                : createType === 'text'
+                    ? await createTextSource(workspaceSlug, { title: title.trim(), content: content.trim(), visibility: textVisibility, knowledgeSection: newSourceSection })
+                    : createType === 'website'
+                        ? await createWebsiteSource(workspaceSlug, { sourceUrl: websiteUrl.trim(), visibility: websiteVisibility, knowledgeSection: newSourceSection })
+                        : null;
+            if (!created) return;
+            notify(`Knowledge source created · ${created.processingStatus.replaceAll('_', ' ')}`);
+            setCreateType(null); setQuestion(''); setAnswer(''); setTitle(''); setContent(''); setWebsiteUrl(''); setActiveSection(newSourceSection); setRetry(value => value + 1);
+        } catch (reason) {
+            setError(reason instanceof ApiError ? reason.message : 'Knowledge source could not be created.');
+        } finally { setCreating(false); }
+    }
+    async function previewExcel(file: File) {
+        const sequence = ++previewSequence.current;
+        setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelError(''); setExcelLoading(false);
+        if (!/\.(xlsx|csv)$/i.test(file.name)) { setExcelError('Unsupported file type. Choose an .xlsx workbook or a .csv exported from Excel.'); if (excelFileInput.current) excelFileInput.current.value = ''; return; }
+        if (!knowledgeBaseId) { setExcelError('This workspace has no active Knowledge Base to receive the Excel import.'); return; }
+        setExcelFile(file); setExcelLoading(true);
+        try {
+            const result = await previewKnowledgeBaseFaqImport(workspaceSlug, knowledgeBaseId, file);
+            if (sequence === previewSequence.current) setExcelPreview(result);
+        } catch (reason) {
+            if (sequence === previewSequence.current) setExcelError(reason instanceof ApiError ? reason.message : 'Excel file could not be validated.');
+        } finally { if (sequence === previewSequence.current) setExcelLoading(false); }
+    }
+    function clearExcelSelection() {
+        previewSequence.current += 1; setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelLoading(false); setExcelError('');
+        if (excelFileInput.current) excelFileInput.current.value = '';
+    }
+    async function importExcel() {
+        if (!excelFile || !excelPreview || !knowledgeBaseId || excelImporting || !excelPreview.valid || (duplicatePolicy === 'REJECT_DUPLICATES' && excelPreview.duplicates > 0)) return;
+        const sequence = previewSequence.current;
+        setExcelImporting(true); setExcelError('');
+        try {
+            const result = await importKnowledgeBaseFaqs(workspaceSlug, knowledgeBaseId, excelFile, duplicatePolicy, importVisibility, newSourceSection);
+            if (sequence !== previewSequence.current) return;
+            setExcelResult(result); setActiveSection(newSourceSection); setExcelFile(null); setExcelPreview(null); if (excelFileInput.current) excelFileInput.current.value = ''; setRetry(value => value + 1);
+            notify(`Excel import complete · ${result.created} added, ${result.skipped} skipped, ${result.failed} failed.`);
+        } catch (reason) { if (sequence === previewSequence.current) setExcelError(reason instanceof ApiError ? reason.message : 'Excel FAQ import failed.'); }
+        finally { if (sequence === previewSequence.current) setExcelImporting(false); }
+    }
+    async function createDestinationBase() {
+        if (!workspaceSlug || !newKnowledgeBaseName.trim() || creatingKnowledgeBase || !isWorkspaceManager) return;
+        setCreatingKnowledgeBase(true); setError('');
+        try {
+            const created = await createKnowledgeBase(workspaceSlug, { name: newKnowledgeBaseName.trim() });
+            setKnowledgeBases(current => [...current, created]); setKnowledgeBaseId(created.id); setNewKnowledgeBaseName('');
+            notify(`Knowledge Base created · ${created.name}`);
+        } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Knowledge Base could not be created.'); }
+        finally { setCreatingKnowledgeBase(false); }
+    }
+    async function activateCustomerKnowledgeForAssistant() {
+        if (!workspaceSlug || !isWorkspaceOwner || visibilitySaving || !activationAssistantId) return;
+        const count = selectedVisibilityIds.length;
+        const assistantName = activationAssistants.find(item => item.id === activationAssistantId)?.name ?? 'selected assistant';
+        if (!window.confirm(`Enable workspace customer knowledge for ${assistantName}${count ? ` and make ${count} selected restricted FAQ(s) public` : ''}? Confirm that selected FAQs are customer-safe. Other restricted sources will remain private.`)) return;
+        setVisibilitySaving(true); setVisibilityResult(null); setError('');
+        try {
+            const result = await activateCustomerKnowledge(workspaceSlug, activationAssistantId, selectedVisibilityIds);
+            setVisibilityResult(result); setSelectedVisibilityIds([]); setRetry(value => value + 1);
+            notify(`Customer knowledge enabled for ${assistantName}; ${result.changedToPublic} FAQ(s) made public, ${result.alreadyPublic} already public, ${result.blocked} blocked.`);
+        } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Customer knowledge activation failed. No partial settings were saved.'); }
+        finally { setVisibilitySaving(false); }
+    }
+    return <div className="knowledge-screen">
+        <PageHeader eyebrow="Train AI / Knowledge" title="Knowledge Base" desc="Manage the information your AI uses to answer customers." action={<><Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={16}/> Refresh</Btn><button type="button" className="btn btn-secondary" aria-expanded={accessOpen} aria-controls="knowledge-assistant-access" onClick={() => setAccessOpen(value => !value)}><Users size={16}/> Assistant Access</button></>}/>
+        <div className="knowledge-compact-stats" aria-label="Knowledge source statistics">
+            <span><strong>{loading ? '…' : sourceLoadError ? 'Unavailable' : countSources()}</strong> total sources</span>
+            <span><strong>{loading ? '…' : sourceLoadError ? '—' : ready}</strong> ready</span>
+            <span><strong>{loading ? '…' : sourceLoadError ? '—' : pending}</strong> processing</span>
+            <span><strong>{loading ? '…' : sourceLoadError ? '—' : failed}</strong> failed</span>
+
+        </div>
+        {error && <Notice tone="amber">{error}</Notice>}
+        {sourceLoadError && <Notice tone="amber">{sourceLoadError}</Notice>}
+        {activeSection === 'home' && <nav className="knowledge-section-nav" aria-label="Knowledge sections">
+            {KNOWLEDGE_SECTION_CARDS.map(section => {
+                const total = countSources(section.id);
+                return <button type="button" key={section.id} className={activeSection === section.id ? 'is-selected' : ''} aria-pressed={activeSection === section.id} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(section.id)}>
+                    <strong>{section.title}</strong><span>{section.description}</span>
+                    <small>{loading ? 'Loading…' : sourceLoadError ? 'Count unavailable' : `${total} sources · ${countSources(section.id, 'ready')} ready →`}</small>
+                </button>;
+            })}
+            <button type="button" className={activeSection === SHOPIFY_CATALOG_TAB ? 'is-selected' : ''} aria-pressed={activeSection === SHOPIFY_CATALOG_TAB} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(SHOPIFY_CATALOG_TAB)}><strong>Products &amp; Collections</strong><span>Products, variants, prices and stock from the authorized Shopify connector.</span><small>Open catalog connection and sync status</small></button>
+        </nav>}
+        <div className="knowledge-source-toolbar">
+            <div className="action-line">
+                {activeSection !== 'home' && <Btn secondary onClick={() => selectSection('home')}>← Knowledge Base</Btn>}
+                <button type="button" className="btn btn-secondary" aria-pressed={activeSection === 'all'} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection('all')}>All sources</button>
+                <button type="button" className="btn btn-secondary" aria-pressed={activeSection === 'unclassified'} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection('unclassified')}>Legacy / Unclassified {loading || sourceLoadError ? '' : `(${countSources(null)})`}</button>
+            </div>
+        </div>
+        {accessOpen && <section id="knowledge-assistant-access"><Card className="knowledge-access-panel"><SectionHeader title="Assistant Access" desc="Configure one assistant once, then review customer-facing sources together."/><label className="field"><span>Assistant</span><select aria-label="Assistant for customer knowledge activation" value={activationAssistantId} disabled={!activationAssistants.length || visibilitySaving} onChange={event => { setActivationAssistantId(event.target.value); setVisibilityResult(null); setSelectedVisibilityIds([]); }}><option value="">{activationAssistants.length ? 'Select assistant' : 'No active assistants available'}</option>{activationAssistants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{!activationAssistants.length && <small>Activate an assistant before enabling customer knowledge retrieval.</small>}</label><div role="status">{activationAccessError ? <Notice tone="amber">{activationAccessError}</Notice> : !activationAssistantId ? <Notice>Select an assistant to inspect saved access.</Notice> : !activationAccess ? <Notice>Loading saved assistant access…</Notice> : <Notice tone={activationAccess.useAllEligibleWorkspaceKnowledge ? 'green' : 'blue'}>Automatic customer knowledge: {activationAccess.useAllEligibleWorkspaceKnowledge === true ? 'Enabled' : activationAccess.useAllEligibleWorkspaceKnowledge === false ? 'Disabled' : 'Unavailable'}. Retrieval {activationAccess.retrievalEnabled ? 'available' : 'not currently available'} · {activationAccess.searchableSourceCount ?? activationAccess.effectiveSourceCount ?? 'Unavailable'} eligible indexed source(s). Visibility and source authorization still apply.</Notice>}</div><p>{publicFaqCount} public FAQ(s) · {restrictedFaqCount} restricted FAQ(s) in the currently loaded workspace source list. Select only FAQs approved for customer use; other restricted content stays private.</p>{authoritativeWorkspaceRole === null ? <Notice tone="amber">{roleCheckError || 'Verifying current workspace owner role…'}</Notice> : isWorkspaceOwner ? <><div className="action-line"><button type="button" className="text-link" onClick={() => setSelectedVisibilityIds(current => { const all = reviewableFaqs.map(source => source.id); return all.length && all.every(id => current.includes(id)) ? current.filter(id => !all.includes(id)) : [...new Set([...current, ...all])]; })} disabled={loading || reviewableFaqs.length === 0}>{reviewableFaqs.length && reviewableFaqs.every(source => selectedVisibilityIds.includes(source.id)) ? 'Clear filtered FAQ selection' : `Select all filtered restricted FAQs (${reviewableFaqs.length})`}</button><span>{selectedVisibilityIds.length} selected</span><Btn disabled={visibilitySaving || !activationAssistantId || loading} onClick={() => void activateCustomerKnowledgeForAssistant()}>{visibilitySaving ? 'Activating…' : 'Enable customer knowledge for assistant'}</Btn></div><div className="playground-diagnostics-list">{reviewableFaqs.map(source => <label key={source.id} className="action-line"><input type="checkbox" checked={selectedVisibilityIds.includes(source.id)} onChange={event => setSelectedVisibilityIds(current => event.target.checked ? [...new Set([...current, source.id])] : current.filter(id => id !== source.id))}/><span>{source.name}</span><small>{source.processingStatus === 'ready' ? 'Indexed' : source.processingStatus.replaceAll('_', ' ')} · restricted</small></label>)}</div>{reviewableFaqs.length === 0 && <small>No restricted registered FAQs match the current source search. You can still enable access for future public indexed sources.</small>}</> : <Notice tone="amber">Workspace role from the current workspace membership is “{authoritativeWorkspaceRole}”. Only an owner can enable workspace-wide customer knowledge and approve FAQ visibility. If you own this business but are not the Carteio workspace owner, ask the listed owner to transfer the workspace owner role.</Notice>}{visibilityResult && <Notice tone={visibilityResult.blocked ? 'amber' : 'green'}>Assistant-wide knowledge access enabled. {visibilityResult.changedToPublic} changed to public, {visibilityResult.alreadyPublic} already public, {visibilityResult.blocked} blocked{visibilityResult.blockedReasons && Object.keys(visibilityResult.blockedReasons).length ? ` · ${Object.entries(visibilityResult.blockedReasons).map(([reason, count]) => `${reason}: ${count}`).join(', ')}` : ''}. The backend resolver still requires public visibility, successful indexing, active generation and chunks.</Notice>}<small>Activation and selected FAQ visibility updates are saved together by the owner-authorized backend operation. Future public FAQ, text and website sources are included automatically after indexing when the assistant-wide setting is enabled.</small></Card></section>}
+        {activeSection === SHOPIFY_CATALOG_TAB ? <div className="knowledge-catalog"><div className="action-line"><Btn secondary onClick={() => go('products')}>Browse products</Btn><Btn secondary onClick={() => go('integrations')}>Manage integrations</Btn></div><React.Suspense fallback={<p role="status">Loading Shopify catalog status…</p>}><KnowledgeCatalog key={workspaceSlug} slug={workspaceSlug} manager={isWorkspaceManager} initialTab="shopify" compact/></React.Suspense></div> : activeSection !== 'home' ? <>
+            <SectionHeader title={selectedSection?.title ?? (activeSection === 'unclassified' ? 'Legacy / Unclassified sources' : 'All loaded sources')} desc={selectedSection?.description ?? 'Existing records keep their section, visibility and assistant assignments.'}/>
+            {selectedSection && <KnowledgePdfPanel key={workspaceSlug + selectedSection.id} slug={workspaceSlug} section={selectedSection.id} bases={knowledgeBases} baseId={knowledgeBaseId} setBaseId={setKnowledgeBaseId} manager={isWorkspaceManager} sourceId={pdfSourceId} closeSource={() => setPdfSourceId(null)} onChange={() => setRetry(value => value + 1)} openSource={setPdfSourceId}/>}
+            {isWorkspaceManager && <Btn secondary onClick={() => setAddKnowledgeOpen(value => !value)}>+ Add Knowledge</Btn>}
+            <div className="knowledge-source-toolbar">
+                <FilterInput value={q} onChange={setQ} placeholder="Search knowledge sources..."/>
+                <label className="field"><span>Processing status</span><select value={sourceStatusFilter} onChange={event => { setSourcePage(1); setSourceStatusFilter(event.target.value); }}><option value="">All statuses</option><option value="not_processed">Not processed</option><option value="queued">Queued</option><option value="processing">Processing</option><option value="ready">Ready</option><option value="failed">Failed</option></select></label>
+                {isWorkspaceManager && addKnowledgeOpen && <div className="action-line"><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('faq'); }}>Add FAQ</Btn><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('text'); }}>Add Text</Btn><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('website'); }}>Add Website</Btn><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('import'); }}><FileSpreadsheet size={15}/> Import Excel / CSV</Btn></div>}
+            </div>
+            {createType && isWorkspaceManager && <Card className="knowledge-editor">
+                <SectionHeader title="Add knowledge" desc="Only newly created sources receive the selected section." action={<Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType(null); }}>Close editor</Btn>}/>
+                <fieldset disabled={creating || excelImporting || excelLoading}>
+                    <label className="field"><span>Knowledge section</span><select value={newSourceSection} onChange={event => setNewSourceSection(event.target.value as KnowledgeSection)}>{KNOWLEDGE_SECTION_CARDS.map(section => <option key={section.id} value={section.id}>{section.title}</option>)}</select></label>
+                    {(createType === 'faq' || createType === 'text') && <form className="knowledge-create-form" onSubmit={event => void createSource(event)}><SectionHeader title={createType === 'faq' ? 'New FAQ source' : 'New text source'} action={<button type="button" className="text-link" onClick={() => setCreateType(null)}>Cancel</button>}/>{createType === 'faq' ? <><label className="field"><span>Question</span><input required value={question} onChange={event => setQuestion(event.target.value)} maxLength={200}/></label><label className="field"><span>Answer</span><textarea required value={answer} onChange={event => setAnswer(event.target.value)} maxLength={20000}/></label><label className="field"><span>Customer visibility</span><select value={faqVisibility} onChange={event => setFaqVisibility(event.target.value as typeof faqVisibility)}><option value="INTERNAL_RESTRICTED">Internal only (not available to customer chatbot)</option><option value="PUBLIC_REFERENCE">Customer-facing public FAQ</option></select><small>Choose public only for information approved for customers.</small></label></> : <><label className="field"><span>Title</span><input required value={title} onChange={event => setTitle(event.target.value)} maxLength={200}/></label><label className="field"><span>Content</span><textarea required value={content} onChange={event => setContent(event.target.value)} maxLength={50000}/></label><label className="field"><span>Customer visibility</span><select value={textVisibility} onChange={event => setTextVisibility(event.target.value as typeof textVisibility)}><option value="INTERNAL_RESTRICTED">Internal only (not available to customer chatbot)</option><option value="PUBLIC_REFERENCE">Customer-facing business knowledge</option></select><small>Choose public only for information approved for customers.</small></label></>}<Btn type="submit" disabled={creating || (createType === 'faq' ? !question.trim() || !answer.trim() : !title.trim() || !content.trim())}>{creating ? 'Creating…' : 'Create source'}</Btn></form>}
+                    {createType === 'website' && <form className="knowledge-create-form" onSubmit={event => void createSource(event)}><label className="field"><span>Website URL</span><input type="url" required maxLength={2048} placeholder="https://example.com/policies" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)}/></label><label className="field"><span>Customer visibility</span><select value={websiteVisibility} onChange={event => setWebsiteVisibility(event.target.value as typeof websiteVisibility)}><option value="PUBLIC_REFERENCE">Customer-facing public website</option><option value="INTERNAL_RESTRICTED">Internal only</option></select></label><p>The existing website service validates the URL and queues its initial crawl. The source remains unavailable until processing succeeds.</p><Btn type="submit" disabled={creating || !websiteUrl.trim()}>{creating ? 'Saving…' : 'Add website'}</Btn></form>}
+                    {createType === 'import' && <div className="knowledge-create-form"><SectionHeader title="Import FAQs from Excel" desc="Validate the spreadsheet before importing it into a workspace Knowledge Base." action={<Badge><FileSpreadsheet size={13}/> XLSX / CSV</Badge>}/><label className="field"><span>Destination Knowledge Base</span><select value={knowledgeBaseId} disabled={excelImporting || knowledgeBasesLoading} onChange={event => { previewSequence.current += 1; setKnowledgeBaseId(event.target.value); setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelLoading(false); setExcelError(''); if (excelFileInput.current) excelFileInput.current.value = ''; }}><option value="">{knowledgeBasesLoading ? 'Loading Knowledge Bases…' : knowledgeBases.length ? 'Select Knowledge Base' : 'No active Knowledge Base available'}</option>{knowledgeBases.map(base => <option key={base.id} value={base.id}>{base.name}</option>)}</select></label>{!knowledgeBasesLoading && knowledgeBases.length === 0 && <><label className="field"><span>Create a destination Knowledge Base</span><input value={newKnowledgeBaseName} onChange={event => setNewKnowledgeBaseName(event.target.value)} maxLength={120} placeholder="Enter a name" disabled={creatingKnowledgeBase}/></label><Btn secondary disabled={creatingKnowledgeBase || !newKnowledgeBaseName.trim() || !isWorkspaceManager} onClick={() => void createDestinationBase()}>{creatingKnowledgeBase ? 'Creating…' : 'Create Knowledge Base'}</Btn>{!isWorkspaceManager && <small>Creating a Knowledge Base requires workspace owner or admin access.</small>}</>}<p>Use an .xlsx workbook or a .csv exported from Excel with <strong>question</strong> and <strong>answer</strong> columns. Category, language and visibility are optional. The first worksheet is used for .xlsx files.</p><label className="field"><span>Default visibility for rows without a visibility column</span><select value={importVisibility} onChange={event => setImportVisibility(event.target.value as typeof importVisibility)}><option value="INTERNAL_RESTRICTED">Internal only (not available to customer chatbot)</option><option value="PUBLIC_REFERENCE">Customer-facing FAQ</option></select><small>Rows with an explicit visibility value keep that value. Select public only when the answers are customer-safe.</small></label><label className="field"><span>Excel workbook or CSV (.xlsx, .csv)</span><input ref={excelFileInput} type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" disabled={!knowledgeBaseId || excelLoading || excelImporting} onChange={event => { const file = event.target.files?.[0]; if (file) void previewExcel(file); else clearExcelSelection(); }}/></label>{excelFile && <small role="status">Selected file: {excelFile.name}</small>}{excelError && <Notice tone="amber">{excelError}</Notice>}{excelFile && !excelLoading && !excelPreview && <Btn secondary onClick={() => void previewExcel(excelFile)}>Retry validation</Btn>}{excelFile && <Btn secondary disabled={excelImporting || excelLoading} onClick={clearExcelSelection}>Remove file</Btn>}{excelLoading && <Empty title="Validating FAQ file…" desc="The existing Knowledge Base API is checking rows and duplicates."/>}{excelPreview && <><div className="top-chip"><Badge>{excelPreview.total} rows</Badge><Badge tone="green">{excelPreview.valid} valid</Badge><Badge tone={excelPreview.invalid ? 'amber' : 'neutral'}>{excelPreview.invalid} invalid</Badge><Badge tone={excelPreview.duplicates ? 'amber' : 'neutral'}>{excelPreview.duplicates} duplicates</Badge></div><Card className="table-card"><TableWrap><thead><tr><th>Row</th><th>Question</th><th>Answer</th><th>Validation</th></tr></thead><tbody>{excelPreview.rows.slice(0, 20).map(row => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td>{row.question || '—'}</td><td>{row.answer.length > 160 ? `${row.answer.slice(0, 160)}…` : row.answer || '—'}</td><td>{row.errors.join(' ') || (row.duplicateInFile ? 'Duplicate in file' : row.duplicateExisting ? 'Already exists' : 'Valid')}</td></tr>)}</tbody></TableWrap>{excelPreview.rows.length > 20 && <div className="table-footer">Showing first 20 of {excelPreview.rows.length} validated rows</div>}</Card><label className="field"><span>Existing questions</span><select value={duplicatePolicy} disabled={excelImporting} onChange={event => setDuplicatePolicy(event.target.value as typeof duplicatePolicy)}><option value="SKIP_EXISTING">Skip existing questions</option><option value="REJECT_DUPLICATES">Reject import if duplicates exist</option></select></label><Btn disabled={excelImporting || !excelPreview.valid || (duplicatePolicy === 'REJECT_DUPLICATES' && excelPreview.duplicates > 0)} onClick={() => void importExcel()}>{excelImporting ? 'Importing…' : 'Import valid FAQ rows'}</Btn></>}{excelResult && <Notice tone="green">Backend import result: {excelResult.created} created, {excelResult.skipped} skipped, {excelResult.failed} failed, {excelResult.updated} updated. Indexing is queued separately; source status will update when indexing finishes.</Notice>}</div>}
+                </fieldset>
+            </Card>}
+            {loading ? <p role="status">Loading knowledge sources…</p> : sourceLoadError ? null : <Card className="table-card knowledge-source-table"><TableWrap><thead><tr><th>Source</th><th>Type</th><th>Section</th><th>Visibility</th><th>Status</th><th>Updated</th></tr></thead><tbody>{pagedSources.map(source => <tr key={source.id}><td><button type="button" className="text-link" onClick={() => source.document && selectedSection ? setPdfSourceId(source.id) : openKnowledge?.(source.id)}>{source.name}</button></td><td>{source.document ? 'PDF' : source.type}</td><td>{KNOWLEDGE_SECTION_CARDS.find(section => section.id === source.knowledgeSection)?.title ?? 'Unclassified'}</td><td>{source.visibility === 'PUBLIC_REFERENCE' ? 'Customer-facing' : source.visibility === 'INTERNAL_RESTRICTED' ? 'Restricted' : 'Unavailable'}</td><td><TinyBadge status={source.processingStatus.replaceAll('_', ' ')}/></td><td>{source.updatedAt ? new Date(source.updatedAt).toLocaleDateString() : '—'}</td></tr>)}</tbody></TableWrap>{visibleSources.length === 0 && <Empty title={q || sourceStatusFilter ? "No matching sources" : "No knowledge added yet."} desc={selectedSection ? "Upload a PDF or add knowledge to help your AI answer questions about this section." : "Choose another section or clear the filters."}/>}<div className="knowledge-pagination"><span>{sourceResult?.total ?? 0} matching sources · Page {currentSourcePage} of {sourcePageCount}</span><div className="action-line"><Btn secondary disabled={currentSourcePage <= 1} onClick={() => setSourcePage(currentSourcePage - 1)}>Previous</Btn><Btn secondary disabled={currentSourcePage >= sourcePageCount} onClick={() => setSourcePage(currentSourcePage + 1)}>Next</Btn></div></div></Card>}
+        </> : null}
+    </div>;
+}
+function SourceDetail({ go, workspaceSlug = '', workspaceRole = '', recordId = '', notify }: Props) {
+    const [source, setSource] = useState<KnowledgeSource | null>(null);
+    const [processing, setProcessing] = useState<ProcessingDetails | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [working, setWorking] = useState(false);
+    const [retry, setRetry] = useState(0);
+    const [assistants, setAssistants] = useState<Assistant[]>([]);
+    const [selectedAssistantId, setSelectedAssistantId] = useState('');
+    const [assistantKnowledgeState, setAssistantKnowledgeState] = useState<SourceAssistantAccessStatus | null>(null);
+    const [assistantAccess, setAssistantAccess] = useState<EffectiveKnowledge | null>(null);
+    const [linkWorking, setLinkWorking] = useState(false);
+    const [linkError, setLinkError] = useState('');
+    const manager = ['owner', 'admin'].includes(workspaceRole.trim().toLowerCase());
+    useEffect(() => {
+        if (!workspaceSlug) { setAssistants([]); setSelectedAssistantId(''); return; }
+        const controller = new AbortController();
+        setAssistants([]); setSelectedAssistantId('');
+        listAssistants(workspaceSlug, 1, controller.signal).then(result => {
+            if (!controller.signal.aborted) { setAssistants(result.assistants); setSelectedAssistantId(result.assistants[0]?.id ?? ''); }
+        }).catch(reason => { if (!controller.signal.aborted) setLinkError(reason instanceof ApiError ? reason.message : 'Assistant list could not be loaded.'); });
+        return () => controller.abort();
+    }, [workspaceSlug]);
+    useEffect(() => {
+        if (!workspaceSlug || !recordId || recordId === 'source-preview' || !selectedAssistantId) { setAssistantKnowledgeState(null); return; }
+        const controller = new AbortController(); setAssistantKnowledgeState(null); setAssistantAccess(null); setLinkError('');
+        getEffectiveKnowledge(workspaceSlug, selectedAssistantId, controller.signal).then(result => {
+            if (controller.signal.aborted) return;
+            setAssistantAccess(result);
+            setAssistantKnowledgeState(sourceAssistantAccessStatus({ sourceId: recordId, visibility: source?.visibility, processingStatus: source?.processingStatus, activeIndexGeneration: processing?.activeIndexGeneration ?? source?.activeIndexGeneration, activeChunkCount: processing?.chunkCount ?? source?.activeChunkCount, effectiveKnowledge: result }));
+        }).catch(reason => { if (!controller.signal.aborted) setLinkError(reason instanceof ApiError ? reason.message : 'Assistant knowledge links could not be loaded.'); });
+        return () => controller.abort();
+    }, [workspaceSlug, recordId, selectedAssistantId, retry, source?.visibility, source?.processingStatus, source?.activeIndexGeneration, source?.activeChunkCount, processing?.activeIndexGeneration, processing?.chunkCount]);
+    useEffect(() => {
+        if (!workspaceSlug || !recordId || recordId === 'source-preview') { setSource(null); setProcessing(null); setLoading(false); setError('Choose a real knowledge source from the Knowledge Base.'); return; }
+        const controller = new AbortController(); setLoading(true); setError(''); setSource(null); setProcessing(null);
+        Promise.allSettled([getKnowledgeSource(workspaceSlug, recordId, controller.signal), getKnowledgeProcessing(workspaceSlug, recordId, controller.signal)]).then(([listResult, processingResult]) => {
+            if (controller.signal.aborted) return;
+            if (listResult.status === 'rejected') throw listResult.reason;
+            const match = listResult.value;
+            if (!match) setError('This knowledge source is unavailable in the current workspace.');
+            else { setSource(match); if (processingResult.status === 'fulfilled') setProcessing(processingResult.value); else setError(processingResult.reason instanceof ApiError ? `Index details unavailable: ${processingResult.reason.message}` : 'Index details are unavailable.'); }
+        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Knowledge source details could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, recordId, retry]);
+    async function reindex() {
+        if (!manager || !source || source.status === 'archived' || working) return;
+        setWorking(true);
+        try { const result = await reindexKnowledge(workspaceSlug, source.id); notify(`Re-index request accepted · ${result.status}`); setRetry(value => value + 1); }
+        catch (reason) { notify(reason instanceof ApiError ? reason.message : 'Re-index request failed.'); }
+        finally { setWorking(false); }
+    }
+    async function changeArchiveState() {
+        if (!manager || !source || working) return;
+        if (source.status !== 'archived' && !window.confirm(`Archive “${source.name}”?`)) return;
+        setWorking(true); setError('');
+        try {
+            if (source.status === 'archived') { await restoreKnowledge(workspaceSlug, source.id); notify('Knowledge source restored.'); setRetry(value => value + 1); }
+            else { await archiveKnowledge(workspaceSlug, source.id); notify('Knowledge source archived.'); go('knowledge'); }
+        } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Knowledge source status could not be changed.'); }
+        finally { setWorking(false); }
+    }
+    async function toggleAssistantKnowledge() {
+        if (!manager || !source || !selectedAssistantId || assistantKnowledgeState !== 'not-enabled' || linkWorking) return;
+        setLinkWorking(true); setLinkError('');
+        try {
+            await attachKnowledge(workspaceSlug, selectedAssistantId, source.id);
+            setRetry(value => value + 1);
+        } catch (reason) { setLinkError(reason instanceof ApiError ? reason.message : 'Assistant knowledge link could not be updated.'); }
+        finally { setLinkWorking(false); }
+    }
+    const status = processing?.semanticIndexStatus ?? source?.processingStatus.replaceAll('_', ' ') ?? 'Unavailable';
+    return <><PageHeader eyebrow="Train AI / Knowledge / Source" title={source?.name ?? 'Knowledge Source'} desc={source?.description ?? source?.sourceUrl ?? 'Source details from this workspace.'} action={<div className="action-line"><Btn secondary disabled={!manager || !source || source.status === 'archived' || working} onClick={() => void reindex()}><RefreshCw size={15}/>{working ? 'Working…' : 'Re-index source'}</Btn><Btn secondary disabled={!manager || !source || working} onClick={() => void changeArchiveState()}>{source?.status === 'archived' ? 'Restore source' : 'Archive source'}</Btn></div>}/>
+        {loading && <Empty title="Loading source…" desc="Fetching source details and indexing status."/>}{error && <Notice tone="amber"><span>{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></span></Notice>}
+        {!loading && source && <div className="two-col content-sidebar"><Card className="doc-preview"><SectionHeader title="Source preview" action={<TinyBadge status={source.status}/>} /><h2>{source.name}</h2><p>{source.description || source.sourceUrl || 'Source details from this workspace.'}</p>{source.contentBody ? <section className="doc-section"><h3>Content</h3><p>{source.contentBody}</p></section> : <Notice>Preview content is not included in this API response.</Notice>}</Card><Card><SectionHeader title="Indexing & retrieval"/><TinyBadge status={status}/>{[['Source type', source.type], ['Source URL', source.sourceUrl ?? '—'], ['Indexed chunks', processing?.chunkCount ?? '—'], ['Last successful sync', source.lastSuccessfulSyncAt ? new Date(source.lastSuccessfulSyncAt).toLocaleString() : '—'], ['Linked knowledge bases', source.knowledgeBaseMemberships?.map(item => item.name).join(', ') || 'None reported'], ['Visibility', source.visibility ?? 'Unavailable']].map(([label, value]) => <div className="detail-row bordered" key={label}><span>{label}</span><strong>{value}</strong></div>)}{source.lastSyncErrorCode && <Notice tone="amber">Latest sync error: {source.lastSyncErrorCode}</Notice>}<label className="field"><span>Assistant access status</span><select value={selectedAssistantId} disabled={!assistants.length || linkWorking} onChange={event => setSelectedAssistantId(event.target.value)}><option value="">{assistants.length ? 'Select assistant' : 'No assistants available'}</option>{assistants.map(assistant => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></label>{selectedAssistantId && assistantKnowledgeState && <Notice tone={assistantKnowledgeState === 'available' ? 'green' : 'amber'}>{assistantKnowledgeState === 'available' ? `Available to ${assistants.find(item => item.id === selectedAssistantId)?.name ?? 'selected assistant'} through effective knowledge access.` : assistantKnowledgeState === 'restricted' ? 'Restricted from public chatbot: source visibility is INTERNAL_RESTRICTED.' : assistantKnowledgeState === 'failed' ? 'Processing failed: resolve the source processing error before retrieval.' : assistantKnowledgeState === 'not-indexed' ? 'Not indexed: a current active generation with chunks is required before chatbot retrieval.' : assistantKnowledgeState === 'blocked' ? 'Automatic workspace access is enabled, but another authorization or source eligibility check blocks this source.' : assistantKnowledgeState === 'inactive-assistant' ? 'This assistant is inactive and cannot retrieve customer knowledge.' : 'Not enabled for this assistant: use the assistant’s centralized workspace access setting or the centralized customer knowledge activation workflow.'}</Notice>}{linkError && <Notice tone="amber">{linkError}</Notice>}{manager && assistantKnowledgeState === 'not-enabled' && !assistantAccess?.useAllEligibleWorkspaceKnowledge && <Btn secondary disabled={linkWorking || !source || source.visibility !== 'PUBLIC_REFERENCE'} onClick={() => void toggleAssistantKnowledge()}>{linkWorking ? 'Saving…' : 'Attach directly (manual mode)'}</Btn>}{assistantAccess?.useAllEligibleWorkspaceKnowledge && <Notice>Automatic workspace knowledge access is enabled for this assistant; source visibility, index and connector authorization checks still apply.</Notice>}<Btn secondary onClick={() => go('playground')}>Test in Playground <ArrowRight size={16}/></Btn></Card></div>}
+    </>;
+}
+function Crawler({ notify, workspaceSlug = '', openCrawl }: Props) {
+    const [domain, setDomain] = useState(''); const [data, setData] = useState<WebsitePagesResponse | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setData(null); setLoading(true); setError(''); listWebsitePages(workspaceSlug, { page: 1, pageSize: 50 }, controller.signal).then(result => { if (!controller.signal.aborted) setData(result); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Website crawl data could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    async function addWebsite() { const url = domain.trim(); if (!url || busy) return; setBusy(true); setError(''); try { const source = await createWebsiteSource(workspaceSlug, { sourceUrl: url }); const job = await crawlWebsiteSource(workspaceSlug, source.id); setDomain(''); setError(''); notify(`Crawl request accepted · ${job.status}`); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Website crawl could not be started.'); } finally { setBusy(false); } }
+    const sites = data?.sources ?? []; const pages = data?.pages ?? []; const discovered = sites.reduce((sum, source) => sum + source.pageCount, 0); const pending = sites.filter(source => ['QUEUED','PROCESSING','PENDING'].includes(source.processingStatus)).length; const indexed = pages.filter(page => page.searchReady).length;
+    return <><PageHeader eyebrow="Train AI / Website Crawler" title="Website Crawler" desc="Manage authorized website sources and actual crawl states." action={<Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={16}/> Refresh</Btn>}/>
+        {error && <Notice tone="amber">{error}</Notice>}
+        <Card className="major"><SectionHeader title="Crawl an authorized website" desc="The existing crawler validates and processes registered website sources."/><div className="inline-field"><input placeholder="https://your-site.example" value={domain} onChange={event => setDomain(event.target.value)}/><Btn disabled={busy || !domain.trim()} onClick={() => void addWebsite()}>{busy ? 'Starting…' : 'Add and crawl'} <ArrowRight size={16}/></Btn></div></Card>
+        <Metrics items={[{ label: 'Domains', value: loading ? '…' : String(sites.length), change: 'Registered workspace sources', icon: Globe2 }, { label: 'Discovered pages', value: loading ? '…' : String(discovered), change: 'API-reported page count', icon: Search }, { label: 'Loaded pages ready', value: loading ? '…' : String(indexed), change: 'Current returned page', icon: Database }, { label: 'Processing sources', value: loading ? '…' : String(pending), change: 'Current backend state', positive: false, icon: RefreshCw }]}/>
+        <Card className="major"><SectionHeader title="Website sources" desc="Status, pages and timestamps returned by the crawler service."/>{sites.map(site => <button key={site.id} onClick={() => openCrawl?.(site.id)} className="crawl-row"><span><strong>{site.domain ?? site.name}</strong><small>{site.pageCount} pages · {site.lastSuccessfulSyncAt ? new Date(site.lastSuccessfulSyncAt).toLocaleString() : 'No successful crawl reported'}</small></span><div className="crawl-progress"><Progress label="Pages loaded" value={site.pageCount > 0 ? Math.round((pages.filter(page => page.sourceId === site.id && page.searchReady).length / site.pageCount) * 100) : 0}/></div><TinyBadge status={site.processingStatus}/><ChevronRight size={16}/></button>)}{loading && <Empty title="Loading website sources…"/>}{!loading && !error && sites.length === 0 && <Empty title="No website sources" desc="Add an authorized website URL to create a crawl job."/>}</Card>
+    </>;
+}
+function CrawlDetail({ go, notify, workspaceSlug = '', recordId = '' }: Props) {
+    const [details, setDetails] = useState<WebsiteSourceDetails | null>(null); const [response, setResponse] = useState<WebsitePagesResponse | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [retry, setRetry] = useState(0); const [search, setSearch] = useState('');
+    useEffect(() => { if (!workspaceSlug || !recordId || recordId === 'source-preview') { setDetails(null); setResponse(null); setLoading(false); setError('Choose a real website source from the crawler list.'); return; } const controller = new AbortController(); setDetails(null); setResponse(null); setLoading(true); setError(''); Promise.all([getWebsiteSourceDetails(workspaceSlug, recordId, controller.signal), listWebsitePages(workspaceSlug, { page: 1, pageSize: 50, sourceId: recordId }, controller.signal)]).then(([sourceDetails, pages]) => { if (!controller.signal.aborted) { setDetails(sourceDetails); setResponse(pages); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Website crawl details could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, recordId, retry]);
+    async function crawl() { if (!recordId || busy) return; setBusy(true); setError(''); try { const job = await crawlWebsiteSource(workspaceSlug, recordId); notify(`Crawl request accepted · ${job.status}`); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Crawl request failed.'); } finally { setBusy(false); } }
+    async function saveSchedule(event: React.ChangeEvent<HTMLSelectElement>) { if (!recordId || busy) return; const value = event.target.value as 'MANUAL' | 'DAILY' | 'WEEKLY'; setBusy(true); setError(''); try { await updateWebsiteSyncSettings(workspaceSlug, recordId, { syncPolicy: value }); setRetry(current => current + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Crawl schedule update failed.'); } finally { setBusy(false); } }
+    async function togglePaused() { if (!recordId || !details || busy) return; setBusy(true); setError(''); try { await updateWebsiteSyncSettings(workspaceSlug, recordId, { paused: !details.paused }); setRetry(current => current + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Pause setting could not be saved.'); } finally { setBusy(false); } }
+    const pages = response?.pages.filter(page => `${page.title} ${page.canonicalUrl} ${page.crawlStatus}`.toLowerCase().includes(search.toLowerCase())) ?? [];
+    return <><PageHeader eyebrow="Train AI / Crawler / Domain" title={response?.sources[0]?.domain ?? response?.sources[0]?.name ?? 'Website Crawl'} desc="Actual source verification, crawl status and page records." action={<div className="action-line"><Btn secondary onClick={() => go('crawler')}>Back to websites</Btn><Btn disabled={busy || !details} onClick={() => void crawl()}>{busy ? 'Working…' : 'Crawl now'} <RefreshCw size={16}/></Btn></div>}/>{error && <Notice tone="amber">{error}</Notice>}{loading && <Empty title="Loading crawl details…"/>}
+        {details && <><div className="top-chip"><Badge>{details.verificationStatus}</Badge><Badge>{details.processingStatus}</Badge><Badge>{details.crawlJobStatus ?? 'No active job'}</Badge></div><div className="two-col reverse-sidebar"><Card><SectionHeader title="Crawl configuration" desc="Only settings supported by the current API are editable."/><div className="detail-row bordered"><span>Source ID</span><strong>{details.sourceId}</strong></div><div className="detail-row bordered"><span>Last attempt</span><strong>{details.lastSyncAttemptAt ? new Date(details.lastSyncAttemptAt).toLocaleString() : '—'}</strong></div><div className="detail-row bordered"><span>Last successful crawl</span><strong>{details.lastSuccessfulSyncAt ? new Date(details.lastSuccessfulSyncAt).toLocaleString() : '—'}</strong></div><div className="detail-row bordered"><span>Robots / crawler worker</span><strong>{details.workerEnabled ? 'Enabled' : 'Unavailable'}</strong></div><label className="field"><span>Sync schedule</span><select value={details.syncPolicy} disabled={busy} onChange={event => void saveSchedule(event)}><option value="MANUAL">Manual</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option></select></label><div className="toggle-row"><div><strong>Pause website sync</strong><p>Persist pause setting through crawler service.</p></div><button type="button" role="switch" aria-checked={details.paused} disabled={busy} className={'toggle '+(details.paused?'on':'')} onClick={() => void togglePaused()}><span/></button></div></Card><Card><SectionHeader title="Discovered & indexed pages" desc={`${response?.total ?? 0} total pages returned by crawler API.`}/><FilterInput value={search} onChange={setSearch} placeholder="Filter URLs"/>{pages.map(page => <div className="url-row" key={page.id}><strong>{page.canonicalUrl}</strong><TinyBadge status={page.crawlStatus}/><small>{page.crawledAt ? new Date(page.crawledAt).toLocaleString() : '—'}</small></div>)}{pages.length === 0 && <Empty title="No matching crawl pages" desc="The crawler API returned no page records for this filter."/>}</Card></div></>}
+    </>;
+}
+function Builder(props: Pick<Props, 'workspaceSlug' | 'workspaceRole' | 'workspaceData'>) {
+    return <ChatflowBuilder workspaceSlug={props.workspaceSlug || ''} workspaceName={props.workspaceData?.name || ''} workspaceRole={props.workspaceRole || ''} />;
+}
+function Integrations({ go, workspaceSlug = '', workspaceRole = '', openShopify }: Props) {
+    const [connectors, setConnectors] = useState<ConnectorInstance[]>([]);
+    const [domain, setDomain] = useState('');
+    const [error, setError] = useState('');
+    const [connectError, setConnectError] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [loaded, setLoaded] = useState(false);
+    const [working, setWorking] = useState(false);
+    const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setLoading(true); setError(''); getConnectors(workspaceSlug, controller.signal).then(result => { if (controller.signal.aborted) return; if (!result || !Array.isArray(result.items)) throw new ApiError('The connector list response is invalid.', 'invalid-response'); setConnectors(result.items); setLoaded(true); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Integration data could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    const shopifyConnectors = connectors.filter(item => item.connectorId === 'shopify_v1');
+    const normalizedDomain = normalizeShopifyDomain(domain);
+    const associatedStore = normalizedDomain ? shopifyConnectors.find(item => connectorShopDomain(item) === normalizedDomain) : undefined;
+    const duplicate = associatedStore && !['DISCONNECTED', 'REVOKED'].includes((associatedStore.state ?? '').toUpperCase()) ? associatedStore : undefined;
+    const manager = workspaceRole === 'owner' || workspaceRole === 'admin';
+    async function connectShopify() { if (!workspaceSlug || !manager || !loaded || error || !normalizedDomain || duplicate || working) return; setWorking(true); setConnectError(''); try { const result = await beginShopifyInstall(workspaceSlug, normalizedDomain, associatedStore?.displayName); window.location.assign(result.authorizationUrl); } catch (reason) { setConnectError(reason instanceof ApiError ? reason.message : 'Shopify installation could not be started.'); } finally { setWorking(false); } }
+    const openStore = (id: string) => openShopify ? openShopify(id) : go('shopify');
+    return <><PageHeader eyebrow="Channels / Integrations" title="Integrations" desc="Connect products, data, AI providers and customer-facing channels." action={<div className="action-line">{loading && loaded && <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>Refreshing Shopify…</span>}<Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={16}/> Refresh</Btn></div>}/>
+        {error && <Notice tone="amber"><span>{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></span></Notice>}
+        <Card className="major shopify-connect-form"><SectionHeader title="Connect a Shopify Store" desc="Enter your store’s myshopify.com domain. You’ll review and approve access on Shopify before Carteio connects."/><form className="inline-field" onSubmit={event => { event.preventDefault(); void connectShopify(); }}><label className="shopify-domain-field"><Search size={18}/><input value={domain} onChange={event => { setDomain(event.target.value); setConnectError(''); }} placeholder="your-store.myshopify.com" aria-label="Shopify store domain" autoComplete="url" aria-invalid={Boolean(domain.trim() && !normalizedDomain)}/></label><Btn type="submit" disabled={!manager || !loaded || Boolean(error) || !normalizedDomain || Boolean(duplicate) || working}>{working ? <><i className="shopify-inline-spinner"/> Opening Shopify…</> : <><Store size={16}/>{associatedStore ? 'Reconnect Shopify' : 'Connect Shopify'}</>}</Btn></form>{connectError && <small className="shopify-domain-hint" role="alert">{connectError}. Correct the domain or retry the authorization.</small>}{domain.trim() && !normalizedDomain && <small className="shopify-domain-hint" role="alert">Enter a valid myshopify.com domain, or an HTTPS URL for that store.</small>}{duplicate && <div className="shopify-domain-hint" role="status">This store is already listed in this workspace. It will not be reconnected or replaced automatically. <button type="button" className="text-link" onClick={() => openStore(duplicate.id)}>Manage this store <ArrowRight size={14}/></button></div>}{associatedStore && !duplicate && <small className="shopify-domain-hint" role="status">This store is already in this workspace as {shopifyConnectionLabel(associatedStore)}. Reauthorization will reuse that store record after your explicit action.</small>}{error && <small className="shopify-domain-hint">Retry the store list before starting OAuth, so an existing store is not duplicated.</small>}{!manager && <small className="shopify-domain-hint">Workspace owner or admin access is required to start Shopify authorization.</small>}</Card>
+        {!loaded && <ShopifyLoadingSkeleton/>}
+        {loaded && shopifyConnectors.length === 0 && !error && <Card className="featured-integration"><div className="integr-icon shop-icon">S</div><div className="featured-body"><Badge tone="neutral">SHOPIFY COMMERCE</Badge><h2>No Shopify store connected</h2><p>Use the store-domain form above to begin the official Shopify authorization flow.</p></div></Card>}
+        {shopifyConnectors.map(shopify => { const connected = connectorIsActive(shopify); const pending = shopify.state === 'DRAFT' && shopify.hasCredentials; return <Card className="featured-integration" key={shopify.id}><div className="integr-icon shop-icon">S</div><div className="featured-body"><Badge>SHOPIFY COMMERCE</Badge><h2>{shopify.displayName}</h2><p>Manage this workspace’s authorized Shopify connection and its permitted synchronization.</p><small>{loading ? 'Showing last loaded connector details' : `Last successful sync: ${shopify.lastSuccessfulSyncAt ? new Date(shopify.lastSuccessfulSyncAt).toLocaleString() : 'Not recorded'}`}</small></div><div className="featured-cta"><Badge tone={shopifyConnectionTone(shopify)}>{shopifyConnectionLabel(shopify)}</Badge><Btn onClick={() => openStore(shopify.id)}>{connected ? 'Manage Shopify' : pending ? 'Verify authorization' : 'Review connection'} <ArrowRight size={15}/></Btn></div></Card>; })}
+        {error && shopifyConnectors.length === 0 && <Card className="featured-integration"><div className="integr-icon shop-icon">S</div><div className="featured-body"><Badge tone="amber">STATUS UNAVAILABLE</Badge><h2>Could not load Shopify stores</h2><p>Existing store status is unknown. Retry before treating a store as disconnected.</p></div><Btn secondary onClick={() => setRetry(value => value + 1)}>Retry</Btn></Card>}
+        <SectionHeader title="More integrations" desc="Additional integrations are coming soon."/><div className="integration-grid"><Card className="integration-card"><div className="integration-top"><span className="integr-icon">+</span><TinyBadge status="Coming soon"/></div><h3>More integrations</h3><p>Additional commerce, content and AI provider integrations will be available later.</p><span className="integration-link">Coming soon</span></Card></div>
+    </>;
+}
+function Shopify({ go, notify, workspaceSlug = '', workspaceRole = '', recordId = '', openShopify }: Props) {
+    const [connectors, setConnectors] = useState<ConnectorInstance[]>([]); const [permissions, setPermissions] = useState<ConnectorPermissions | null>(null); const [permissionsConnectorId, setPermissionsConnectorId] = useState(''); const [assistantId, setAssistantId] = useState(''); const [jobs, setJobs] = useState<SyncJob[]>([]); const [historyConnectorId, setHistoryConnectorId] = useState(''); const [shopDomain, setShopDomain] = useState(''); const [error, setError] = useState(''); const [actionError, setActionError] = useState(''); const [permissionsError, setPermissionsError] = useState(''); const [historyError, setHistoryError] = useState(''); const [loading, setLoading] = useState(true); const [loaded, setLoaded] = useState(false); const [permissionsLoading, setPermissionsLoading] = useState(true); const [historyLoading, setHistoryLoading] = useState(true); const [working, setWorking] = useState(false); const [workingAction, setWorkingAction] = useState(''); const [retry, setRetry] = useState(0); const [verificationPollTimedOut, setVerificationPollTimedOut] = useState(false); const [verificationPollUnavailable, setVerificationPollUnavailable] = useState(false); const [verificationStatusCheckedAt, setVerificationStatusCheckedAt] = useState<string | null>(null); const [syncPollingPaused, setSyncPollingPaused] = useState(false);
+    const shopifyConnectors = connectors.filter(value => value.connectorId === 'shopify_v1');
+    const connector = recordId ? shopifyConnectors.find(value => value.id === recordId) ?? null : shopifyConnectors[0] ?? null;
+    const visiblePermissions = connector && permissionsConnectorId === connector.id ? permissions : null;
+    const visibleJobs = connector && historyConnectorId === connector.id ? jobs : [];
+    const activeSyncJob = visibleJobs.find(job => ['PENDING', 'RUNNING', 'RETRY_WAIT'].includes(job.state));
+    const manager = workspaceRole === 'owner' || workspaceRole === 'admin';
+    useEffect(() => {
+        if (!workspaceSlug || !connector || connector.state !== 'CONNECTING') { setVerificationPollTimedOut(false); setVerificationPollUnavailable(false); return; }
+        const controller = new AbortController();
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let attempts = 0;
+        setVerificationPollTimedOut(false);
+        setVerificationPollUnavailable(false);
+        const poll = async () => {
+            if (controller.signal.aborted) return;
+            attempts += 1;
+            try {
+                const result = await getConnectors(workspaceSlug, controller.signal);
+                if (controller.signal.aborted) return;
+                setVerificationPollUnavailable(false);
+                setVerificationStatusCheckedAt(new Date().toISOString());
+                setConnectors(result.items);
+                const latest = result.items.find(item => item.id === connector.id);
+                if (latest && latest.state !== 'CONNECTING') {
+                    setRetry(value => value + 1);
+                    return;
+                }
+            } catch {
+                // Keep the last valid status visible and continue only within the bounded window.
+                if (!controller.signal.aborted) setVerificationPollUnavailable(true);
+            }
+            if (attempts >= 25) { setVerificationPollTimedOut(true); return; }
+            timeout = setTimeout(() => void poll(), 5_000);
+        };
+        timeout = setTimeout(() => void poll(), 5_000);
+        return () => { controller.abort(); if (timeout) clearTimeout(timeout); };
+    }, [workspaceSlug, connector?.id, connector?.state, connector?.updatedAt, retry]);
+    useEffect(() => {
+        if (!workspaceSlug || !connector || !activeSyncJob || historyConnectorId !== connector.id) { setSyncPollingPaused(false); return; }
+        const controller = new AbortController();
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let attempts = 0;
+        setSyncPollingPaused(false);
+        const poll = async () => {
+            if (controller.signal.aborted) return;
+            attempts += 1;
+            try {
+                const history = await getConnectorSyncHistory(workspaceSlug, connector.id, controller.signal);
+                if (controller.signal.aborted) return;
+                setJobs(history.items);
+                setHistoryConnectorId(connector.id);
+                setHistoryError('');
+                const latest = history.items.find(job => job.id === activeSyncJob.id);
+                if (latest && !['PENDING', 'RUNNING', 'RETRY_WAIT'].includes(latest.state)) {
+                    setRetry(value => value + 1);
+                    return;
+                }
+            } catch {
+                if (!controller.signal.aborted) setSyncPollingPaused(true);
+            }
+            if (attempts >= 12) { setSyncPollingPaused(true); return; }
+            timeout = setTimeout(() => void poll(), 5_000);
+        };
+        timeout = setTimeout(() => void poll(), 5_000);
+        return () => { controller.abort(); if (timeout) clearTimeout(timeout); };
+    }, [workspaceSlug, connector?.id, historyConnectorId, activeSyncJob?.id, activeSyncJob?.state, retry]);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setLoading(true); setError(''); setPermissionsLoading(true); setHistoryLoading(true); getConnectors(workspaceSlug, controller.signal).then(async result => { if (controller.signal.aborted) return; setVerificationStatusCheckedAt(new Date().toISOString()); setConnectors(result.items); setLoaded(true); const shopify = result.items.filter(value => value.connectorId === 'shopify_v1'); const item = recordId ? shopify.find(value => value.id === recordId) : shopify[0]; if (!item) { setPermissionsLoading(false); setHistoryLoading(false); return; } const savedDomain = item.configuration?.shopDomain; if (typeof savedDomain === 'string') setShopDomain(savedDomain); const [permissionResult, historyResult] = await Promise.allSettled([getConnectorPermissions(workspaceSlug, item.id), getConnectorSyncHistory(workspaceSlug, item.id, controller.signal)]); if (controller.signal.aborted) return; if (permissionResult.status === 'fulfilled') { setPermissions(permissionResult.value); setPermissionsConnectorId(item.id); const available = permissionResult.value.assistants ?? []; const preferred = permissionResult.value.assistantId ?? readShopifyAssistantSelection(workspaceSlug, item.id); const selected = available.some(assistant => assistant.id === preferred) ? preferred : available[0]?.id ?? ''; setAssistantId(selected); if (selected) writeShopifyAssistantSelection(workspaceSlug, item.id, selected); setPermissionsError(''); } else setPermissionsError(permissionResult.reason instanceof ApiError ? permissionResult.reason.message : 'Shopify permissions could not be loaded.'); if (historyResult.status === 'fulfilled') { setJobs(historyResult.value.items); setHistoryConnectorId(item.id); setHistoryError(''); } else setHistoryError(historyResult.reason instanceof ApiError ? historyResult.reason.message : 'Shopify sync history could not be loaded.'); setPermissionsLoading(false); setHistoryLoading(false); }).catch(reason => { if (!controller.signal.aborted) { setError(reason instanceof ApiError ? reason.message : 'Shopify connection could not be loaded.'); setPermissionsLoading(false); setHistoryLoading(false); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, recordId, retry]);
+    async function action(kind: 'verify' | 'disconnect' | 'permissions' | 'sync' | 'orders' | 'content' | 'retry' | 'scope-upgrade', jobId?: string) { if (!connector || working || !manager || (kind === 'permissions' && !connected)) return; if (kind === 'disconnect' && !window.confirm(`Disconnect ${shopDomain || connector.displayName}? Its synced Shopify product, variant, inventory, and order records will be removed. Your website crawler sources and pages will be kept.`)) return; setWorking(true); setWorkingAction(kind); setActionError(''); try { if (kind === 'verify') await verifyConnector(workspaceSlug, connector.id, false); if (kind === 'disconnect') { await disconnectConnector(workspaceSlug, connector.id); notify('Shopify disconnected. Synced Shopify commerce records were removed; website crawler sources were preserved.'); } if (kind === 'permissions') { const next = await refreshShopifyPermissions(workspaceSlug, connector.id); setPermissions(next); setPermissionsConnectorId(connector.id); } if (kind === 'sync') { const job = await queueConnectorSync(workspaceSlug, connector.id, 'PRODUCTS', 'FULL'); notify(`Product sync queued · ${job.state}`); } if (kind === 'orders') await queueConnectorSync(workspaceSlug, connector.id, 'ORDERS', 'FULL'); if (kind === 'content') await queueConnectorSync(workspaceSlug, connector.id, 'CONTENT', 'FULL'); if (kind === 'retry' && jobId) await retryConnectorSync(workspaceSlug, connector.id, jobId); if (kind === 'scope-upgrade') { const upgrade = await beginShopifyScopeUpgrade(workspaceSlug, shopDomain, connector.displayName); if (!window.confirm(`Continue to Shopify to review these requested permissions?\n\n${upgrade.requestedScopes.join(', ')}\n\nNo permission changes until you approve them on Shopify.`)) return; window.location.assign(upgrade.authorizationUrl); return; } setRetry(value => value + 1); } catch (reason) { setActionError(reason instanceof ApiError ? reason.message : 'Shopify action failed.'); setRetry(value => value + 1); } finally { setWorking(false); setWorkingAction(''); } }
+    async function changePermission(category: string, enabled: boolean, selectedAssistant?: string, scope: 'AI' | 'SYNC' = 'AI') {
+      if (!connector || !manager || working) return;
+      const connectorId = connector.id;
+      const contextAssistantId = selectedAssistant ?? assistantId;
+      setWorking(true); setPermissionsError('');
+      try {
+        const next = await updateConnectorPermission(workspaceSlug, connectorId, { category, enabled, scope, ...(selectedAssistant ? { assistantId: selectedAssistant } : {}) });
+        setPermissions((previous) => ({ ...next, assistants: next.assistants ?? previous?.assistants })); setAssistantId(next.assistantId ?? selectedAssistant ?? '');
+        if (selectedAssistant) writeShopifyAssistantSelection(workspaceSlug, connectorId, selectedAssistant);
+      } catch (reason) {
+        if (reason instanceof ApiError && reason.kind === 'timeout' && contextAssistantId) {
+          try {
+            const saved = await getConnectorPermissions(workspaceSlug, connectorId, contextAssistantId);
+            setPermissions((previous) => ({ ...saved, assistants: saved.assistants ?? previous?.assistants })); setPermissionsConnectorId(connectorId);
+            const row = saved.categories.find((entry) => entry.category === category);
+            const persisted = selectedAssistant ? row?.assistantEnabled === true : scope === 'SYNC' ? row?.syncEnabled === true : row?.businessEnabled === true;
+            setPermissionsError(persisted === enabled
+              ? 'The save response timed out, but the requested permission is confirmed as saved.'
+              : 'The save response timed out. The requested value was not present in the saved state checked; refresh permissions again to confirm the final result.');
+          } catch {
+            setPermissionsError('The save request timed out. Its final result could not be confirmed; refresh permissions to check the saved value.');
+          }
+        } else setPermissionsError(reason instanceof ApiError ? reason.message : 'Shopify permission could not be updated.');
+      } finally { setWorking(false); }
+    }
+    async function reconnect() { const normalized = normalizeShopifyDomain(shopDomain); if (!manager || !workspaceSlug || !normalized || working) return; setWorking(true); setWorkingAction('oauth'); setActionError(''); try { const result = await beginShopifyInstall(workspaceSlug, normalized); window.location.assign(result.authorizationUrl); } catch (reason) { setActionError(reason instanceof ApiError ? reason.message : 'Shopify authorization could not be started.'); } finally { setWorking(false); setWorkingAction(''); } }
+    const domain = String(connector?.configuration?.shopDomain ?? shopDomain ?? '');
+    const connected = connectorIsActive(connector);
+    const pendingVerification = connector?.state === 'DRAFT' && connector.hasCredentials;
+    const verificationInProgress = connector?.state === 'CONNECTING';
+    const verificationStartedAt = connector?.state === 'CONNECTING' ? Date.parse(connector.updatedAt) : Number.NaN;
+    const verificationExpired = verificationInProgress && Number.isFinite(verificationStartedAt) && Date.now() - verificationStartedAt >= SHOPIFY_VERIFICATION_STALE_AFTER_MS;
+    const databaseVerificationRetry = Boolean(connector?.hasCredentials && connector.lastErrorCode === 'CONNECTOR_DATABASE_TRANSACTION_FAILED');
+    const needsOauth = Boolean(connector && !connected && !pendingVerification && !verificationInProgress && !databaseVerificationRetry);
+    const canSyncCategory = (category: string) => Boolean(visiblePermissions?.categories.some(item => item.category === category && item.providerStatus === 'GRANTED' && item.syncEnabled));
+    return <><PageHeader eyebrow="Integrations / Shopify" title="Shopify Integration" desc="Store connection, permissions, synchronization and store management." action={<div className="action-line">{loading && loaded && <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>Refreshing store data…</span>}<Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={15}/> Refresh</Btn><Btn secondary onClick={() => go('integrations')}>All integrations</Btn></div>}/>
+        {error && <Notice tone="amber"><span>{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></span></Notice>}
+        {actionError && <Notice tone="amber"><span>{actionError} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Refresh status</button></span></Notice>}
+        {workingAction === 'verify' && <div className="shopify-verification-progress" role="status" aria-live="polite"><i className="shopify-inline-spinner"/> Verifying Shopify authorization and granted access…</div>}
+        {!loaded && loading ? <ShopifyLoadingSkeleton details/> : error && !connector ? <Card className="shopify-hero"><span className="integr-icon shop-icon">S</span><div><small>SHOPIFY STATUS UNAVAILABLE</small><h2>Connection status could not be loaded</h2><p>Retry the connector request before treating this store as disconnected.</p></div><Btn secondary onClick={() => setRetry(value => value + 1)}>Retry</Btn></Card> : recordId && !connector ? <Card className="shopify-hero"><span className="integr-icon shop-icon">S</span><div><small>SHOPIFY STORE UNAVAILABLE</small><h2>This Shopify store is not in the current workspace</h2><p>Choose a store from Integrations. No other store’s details are shown.</p></div><Btn secondary onClick={() => go('integrations')}>View stores</Btn></Card> : !connector ? <Card className="shopify-hero"><span className="integr-icon shop-icon">S</span><div><small>SHOPIFY STORE</small><h2>Not connected</h2><p>No Shopify connector exists for this workspace.</p></div><Btn onClick={() => go('integrations')}>Connect Shopify</Btn></Card> : <>
+            {shopifyConnectors.length > 1 && <Card className="shopify-store-picker"><SectionHeader title="Shopify stores" desc="Stores connected to this workspace."/><label className="field"><span>Select a store</span><select aria-label="Select Shopify store" value={connector.id} onChange={event => openShopify?.(event.target.value)}>{shopifyConnectors.map(item => <option key={item.id} value={item.id}>{item.displayName} · {shopifyConnectionLabel(item)}</option>)}</select></label></Card>}
+            {loading && <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>Refreshing connection data; current details remain visible.</span>}
+            <Card className="shopify-hero"><span className="integr-icon shop-icon">S</span><div><small>{connected ? 'CONNECTED SHOPIFY STORE' : pendingVerification ? 'SHOPIFY VERIFICATION REQUIRED' : verificationInProgress ? verificationExpired ? 'VERIFICATION DID NOT FINISH' : 'SHOPIFY VERIFICATION IN PROGRESS' : 'SHOPIFY CONNECTION'}</small><h2>{domain || connector.displayName || 'Store domain unavailable'}</h2><p>{pendingVerification ? 'The connector reports stored credentials, but provider access is not verified yet. Review the returned grant snapshot and verify the connection before using synchronized data.' : verificationInProgress ? verificationExpired ? 'No terminal verification result was saved before the verification deadline. The connector is not confirmed connected. Retry verification explicitly; this will not start Shopify OAuth.' : 'The backend has claimed this connector for verification. Status checks are bounded and will stop if no final state is reported.' : `Last verified ${connector.lastVerifiedAt ? new Date(connector.lastVerifiedAt).toLocaleString() : 'not verified'}`}{connector.lastSuccessfulSyncAt ? ` · Last successful sync ${new Date(connector.lastSuccessfulSyncAt).toLocaleString()}` : ' · No successful sync recorded'}{connector.lastErrorCode ? ` · Latest connector error: ${connector.lastErrorCode}` : ''}</p></div><Badge tone={shopifyConnectionTone(connector)}>{shopifyConnectionLabel(connector)}</Badge></Card>
+            {verificationInProgress && <Card className="major"><div className="shopify-verification-progress" role="status">{verificationExpired ? <AlertCircle size={16}/> : <i className="shopify-inline-spinner"/>} {verificationExpired ? 'Verification did not finish. The backend still reports CONNECTING, so connected status is not confirmed.' : verificationPollTimedOut ? verificationPollUnavailable ? 'Automatic checks paused because the backend status could not be refreshed. Check status before retrying.' : 'Automatic status checks paused after two minutes. The connector may be temporarily unavailable.' : 'Shopify verification is in progress. Status checks pause automatically after two minutes.'}{verificationStatusCheckedAt && <small> Status last checked {new Date(verificationStatusCheckedAt).toLocaleTimeString()}.</small>}</div>{(verificationExpired || (verificationPollTimedOut && !verificationPollUnavailable)) ? <Btn disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Retrying verification…</> : 'Retry verification'}</Btn> : <Btn secondary onClick={() => setRetry(value => value + 1)}>Refresh verification status</Btn>}</Card>}
+            {databaseVerificationRetry && <Card className="major"><SectionHeader title="Verification was not saved" desc="The database could not persist the final status. This does not indicate invalid Shopify credentials; verify again to retry the save."/><Btn disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Verifying…</> : 'Retry verification'}</Btn></Card>}
+            {needsOauth && <Card className="major"><SectionHeader title={connector.state === 'DRAFT' ? 'Connect Shopify' : 'Reconnect Shopify'} desc="Continue through Shopify OAuth to establish or restore the authorized connection. Existing grants are not expanded automatically."/><div className="inline-field"><input value={shopDomain} onChange={event => setShopDomain(event.target.value)} placeholder="your-store.myshopify.com" aria-label="Shopify store domain" autoComplete="url" aria-invalid={Boolean(shopDomain.trim() && !normalizeShopifyDomain(shopDomain))}/><Btn disabled={!manager || working || !normalizeShopifyDomain(shopDomain)} onClick={() => void reconnect()}>{workingAction === 'oauth' ? <><i className="shopify-inline-spinner"/> Opening Shopify…</> : connector.state === 'DRAFT' ? 'Connect Shopify' : 'Reconnect Shopify'}</Btn></div>{shopDomain.trim() && !normalizeShopifyDomain(shopDomain) && <small className="shopify-domain-hint" role="alert">Enter a valid myshopify.com domain before opening Shopify authorization.</small>}{!manager && <Notice tone="amber">Workspace owner or admin access is required to manage Shopify.</Notice>}</Card>}
+            {pendingVerification && !databaseVerificationRetry && <Card className="major"><SectionHeader title="Finish connection verification" desc="Stored connector credentials are present, but Shopify access is not marked connected until verification succeeds."/><Btn disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Verifying…</> : 'Verify connection'}</Btn>{connector.lastErrorCode && <p role="status">Last connector error: {connector.lastErrorCode}</p>}</Card>}
+            {connector.hasCredentials && <>
+            {visiblePermissions?.storedRecordCounts && <><Metrics items={[{ label: 'Stored products', value: visiblePermissions.storedRecordCounts.products.toLocaleString(), change: 'Persisted connector records', icon: Package, positive: false }, { label: 'Stored variants', value: visiblePermissions.storedRecordCounts.variants.toLocaleString(), change: 'Persisted connector records', icon: Layers3, positive: false }, { label: 'Collections', value: visiblePermissions.storedRecordCounts.collections.toLocaleString(), change: 'Persisted connector records', icon: ShoppingBag, positive: false }, { label: 'Products with price / inventory', value: `${visiblePermissions.storedRecordCounts.productsWithPrices.toLocaleString()} / ${visiblePermissions.storedRecordCounts.productsWithInventory.toLocaleString()}`, change: 'Persisted field counts', icon: PackageCheck, positive: false }]}/><p className="shopify-domain-hint">Stored synchronized records: {visiblePermissions.storedRecordCounts.products.toLocaleString()} products and {visiblePermissions.storedRecordCounts.variants.toLocaleString()} variants. Current Products API visibility: {visiblePermissions.visibleProductCount === null || visiblePermissions.visibleProductCount === undefined ? 'Unavailable' : visiblePermissions.visibleProductCount.toLocaleString()} products under active connector, Shopify grant and workspace permission checks.</p></>}
+            <div className="action-line major">{connected && <Btn secondary disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Verifying…</> : 'Verify connection'}</Btn>}{connected && connector.verifiedCapabilities.includes('PRODUCT_CATALOG') && canSyncCategory('PRODUCTS') && <Btn disabled={!manager || working} onClick={() => void action('sync')}>{workingAction === 'sync' ? <><i className="shopify-inline-spinner"/> Queueing…</> : 'Sync products & variants'}</Btn>}{connected && connector.verifiedCapabilities.includes('ORDERS') && canSyncCategory('ORDERS') && <Btn secondary disabled={!manager || working} onClick={() => void action('orders')}>{workingAction === 'orders' ? 'Queueing…' : 'Sync orders'}</Btn>}{connected && connector.verifiedCapabilities.includes('WEBSITE_CONTENT') && ['WEBSITE_PAGES', 'FAQ_POLICIES'].some(canSyncCategory) && <Btn secondary disabled={!manager || working} onClick={() => void action('content')}>{workingAction === 'content' ? 'Queueing…' : 'Sync content'}</Btn>}{connected && <><Btn secondary disabled={!manager || working} onClick={() => void action('scope-upgrade')}>Review additional Shopify permissions</Btn><Btn secondary disabled={!manager || working} onClick={() => void action('disconnect')}>Disconnect store</Btn></>}{connected && <Btn secondary disabled={!manager || working} onClick={() => void action('permissions')}>{workingAction === 'permissions' ? <><i className="shopify-inline-spinner"/> Refreshing…</> : 'Refresh granted permissions'}</Btn>}</div>
+            {permissionsError && <Notice tone="amber"><span>{permissionsError} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry permissions</button></span></Notice>}{historyError && <Notice tone="amber"><span>{historyError} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry sync history</button></span></Notice>}
+            {permissionsLoading && !visiblePermissions && <ShopifyLoadingSkeleton/>}
+            {visiblePermissions && <ShopifyPermissionsPanel name={connector.displayName} permissions={visiblePermissions} assistantId={assistantId} refreshing={workingAction === 'permissions'} busy={working || permissionsLoading} refreshAvailable={connected} onAssistantChange={id => { setAssistantId(id); writeShopifyAssistantSelection(workspaceSlug, connector.id, id); setPermissionsLoading(true); void getConnectorPermissions(workspaceSlug, connector.id, id).then(next => { setPermissions(previous => ({ ...next, assistants: next.assistants ?? previous?.assistants })); setPermissionsConnectorId(connector.id); setPermissionsError(''); }).catch(reason => setPermissionsError(reason instanceof ApiError ? reason.message : 'Assistant permissions could not be loaded.')).finally(() => setPermissionsLoading(false)); }} onRefresh={() => void action('permissions')} onPermission={(category, enabled, selectedAssistant, scope) => void changePermission(category, enabled, selectedAssistant, scope)}/>}
+            {!permissionsLoading && !visiblePermissions && !permissionsError && <Empty title="Granted permissions unavailable" desc="The connector API returned no permission snapshot."/>}
+            <Card className="major"><SectionHeader title="Synchronization history" desc="Actual connector jobs, timestamps and backend error codes." action={historyLoading ? <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>Loading history…</span> : activeSyncJob ? syncPollingPaused ? <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Refresh sync status</button> : <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>{activeSyncJob.state === 'PENDING' ? 'Sync queued…' : 'Sync running…'}</span> : undefined}/>{historyLoading && visibleJobs.length === 0 ? <div className="shopify-history-loading" role="status"><i className="shopify-inline-spinner"/>Loading synchronization history…</div> : visibleJobs.length ? <div className="timeline">{visibleJobs.map(job => <div key={job.id}><span className="timeline-dot"/><strong>{job.resourceType} · {job.state}</strong><small>{new Date(job.createdAt).toLocaleString()} · {job.itemCount.toLocaleString()} records · {job.attemptCount} attempts{job.lastErrorCode ? ` · ${job.lastErrorCode}` : ''}</small>{job.state === 'FAILED' && <Btn secondary disabled={!manager || working} onClick={() => void action('retry', job.id)}>{workingAction === 'retry' ? 'Retrying…' : 'Retry failed sync'}</Btn>}</div>)}</div> : historyError ? <Empty title="Sync history unavailable" desc="Retry to load actual synchronization jobs."/> : <Empty title="No sync jobs available" desc="The connector API returned no synchronization history."/>}</Card>
+            </>}
+        </>}
+    </>;
+}
+function freshWidgetConfig(assistantId: string): WidgetConfig {
+    return { assistantId, publicId: '', enabled: false, allowedDomains: [], appearance: { name: 'Assistant', welcomeMessage: 'Hi! How can I help?', color: '#3157d5', userBubbleColor: '#3157d5', position: 'right', fontFamily: 'system', desktopSize: 'medium', width: 380, height: 590, mobileWidth: 420, mobileHeight: 720, cornerRadius: 20, launcherSize: 58, avatarUrl: null, suggestions: [] } };
+}
+function normalizeWidgetHostname(value: string): string | null {
+    const hostname = value.trim().toLowerCase();
+    if (!hostname || hostname.includes('://') || /[\s/:?#,*]/.test(hostname)) return null;
+    if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return hostname;
+    const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+    return hostname.length <= 253 && new RegExp(`^${label}(?:\\.${label})*$`, 'i').test(hostname) ? hostname : null;
+}
+function Install({ go, notify, workspaceSlug = '' }: Props) {
+    const [platform, setPlatform] = useState('Shopify'); const [assistants, setAssistants] = useState<Assistant[]>([]); const [assistantId, setAssistantId] = useState(''); const [widget, setWidget] = useState<WidgetConfig | null>(null); const [domains, setDomains] = useState(''); const [enabled, setEnabled] = useState(false); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry, setRetry] = useState(0); const [scriptStatus, setScriptStatus] = useState<'checking' | 'available' | 'limited' | 'unavailable'>('checking');
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setAssistants([]); setAssistantId(''); setWidget(null); setDomains(''); setEnabled(false); setLoading(true); setError(''); listAssistants(workspaceSlug, 1, controller.signal, 'ALL').then(result => { if (controller.signal.aborted) return; const available = result.assistants.filter(item => item.status.toLowerCase() !== 'archived'); setAssistants(available); const selected = available.find(item => item.status.toLowerCase() === 'active') ?? available[0]; setAssistantId(selected?.id ?? ''); if (!selected) setLoading(false); }).catch(reason => { if (!controller.signal.aborted) { setError(reason instanceof ApiError ? reason.message : 'Workspace assistants could not be loaded.'); setLoading(false); } }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    useEffect(() => { if (!workspaceSlug || !assistantId) { setWidget(null); setLoading(false); return; } const controller = new AbortController(); setWidget(null); setLoading(true); setError(''); getWidgetConfig(workspaceSlug, assistantId, controller.signal).then(result => { if (!controller.signal.aborted) { setWidget(result); setDomains(result.allowedDomains[0] ?? ''); setEnabled(result.enabled); } }).catch(reason => { if (controller.signal.aborted) return; if (reason instanceof ApiError && reason.status === 404) { const empty = freshWidgetConfig(assistantId); setWidget(empty); setDomains(''); setEnabled(false); } else setError(reason instanceof ApiError ? reason.message : 'Widget configuration could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, assistantId]);
+    const hostingOrigin = getWidgetHostingOrigin(); const apiOrigin = getWidgetApiOrigin(); const apiOriginValid = isWidgetApiOriginConfigurationValid();
+    useEffect(() => { const controller = new AbortController(); if (!hostingOrigin) { setScriptStatus('unavailable'); return () => controller.abort(); } setScriptStatus('checking'); fetch(new URL('/widget.js', hostingOrigin), { cache: 'no-store', signal: controller.signal }).then(response => { const contentType = response.headers.get('content-type') ?? ''; if (!controller.signal.aborted) setScriptStatus(response.ok && /javascript|ecmascript/i.test(contentType) ? 'available' : response.ok ? 'limited' : 'unavailable'); }).catch(() => { if (!controller.signal.aborted) setScriptStatus('unavailable'); }); return () => controller.abort(); }, [hostingOrigin]);
+    const snippet = widget?.publicId && hostingOrigin && apiOriginValid ? `<script async src="${hostingOrigin}/widget.js" data-widget-id="${widget.publicId}"${apiOrigin ? ` data-api-base-url="${apiOrigin}"` : ''}></script>` : '';
+    async function copy() { if (!snippet) return; try { await navigator.clipboard.writeText(snippet); notify('Current public widget snippet copied.'); } catch { setError('Clipboard access is unavailable in this browser.'); } }
+    const hostname = normalizeWidgetHostname(domains);
+    async function saveSetup() { if (!widget || busy) return; if (enabled && !hostname) { setError('Enter one valid hostname before enabling the widget.'); return; } if (domains.trim() && !hostname) { setError('Enter a hostname only, such as shop.example.com. Do not include https://, a path, port, wildcard, or multiple domains.'); return; } setBusy(true); setError(''); try { const saved = await saveWidgetConfig(workspaceSlug, { assistantId: widget.assistantId, enabled, allowedDomains: hostname ? [hostname] : [], appearance: widget.appearance }); setWidget(saved); setDomains(saved.allowedDomains[0] ?? ''); setEnabled(saved.enabled); notify('Widget setup saved for '+(hostname ?? 'no domain')+'.'); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Widget setup could not be saved.'); } finally { setBusy(false); } }
+    const instructions: Record<string, string[]> = { Shopify: ['Open Online Store → Themes → Edit code.', 'Open layout/theme.liquid.', 'Paste the copied script immediately before </body>, then save and publish.'], WordPress: ['Open your site-wide footer or a trusted header/footer script tool.', 'Paste the copied script immediately before the closing body tag.', 'Publish and confirm the website domain is listed under Approved websites.'], 'React / Next.js': ['Add the script to the shared application layout or document head.', 'Use the exact public snippet shown below; do not add private API keys.', 'Deploy the site and confirm its hostname is approved.'], 'Static / Custom': ['Open the shared HTML layout used by your website.', 'Paste the script immediately before </body>.', 'Publish and confirm the website hostname is approved.'] };
+    return <><PageHeader eyebrow="Channels / Website Widget" title="Widget & Installation" desc="Choose an assistant, approve your website and install its public widget script." action={<Btn disabled={!snippet} onClick={() => void copy()}><Copy size={15}/> Copy snippet</Btn>}/>{error && <Notice tone="amber">{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></Notice>}{!apiOriginValid && <Notice tone="amber">Widget API origin configuration is invalid. The embed snippet is withheld until it is corrected.</Notice>}
+        <Card><SectionHeader title="Connect your website" desc="Create one assistant widget ID and bind it to one exact hostname."/><label className="field"><span>Widget assistant</span><select value={assistantId} disabled={busy || loading} onChange={event => setAssistantId(event.target.value)}><option value="">Select an assistant</option>{assistants.map(item => <option key={item.id} value={item.id}>{item.name} · {item.status}</option>)}</select></label>{!loading && assistants.length === 0 && <Empty title="No assistant available" desc="Create an assistant before configuring a website widget."/>}{widget && <><label className="field"><span>Approved website domain</span><input value={domains} onChange={event => setDomains(event.target.value)} placeholder="shop.example.com" aria-describedby="widget-domain-help" autoComplete="url"/></label><small id="widget-domain-help" className="muted">Enter the exact hostname only. Subdomains are separate: approving example.com does not approve shop.example.com.</small><div className="toggle-row"><div><strong>Enable this website widget</strong><p>The public widget ID will load only on this saved hostname.</p></div><button type="button" role="switch" aria-checked={enabled} className={'toggle '+(enabled?'on':'')} onClick={() => setEnabled(value => !value)} disabled={busy}><span/></button></div><div className="action-line"><Btn disabled={busy || (enabled && !hostname)} onClick={() => void saveSetup()}>{busy ? 'Saving…' : 'Save website setup'}</Btn><Badge tone={enabled && hostname ? 'green' : 'amber'}>{enabled && hostname ? 'Configured' : 'Setup required'}</Badge></div></>}</Card>
+        <Card className="major"><SectionHeader title="Choose where to install" desc="Select instructions for your website platform."/><div className="install-options">{[['Shopify','Theme code or supported embed'],['WordPress','Site-wide script embed'],['React / Next.js','Web widget script'],['Static / Custom','Script embed']].map(([title,desc]) => <button type="button" key={title} className={'install-option '+(platform===title?'selected':'')} onClick={() => setPlatform(title ?? 'Shopify')}><strong>{title}</strong><small>{desc}</small></button>)}</div></Card>
+        <div className="two-col major"><Card><SectionHeader title={'Install on '+platform} desc="Use this generated public widget snippet on the approved website."/>{snippet ? <pre className="code-pane"><code>{snippet}</code></pre> : <Empty title={loading ? 'Loading widget configuration…' : !assistantId ? 'Select an assistant first' : widget?.publicId ? 'Widget snippet unavailable' : 'Public widget ID unavailable'} desc={widget?.publicId ? 'Check the configured public widget hosting and API origins.' : 'The backend must return a public widget identifier before installation code can be generated.'}/>}<Btn secondary disabled={!snippet} onClick={() => void copy()}><Copy size={15}/> Copy installation code</Btn><h4>Installation steps</h4><ol className="widget-install-steps">{(instructions[platform] ?? instructions.Shopify ?? []).map(step => <li key={step}>{step}</li>)}</ol><p>Only the public widget ID is included. Never paste private API keys or server credentials into website code.</p></Card><Card><SectionHeader title="Installation status"/><Badge tone={scriptStatus === 'available' ? 'green' : scriptStatus === 'unavailable' ? 'amber' : 'neutral'}>{scriptStatus === 'checking' ? 'Checking widget script…' : scriptStatus === 'available' ? 'Widget script available' : scriptStatus === 'limited' ? 'Widget script response needs review' : 'Widget script unavailable'}</Badge><p className="small-desc">This checks that the public script host responds. It does not claim that your website has installed or verified the widget.</p><div className="website-mock"><div className="mock-browser-title">{widget?.allowedDomains[0] ?? 'Approved website'}</div><h4>{widget?.appearance.name || 'Widget preview'}</h4><div className="mock-line"/><div className="mock-line short"/><button className="chat-floating" type="button" aria-label="Widget preview" style={{background:widget?.appearance.color}}><Sparkles size={21}/></button></div><Btn secondary onClick={() => go('appearance')}>Customize widget <ArrowRight size={17}/></Btn><button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}><RefreshCw size={14}/> Refresh configuration</button></Card></div>
+    </>;
+}
+function Appearance({ notify, workspaceSlug = '' }: Props) {
+    const [widget, setWidget] = useState<WidgetConfig | null>(null); const [color, setColor] = useState('#286BFF'); const [greeting, setGreeting] = useState(''); const [name, setName] = useState(''); const [position, setPosition] = useState<'left'|'right'>('right'); const [theme, setTheme] = useState('Light'); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setWidget(null); setLoading(true); setError(''); getWidgetConfig(workspaceSlug, undefined, controller.signal).then(config => { if (!controller.signal.aborted) { setWidget(config); setColor(config.appearance.color); setGreeting(config.appearance.welcomeMessage); setName(config.appearance.name); setPosition(config.appearance.position); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Widget appearance could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    async function save() { if (!widget || busy) return; setBusy(true); setError(''); try { const saved = await saveWidgetConfig(workspaceSlug, { assistantId: widget.assistantId, enabled: widget.enabled, allowedDomains: widget.allowedDomains, appearance: { ...widget.appearance, color, welcomeMessage: greeting, name, position } }); setWidget(saved); notify('Widget appearance saved.'); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Widget appearance could not be saved.'); } finally { setBusy(false); } }
+    return <><PageHeader eyebrow="Widget / Customize" title="Widget Appearance" desc="Edit supported appearance settings and preview the current form values." action={<Btn disabled={!widget || busy} onClick={() => void save()}><Check size={17}/>{busy ? 'Saving…' : 'Save appearance'}</Btn>}/>{error && <Notice tone="amber">{error}</Notice>}{loading && <Empty title="Loading widget appearance…"/>}{!loading && !widget && !error && <Empty title="Widget configuration unavailable" desc="No saved widget settings were returned for this workspace."/>}
+        {widget && <div className="appearance-grid"><Card className="form-card"><SectionHeader title="Appearance settings"/><div className="field"><span>Theme preview</span><div className="filter-pills">{['Light','Dark'].map(value => <button type="button" className={'filter-pill '+(value===theme?'active':'')} onClick={() => setTheme(value)} key={value}>{value}</button>)}</div><small>Theme is preview-only; the widget API does not persist a theme field.</small></div><div className="field"><span>Primary color</span><div className="color-field"><input aria-label="Pick primary color" type="color" value={color} onChange={event => setColor(event.target.value)}/><input aria-label="Primary color value" value={color} onChange={event => setColor(event.target.value)}/></div></div><label className="field"><span>Launcher position</span><select value={position} onChange={event => setPosition(event.target.value as 'left'|'right')}><option value="right">Bottom right</option><option value="left">Bottom left</option></select></label><label className="field"><span>Welcome message</span><textarea value={greeting} onChange={event => setGreeting(event.target.value)}/></label><label className="field"><span>Assistant display name</span><input value={name} onChange={event => setName(event.target.value)}/></label><div className="detail-row bordered"><span>Widget enabled</span><strong>{widget.enabled ? 'Yes' : 'No'}</strong></div><div className="detail-row bordered"><span>Allowed domains</span><strong>{widget.allowedDomains.join(', ') || 'None'}</strong></div><Notice tone="amber">Branding controls are not exposed by the current widget configuration API.</Notice></Card><Card className="widget-preview" style={{background:theme==='Dark'?'#14213b':'#ecf3ff'}}><SectionHeader title="Live preview · Desktop"/><div className="website-mock browser-large"><div className="mock-browser-title">{widget.allowedDomains[0] ?? 'Allowed domain unavailable'}</div><h3>Widget preview</h3><p>Preview updates from current appearance fields.</p><div className="floating-widget"><div className="floating-widget-head" style={{background:color}}><strong>{name}</strong><small>{widget.enabled ? 'Enabled' : 'Disabled'}</small></div><p>{greeting}</p><div className="filter-pills">{widget.appearance.suggestions.map(item => <Badge key={item}>{item}</Badge>)}</div><div className="widget-input">Type your message… <Send size={14}/></div></div><span className="chat-floating" style={{background:color,left:position==='left'?13:undefined,right:position==='right'?13:undefined}}><Sparkles size={21}/></span></div></Card></div>}
+    </>;
+}
+function Conversations({ go, workspaceSlug = '' }: Props) {
+    const [q, setQ] = useState(''); const [items, setItems] = useState<InboxConversation[]>([]); const [selectedId, setSelectedId] = useState(''); const [detail, setDetail] = useState<InboxDetail | null>(null); const [draft, setDraft] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [retry, setRetry] = useState(0); const [working, setWorking] = useState(false);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setItems([]); setSelectedId(''); setDetail(null); setLoading(true); setError(''); getConversations(workspaceSlug, { page: 1, pageSize: 30, search: q || undefined }, controller.signal).then(result => { if (!controller.signal.aborted) { setItems(result.items); setSelectedId(current => result.items.some(item => item.id === current) ? current : result.items[0]?.id ?? ''); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Conversations could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, q, retry]);
+    useEffect(() => { if (!workspaceSlug || !selectedId) { setDetail(null); return; } const controller = new AbortController(); setDetail(null); getConversation(workspaceSlug, selectedId, controller.signal).then(result => { if (!controller.signal.aborted) setDetail(result); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Conversation details could not be loaded.'); }); void markConversationRead(workspaceSlug, selectedId).catch(() => undefined); return () => controller.abort(); }, [workspaceSlug, selectedId]);
+    async function addNote(event: React.FormEvent) { event.preventDefault(); const content = draft.trim(); if (!content || !selectedId || working) return; setWorking(true); setError(''); try { await addConversationNote(workspaceSlug, selectedId, content); setDraft(''); const refreshed = await getConversation(workspaceSlug, selectedId); setDetail(refreshed); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Internal note could not be saved.'); } finally { setWorking(false); } }
+    const active = items.find(item => item.id === selectedId);
+    return <><PageHeader eyebrow="Support / Inbox" title="Conversations" desc="Review authorized assistant interactions and their actual message history." action={<Btn secondary onClick={() => go('handoff')}><Headset size={16}/> Handoff center</Btn>}/>
+        <div className="conversation-grid"><Card className="inbox-list"><SectionHeader title="All conversations" action={<Badge>{items.length}</Badge>}/><FilterInput value={q} onChange={setQ} placeholder="Search conversations"/>{items.map(item => <button key={item.id} className={'inbox-row ' + (selectedId === item.id ? 'active' : '')} onClick={() => setSelectedId(item.id)}><span className="avatar">{(item.customerReference || '?').slice(0, 2).toUpperCase()}</span><div><strong>{item.lastMessagePreview || item.customerReference}</strong><p>{item.lastMessagePreview || 'No message preview'}</p><small>{item.channel} · {item.state}</small></div></button>)}{loading && <Empty title="Loading conversations…"/>}{!loading && !error && items.length === 0 && <Empty title="No conversations" desc="No conversations were returned for this workspace."/>}{error && <Notice tone="amber"><span>{error} <button type="button" className="text-link" onClick={() => setRetry(n => n + 1)}>Retry</button></span></Notice>}</Card>
+            <Card className="transcript"><div className="chat-head"><div><h3>{active?.lastMessagePreview || 'Conversation'}</h3><p>{active?.assistant.name ?? 'Assistant unavailable'} · {active?.channel ?? '—'}</p></div><Badge>{active?.state ?? 'Select a conversation'}</Badge></div><div className="chat-messages">{detail?.messages.map(message => <div key={message.id} className={'chat-message ' + (message.kind === 'VISITOR' ? 'visitor' : 'assistant')}><small>{message.author?.name || message.kind}</small><p>{message.content}</p><small>{new Date(message.createdAt).toLocaleString()}</small></div>)}{!detail && <Empty title={selectedId ? 'Loading messages…' : 'Select a conversation'}/>}</div><form className="chat-compose" onSubmit={addNote}><input placeholder="Add an internal note…" value={draft} onChange={event => setDraft(event.target.value)} disabled={!detail?.permissions?.canManage || working}/><button title="Add internal note" type="submit" disabled={!draft.trim() || !detail?.permissions?.canManage || working}><Send size={17}/></button></form><small>Customer replies are unavailable through the current conversation API.</small></Card>
+            <Card className="chat-context"><SectionHeader title="Conversation context"/><span className="avatar large-avatar">{(active?.customerReference || '?').slice(0, 2).toUpperCase()}</span><h3>{active?.customerReference ?? '—'}</h3><Badge>{active?.state ?? '—'}</Badge>{[['Channel', active?.channel ?? '—'], ['Assistant', active?.assistant.name ?? '—'], ['Assigned to', active?.assignee?.name ?? 'Unassigned'], ['Messages', detail?.messageTotal ?? '—'], ['Permissions', detail?.permissions?.canManage ? 'Manager' : 'Read only']].map(([key, value]) => <div className="kv" key={key}><small>{String(key).toUpperCase()}</small><strong>{value}</strong></div>)}<Btn secondary className="full" onClick={() => go('handoff')}>Open handoff center</Btn></Card></div>
+    </>;
+}
+function Handoff({ go, workspaceSlug = '', openTicket }: Props) {
+    const [data, setData] = useState<TicketPage | null>(null); const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [priority, setPriority] = useState(''); const [page, setPage] = useState(1); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setData(null); setLoading(true); setError(''); getTickets(workspaceSlug, { page, pageSize: 25, search, status, priority }, controller.signal).then(result => { if (!controller.signal.aborted) setData(result); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Handoff cases could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, page, search, status, priority, retry]);
+    const rows = data?.items ?? [];
+    return <><PageHeader eyebrow="Support / Human Handoff" title="Human Handoff Center" desc="Manage workspace escalation cases using their live status and assignments." action={<div className="action-line"><Btn secondary onClick={() => go('handoff-rules')}>Handoff rules <Settings size={16}/></Btn><button className="text-link" type="button" onClick={() => setRetry(value => value + 1)}><RefreshCw size={15}/> Refresh</button></div>}/>
+        {data && <Metrics items={[{ label: 'Total cases', value: String(data.summary.total), change: 'Current workspace queue', icon: Headset }, { label: 'Open', value: String(data.summary.OPEN), change: 'Live ticket status', icon: Clock3 }, { label: 'Active', value: String(data.summary.ACTIVE), change: 'Live ticket status', icon: Users }, { label: 'Pending', value: String(data.summary.PENDING), change: 'Live ticket status', positive: false, icon: AlertCircle }]}/>}
+        {error && <Notice tone="amber">{error}</Notice>}
+        <div className="filter-line"><FilterInput value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder="Search cases..."/><select aria-label="Filter case status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{['OPEN','ACTIVE','PENDING','CLOSED'].map(value => <option key={value}>{value}</option>)}</select><select aria-label="Filter priority" value={priority} onChange={event => setPriority(event.target.value)}><option value="">All priorities</option>{['LOW','MEDIUM','HIGH','URGENT'].map(value => <option key={value}>{value}</option>)}</select></div>
+        <Card className="major"><SectionHeader title="Escalated conversations" desc="Cases returned by the authorized ticket API."/><TableWrap><thead><tr><th>Case</th><th>Subject</th><th>Priority</th><th>Assigned to</th><th>Updated</th><th>Channel</th><th/></tr></thead><tbody>{rows.map(item => <tr key={item.id} className="selectable" onClick={() => openTicket?.(item.id)}><td className="link-cell">{item.reference}</td><td className="semi">{item.title}</td><td><TinyBadge status={item.priority}/></td><td>Open case for assignment</td><td>{new Date(item.updatedAt).toLocaleString()}</td><td>{item.conversation.channel}</td><td><ChevronRight size={16}/></td></tr>)}</tbody></TableWrap>{loading && <Empty title="Loading handoff cases…"/>}{!loading && !error && rows.length === 0 && <Empty title="No handoff cases" desc="No cases were returned for this workspace and filter."/>}<div className="table-footer"><span>{data ? `${data.total} total cases · Page ${page}` : 'Case count unavailable'}</span><div className="action-line"><button className="text-link" type="button" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button><button className="text-link" type="button" disabled={!data || page * data.pageSize >= data.total} onClick={() => setPage(value => value + 1)}>Next</button></div></div></Card>
+    </>;
+}
+function CaseDetail({ go, notify, workspaceSlug = '', recordId = '' }: Props) {
+    const [detail, setDetail] = useState<TicketDetail | null>(null); const [list, setList] = useState<TicketPage | null>(null); const [reply, setReply] = useState(''); const [note, setNote] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug || !recordId || recordId === 'source-preview') { setDetail(null); setError('Select a handoff case from the live queue.'); return; } const controller = new AbortController(); setDetail(null); setError(''); Promise.all([getTicket(workspaceSlug, recordId, controller.signal), getTickets(workspaceSlug, { page: 1, pageSize: 25 }, controller.signal)]).then(([ticket, queue]) => { if (!controller.signal.aborted) { setDetail(ticket); setList(queue); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Handoff case could not be loaded.'); }); return () => controller.abort(); }, [workspaceSlug, recordId, retry]);
+    async function mutate(input: { status?: string; priority?: string; assigneeUserId?: string | null }) { if (!recordId || busy) return; setBusy(true); setError(''); try { if (input.assigneeUserId !== undefined) await assignTicket(workspaceSlug, recordId, input.assigneeUserId); else await updateTicket(workspaceSlug, recordId, input); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Case update failed.'); } finally { setBusy(false); } }
+    async function sendReply(event: React.FormEvent) { event.preventDefault(); if (!reply.trim() || busy) return; setBusy(true); setError(''); try { const result = await replyToTicket(workspaceSlug, recordId, reply.trim(), crypto.randomUUID()); notify(`Reply ${result.deliveryState.toLowerCase().replaceAll('_', ' ')}.`); setReply(''); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Reply could not be sent.'); } finally { setBusy(false); } }
+    async function saveNote(event: React.FormEvent) { event.preventDefault(); if (!note.trim() || busy) return; setBusy(true); setError(''); try { await addTicketNote(workspaceSlug, recordId, note.trim()); setNote(''); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Internal note could not be saved.'); } finally { setBusy(false); } }
+    const messages: TicketMessage[] = detail?.messages ?? [];
+    return <><PageHeader eyebrow="Support / Handoff / Case" title={detail?.reference ?? 'Handoff Case'} desc={detail?.title ?? 'Actual case data from the authorized support API.'} action={<Btn secondary onClick={() => go('handoff')}>Back to queue</Btn>}/>
+        {error && <Notice tone="amber">{error}</Notice>}{!detail && !error && <Empty title="Loading handoff case…"/>}
+        {detail && <><div className="top-chip"><Badge>{detail.status}</Badge><Badge tone={detail.priority === 'HIGH' || detail.priority === 'URGENT' ? 'amber' : 'neutral'}>Priority: {detail.priority}</Badge></div><div className="two-col content-sidebar"><Card><SectionHeader title="Conversation timeline" desc={detail.assistant?.name ? `Transferred from ${detail.assistant.name}` : 'Case conversation history'}/>{messages.length ? <div className="case-thread">{messages.map(message => <div className={'message ' + (message.kind === 'CUSTOMER' ? 'visitor' : 'assistant')} key={message.id}><small>{message.kind} · {message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Time unavailable'}</small><p>{message.content}</p></div>)}</div> : <Empty title="No case messages" desc="The ticket API returned no transcript messages."/>}
+            <form onSubmit={sendReply} className="field"><label>Reply to customer</label><textarea value={reply} onChange={event => setReply(event.target.value)} placeholder="Write your message…"/><Btn type="submit" disabled={busy || !reply.trim()}>Send response</Btn></form><form onSubmit={saveNote} className="field"><label>Internal note</label><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add an internal note…"/><Btn secondary type="submit" disabled={busy || !note.trim()}>Save note</Btn></form></Card><Card><SectionHeader title="Case details"/><div className="detail-row"><span>Reference</span><strong>{detail.reference ?? recordId}</strong></div><div className="detail-row"><span>Channel</span><strong>{detail.conversation?.channel ?? 'Unavailable'}</strong></div><div className="detail-row"><span>Priority</span><select aria-label="Case priority" disabled={busy} value={detail.priority ?? 'MEDIUM'} onChange={event => void mutate({ priority: event.target.value })}>{['LOW','MEDIUM','HIGH','URGENT'].map(value => <option key={value}>{value}</option>)}</select></div><div className="detail-row"><span>Status</span><select aria-label="Case status" disabled={busy} value={detail.status ?? 'OPEN'} onChange={event => void mutate({ status: event.target.value })}>{['OPEN','ACTIVE','PENDING','CLOSED'].map(value => <option key={value}>{value}</option>)}</select></div><div className="detail-row"><span>Assigned to</span><select aria-label="Assign case" disabled={busy} value={detail.assignee?.id ?? ''} onChange={event => void mutate({ assigneeUserId: event.target.value || null })}><option value="">Unassigned</option>{list?.assigneeOptions.map(person => <option key={person.userId} value={person.userId}>{person.name ?? person.role}</option>)}</select></div><Btn secondary className="full" onClick={() => go('handoff-rules')}>Handoff rules</Btn><Notice>Role and assignment authorization are enforced by the ticket API.</Notice></Card></div></>}
+    </>;
+}
+function HandoffRules(): JSX.Element { return <><PageHeader eyebrow="Support / Handoff / Rules" title="Handoff Rules" desc="Review escalation policy availability for this workspace."/><div className="two-col content-sidebar"><Card><SectionHeader title="Automatic escalation" desc="The current backend exposes ticket operations but no workspace routing-rules read or save endpoint."/>{[['Customer explicitly asks for a human','Unavailable from current API'],['Trusted knowledge unavailable','Unavailable from current API'],['Payment or sensitive account issue','Unavailable from current API'],['Repeated unresolved turns','Unavailable from current API'],['Low model certainty','Unavailable from current API']].map(([label,description])=><div className="toggle-row" key={label}><div><strong>{label}</strong><p>{description}</p></div><button className="toggle" type="button" role="switch" aria-checked="false" disabled aria-label={`${label} unavailable`}><span/></button></div>)}<Notice tone="amber">Routing rules are not changeable here because no existing frontend API exposes their persisted configuration.</Notice></Card><Card><SectionHeader title="Routing and coverage" desc="No policy values were returned by an existing API."/>{['Default team','Priority rules','Working hours','After-hours behavior','SLA window','Notifications'].map(label=><div className="detail-row bordered" key={label}><span>{label}</span><strong>Unavailable</strong></div>)}</Card></div></> }
+function Analytics({ go, workspaceSlug = '' }: Props) {
+    const data = useOverviewData(workspaceSlug); const summary = data.summary; const totals = summary?.sales?.currencyTotals ?? []; const total = totals[0]; const salesValue = totals.length === 1 && total ? formatProductMoney(total.netSales, total.currency) : totals.length > 1 ? 'Multiple currencies' : 'Unavailable';
+    return <><PageHeader eyebrow="Insights / Analytics" title="Analytics" desc="Workspace metrics currently exposed by the existing summary and commerce APIs." action={<Btn secondary onClick={() => go('sales')}><ArrowUpRight size={16}/> View sales data</Btn>}/>
+        <Metrics items={[{ label: 'Conversations', value: data.loading ? '…' : data.conversations?.total.toLocaleString() ?? (data.failed.conversations ? 'Unavailable' : '—'), change: 'Current API total; date range unavailable', icon: MessageSquare }, { label: 'AI resolution rate', value: 'Unavailable', change: 'No resolution analytics API', positive: false, icon: Bot }, { label: 'Average response', value: 'Unavailable', change: 'No latency metrics API', positive: false, icon: Clock3 }, { label: 'Open support cases', value: data.loading ? '…' : data.openTickets?.summary.OPEN.toLocaleString() ?? (data.failed.openTickets ? 'Unavailable' : '—'), change: 'Ticket API open status', icon: Headset }]}/>
+        <div className="two-col major"><ChartBlock title="Sales & conversations" desc="Time series are not returned by current APIs." values={[]} go={() => go('sales')}/><Card><SectionHeader title="Commerce summary" desc="Current authorized sales summary."/><div className="detail-row bordered"><span>Net sales</span><strong>{salesValue}</strong></div><div className="detail-row bordered"><span>Orders in summary</span><strong>{summary?.commerce?.orderCount ?? 'Unavailable'}</strong></div><div className="detail-row bordered"><span>Sales period</span><strong>{summary?.sales?.from && summary.sales.to ? `${summary.sales.from} – ${summary.sales.to}` : 'Unavailable'}</strong></div><Notice tone="amber">Conversion attribution, AI resolution and topic breakdown are unavailable from existing APIs.</Notice></Card></div>
+        <Card className="major"><SectionHeader title="Topic breakdown" desc="No topic aggregation endpoint is available."/><Empty title="Topic analytics unavailable" desc="The dashboard will not infer or fabricate question categories."/></Card>
+    </>;
+}
+function Billing({ go, workspaceSlug = '' }: Props) {
+    const [billing, setBilling] = useState<BillingUsage | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setBilling(null); setLoading(true); setError(''); getBillingUsage(workspaceSlug, controller.signal).then(result => { if (!controller.signal.aborted) setBilling(result); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Billing usage could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    const plan = billing?.subscription.plan; const formatPrice = () => { if (!plan?.priceMinor || !plan.currency) return '—'; try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: plan.currency }).format(plan.priceMinor / 100); } catch { return '—'; } };
+    return <><PageHeader eyebrow="Insights / Billing" title="Billing & Plans" desc="Subscription status and usage returned for this workspace." action={<Btn secondary onClick={() => go('invoices')}>Billing history <ArrowRight size={15}/></Btn>}/>
+        {error && <Notice tone="amber">{error}</Notice>}
+        <Metrics items={[{ label: 'Plan', value: loading ? '…' : plan?.displayName ?? 'Unavailable', change: billing?.subscription.state ?? 'No subscription data', icon: CreditCard }, { label: 'Subscription', value: loading ? '…' : billing?.subscription.state ?? 'Unavailable', change: billing?.subscription.currentPeriodEnd ? `Period ends ${new Date(billing.subscription.currentPeriodEnd).toLocaleDateString()}` : 'Period end unavailable', icon: BadgeCheck }, { label: 'Assistant messages', value: loading ? '…' : billing ? String(billing.usage.assistantMessages) : 'Unavailable', change: 'Current billing period', icon: MessageSquare }, { label: 'Playground sessions', value: loading ? '…' : billing ? String(billing.usage.playgroundConversations) : 'Unavailable', change: billing?.usage.tokenAvailability ?? 'Usage unavailable', icon: Bot }]}/>
+        <div className="two-col major billing-columns"><Card className="current-plan"><Badge>{plan ? billing?.subscription.state : 'Plan unavailable'}</Badge><h2>{plan?.displayName ?? 'Subscription details unavailable'}</h2><p>{plan?.interval ?? 'Billing interval unavailable'}</p><div className="price-display">{formatPrice()} <small>{plan?.currency ? `per ${plan.interval ?? 'period'}` : 'Price unavailable'}</small></div><div className="detail-row bordered"><span>Billing provider</span><strong>{billing?.billingProvider ?? 'Unavailable'}</strong></div><div className="detail-row bordered"><span>Period start</span><strong>{billing?.subscription.currentPeriodStart ? new Date(billing.subscription.currentPeriodStart).toLocaleDateString() : '—'}</strong></div><div className="detail-row bordered"><span>Period end</span><strong>{billing?.subscription.currentPeriodEnd ? new Date(billing.subscription.currentPeriodEnd).toLocaleDateString() : '—'}</strong></div><Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={15}/> Refresh billing</Btn></Card><Card><SectionHeader title="Usage" desc="Usage totals returned by the billing endpoint; plan limits are not exposed here."/><div className="detail-row bordered"><span>Assistant messages</span><strong>{billing?.usage.assistantMessages ?? '—'}</strong></div><div className="detail-row bordered"><span>Playground conversations</span><strong>{billing?.usage.playgroundConversations ?? '—'}</strong></div><div className="detail-row bordered"><span>Token-reported responses</span><strong>{billing?.usage.tokenReportedResponses ?? '—'}</strong></div><div className="detail-row bordered"><span>Input / output tokens</span><strong>{billing?.usage.inputTokens ?? '—'} / {billing?.usage.outputTokens ?? '—'}</strong></div><Notice tone="amber">Plan limits, invoices, and subscription change operations are not available from the current billing API.</Notice></Card></div>
+    </>;
+}
+function Invoices({ go }: Props) { return <><PageHeader eyebrow="Billing / History" title="Billing History" desc="Review invoice records and payment status returned by the billing provider." action={<Btn secondary onClick={() => go('billing')}>Back to billing</Btn>}/><Metrics items={[{ label: 'Invoices', value: 'Unavailable', change: 'No invoice history API', positive: false, icon: Receipt }, { label: 'Payment status', value: 'Unavailable', change: 'No invoice records returned', positive: false, icon: CreditCard }, { label: 'Latest invoice', value: '—', change: 'Unavailable', positive: false, icon: FileText }, { label: 'Next billing', value: '—', change: 'Unavailable', positive: false, icon: Clock3 }]}/><Card className="major"><SectionHeader title="Invoice history" desc="The existing frontend billing API does not expose invoice records or downloads."/><Empty title="Invoice history unavailable" desc="No invoices or payment history are fabricated here. A read-only invoice list/download API is required to populate this page."/></Card></> }
+function SettingsPage({ go, notify, workspaceSlug = '', workspaceData, onWorkspaceSaved }: Props) {
+    const [name, setName] = useState(''); const [websiteUrl, setWebsiteUrl] = useState(''); const [businessType, setBusinessType] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+    useEffect(() => { setName(workspaceData?.name ?? ''); setWebsiteUrl(workspaceData?.websiteUrl ?? ''); setBusinessType(workspaceData?.businessType ?? ''); }, [workspaceSlug, workspaceData?.name, workspaceData?.websiteUrl, workspaceData?.businessType]);
+    async function save() { if (!workspaceSlug || busy) return; setBusy(true); setError(''); try { const updated = await updateWorkspace(workspaceSlug, { name: name.trim(), websiteUrl: websiteUrl.trim() || undefined, businessType: businessType.trim() || undefined }); onWorkspaceSaved?.(updated); notify('Workspace settings saved.'); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Workspace settings could not be saved.'); } finally { setBusy(false); } }
+    return <><PageHeader eyebrow="Admin / Workspace" title="Workspace Settings" desc="Manage this workspace’s name, website and business type." action={<Btn disabled={busy || !name.trim()} onClick={() => void save()}><Check size={16}/>{busy ? 'Saving…' : 'Save changes'}</Btn>}/>{error && <Notice tone="amber">{error}</Notice>}<div className="settings-grid"><Card className="settings-menu"><SectionHeader title="Settings"/>{[['General','Workspace information'],['Team & access','Membership & roles'],['AI preferences','Assistant configuration'],['Notifications','Unavailable from current API'],['Security','Managed by authenticated session'],['Billing','Plan and usage']].map(([label,desc],i)=><button type="button" className={'settings-menu-item '+(i===0?'active':'')} onClick={() => { if (i===1) go('team'); else if (i===5) go('billing'); }} key={label}><strong>{label}</strong><small>{desc}</small></button>)}</Card><Card className="settings-form"><SectionHeader title="General settings" desc="Values are loaded from the selected authorized workspace."/><label className="field"><span>Workspace name</span><input value={name} onChange={event => setName(event.target.value)}/></label><label className="field"><span>Website URL</span><input value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)}/></label><label className="field"><span>Business type</span><input value={businessType} onChange={event => setBusinessType(event.target.value)}/></label><div className="detail-row bordered"><span>Timezone</span><strong>{workspaceData?.timezone ?? 'Unavailable'}</strong></div><div className="detail-row bordered"><span>Locale</span><strong>{workspaceData?.locale ?? 'Unavailable'}</strong></div><Notice tone="amber">Personal profile editing and notification/security preference APIs are not available in the current frontend service layer.</Notice><Btn disabled={busy || !name.trim()} onClick={() => void save()}>{busy ? 'Saving…' : 'Save changes'}</Btn></Card></div></>;
+}
+function Team({ workspaceSlug = '' }: Props) {
+    const [members, setMembers] = useState<WorkspaceMember[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [role, setRole] = useState(''); const [retry, setRetry] = useState(0);
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setMembers([]); setLoading(true); setError(''); listWorkspaceMembers(workspaceSlug, 1, controller.signal).then(result => { if (!controller.signal.aborted) { setMembers(result.members); setRole(result.currentUserRole); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Workspace members could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    return <><PageHeader eyebrow="Admin / Access" title="Team & Permissions" desc="View authorized workspace memberships and roles." action={<Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={15}/> Refresh</Btn>}/>{error && <Notice tone="amber">{error}</Notice>}<Metrics items={[{ label: 'Members', value: loading ? '…' : error ? 'Unavailable' : String(members.length), change: 'Current workspace membership', icon: Users }, { label: 'Current role', value: role || '—', change: 'From membership API', icon: Shield }, { label: 'Invitations', value: 'Unavailable', change: 'No invitation listing API', positive: false, icon: Clock3 }, { label: 'Role changes', value: 'Unavailable', change: 'No role mutation API', positive: false, icon: BadgeCheck }]}/><Card className="major"><SectionHeader title="Workspace members" desc="Membership details returned by the authorized workspace API."/><TableWrap><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th></tr></thead><tbody>{members.map(member => <tr key={member.id}><td className="semi">{member.name || 'Name unavailable'}</td><td>Not exposed by members API</td><td>{member.role}</td><td><TinyBadge status="Member"/></td><td>{member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}</td></tr>)}</tbody></TableWrap>{loading && <Empty title="Loading workspace members…"/>}{!loading && !error && members.length === 0 && <Empty title="No members returned" desc="No workspace membership records are available."/>}</Card><Notice tone="amber">Invitations, role changes and member removal are unavailable because the existing frontend API exposes membership listing only.</Notice></>;
+}
+function Sync({ go, notify, workspaceSlug = '', workspaceRole = '' }: Props) {
+    const [connector, setConnector] = useState<ConnectorInstance | null>(null); const [items, setItems] = useState<Product[]>([]); const [total, setTotal] = useState<number | null>(null); const [jobs, setJobs] = useState<SyncJob[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [working, setWorking] = useState(false); const [retry, setRetry] = useState(0); const manager = workspaceRole === 'owner' || workspaceRole === 'admin';
+    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setConnector(null); setItems([]); setJobs([]); setTotal(null); setLoading(true); setError(''); getConnectors(workspaceSlug, controller.signal).then(async connections => { const shop = connections.items.find(item => item.connectorId === 'shopify_v1' && item.state === 'CONNECTED') ?? connections.items.find(item => item.connectorId === 'shopify_v1'); if (controller.signal.aborted) return; setConnector(shop ?? null); if (shop?.integrationConnectionId) { const [productsResponse, history] = await Promise.all([getProducts(workspaceSlug, 1, '', controller.signal, shop.integrationConnectionId), getConnectorSyncHistory(workspaceSlug, shop.id, controller.signal)]); if (!controller.signal.aborted) { setItems(productsResponse.items); setTotal(productsResponse.total); setJobs(history.items); } } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Sync data could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
+    const connected = connectorIsActive(connector);
+    async function sync() { if (!connector || !connected || !manager || working) return; setWorking(true); setError(''); try { const job = await queueConnectorSync(workspaceSlug, connector.id, 'PRODUCTS', 'FULL'); notify(`Product sync queued · ${job.state}`); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Product sync could not be queued.'); } finally { setWorking(false); } }
+    return <><PageHeader eyebrow="Integrations / Shopify / Sync" title="Shopify Product Sync Monitor" desc="Review actual synchronized products and connector job history." action={<div className="action-line"><Btn secondary onClick={() => go('shopify')}>Back to Shopify</Btn><Btn disabled={!connected || !manager || working} onClick={() => void sync()}>{working ? 'Queueing…' : 'Sync products'} <RefreshCw size={15}/></Btn></div>}/>{error && <Notice tone="amber">{error}</Notice>}
+        <Metrics items={[{ label: 'Catalog products', value: loading ? '…' : total === null ? 'Unavailable' : String(total), change: 'Authorized product API', icon: PackageCheck }, { label: 'Loaded on this page', value: loading ? '…' : String(items.length), change: '25 item page', icon: Package }, { label: 'AI index state', value: 'Unavailable', change: 'No product-index API', positive: false, icon: Database }, { label: 'Latest sync job', value: jobs[0]?.state ?? '—', change: jobs[0]?.createdAt ? new Date(jobs[0].createdAt).toLocaleString() : 'No job returned', icon: RefreshCw }]}/>
+        <Card className="major">
+            <SectionHeader
+                title="Sync activity & products"
+                desc={connector ? `Connector state: ${connector.state}` : error ? 'Shopify connector status is unavailable.' : loading ? 'Loading Shopify connector status…' : 'No Shopify connector is listed for this workspace.'}
+            />
+            <TableWrap>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th>Inventory</th>
+                        <th>AI index</th>
+                        <th>Last sync</th>
+                        <th>Catalog status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {items.map(product => (
+                        <tr key={product.id}>
+                            <td className="semi">{product.name}</td>
+                            <td>{product.sku ?? '—'}</td>
+                            <td>{product.inventory ?? '—'}</td>
+                            <td>Unavailable</td>
+                            <td>{product.syncedAt ? new Date(product.syncedAt).toLocaleString() : '—'}</td>
+                            <td>
+                                <TinyBadge status={product.rawStatus ?? product.availabilityStatus ?? 'Unknown'} />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </TableWrap>
+            {loading && <Empty title="Loading sync data…" />}
+            {!loading && !error && items.length === 0 && (
+                <Empty
+                    title={connector ? 'No synced products' : 'No Shopify products available'}
+                    desc={connector ? 'The selected Shopify connection has no product records returned by the Products API.' : 'Connect a Shopify store before viewing its catalog.'}
+                />
+            )}
+        </Card>
+        <Card className="major"><SectionHeader title="Connector job history" desc="Only returned sync jobs are listed."/>{jobs.length ? jobs.map(job => <div className="detail-row bordered" key={job.id}><span>{job.resourceType} · {job.mode}</span><strong>{job.state} · {new Date(job.createdAt).toLocaleString()}</strong></div>) : <Empty title="No sync jobs returned"/>}</Card>
+    </>;
+}
+export default function Pages({ page, go, notify, workspaceSlug = '', workspaceRole = '', workspaceData, onWorkspaceSaved, recordId = '', preferredAssistantId = '', openProduct, openOrder, openAssistant, createAssistant, openKnowledge, openTicket, openCrawl, openShopify }: { page: PageId } & Props) {
+    switch (page) {
+        case 'overview': return <Overview go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'products': return <Products go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} openProduct={openProduct} />;
+        case 'product-detail': return <ProductDetail go={go} notify={notify} workspaceSlug={workspaceSlug} recordId={recordId} />;
+        case 'sales': return <Sales go={go} notify={notify} workspaceSlug={workspaceSlug} openOrder={openOrder} />;
+        case 'order-detail': return <OrderDetail go={go} notify={notify} workspaceSlug={workspaceSlug} recordId={recordId} />;
+        case 'assistants': return <Assistants go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} recordId={recordId} openAssistant={openAssistant} createAssistant={createAssistant} />;
+        case 'train': return <Train go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'behavior': return <Behavior go={go} notify={notify} workspaceSlug={workspaceSlug} preferredAssistantId={preferredAssistantId} />;
+        case 'playground': return <Playground go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} />;
+        case 'knowledge': return <Knowledge go={go} notify={notify} workspaceSlug={workspaceSlug} openKnowledge={openKnowledge} />;
+        case 'source-detail': return <SourceDetail go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} recordId={recordId} />;
+        case 'crawler': return <Crawler go={go} notify={notify} workspaceSlug={workspaceSlug} openCrawl={openCrawl} />;
+        case 'crawl-detail': return <CrawlDetail go={go} notify={notify} workspaceSlug={workspaceSlug} recordId={recordId} />;
+        case 'builder': return <Builder workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} workspaceData={workspaceData} />;
+        case 'integrations': return <Integrations go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} openShopify={openShopify} />;
+        case 'shopify': return <Shopify go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} recordId={recordId} openShopify={openShopify} />;
+        case 'install': return <Install go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'appearance': return <Appearance go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'conversations': return <Conversations go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'handoff': return <Handoff go={go} notify={notify} workspaceSlug={workspaceSlug} openTicket={openTicket} />;
+        case 'case-detail': return <CaseDetail go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} recordId={recordId} />;
+        case 'handoff-rules': return <HandoffRules />;
+        case 'analytics': return <Analytics go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'billing': return <Billing go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'invoices': return <Invoices go={go} notify={notify} />;
+        case 'settings': return <SettingsPage go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceData={workspaceData} onWorkspaceSaved={onWorkspaceSaved} />;
+        case 'team': return <Team go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+        case 'sync': return <Sync go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} />;
+        default: return <Overview go={go} notify={notify} workspaceSlug={workspaceSlug} />;
+    }
+}

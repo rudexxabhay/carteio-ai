@@ -1,0 +1,353 @@
+{
+  "createdAtUtc": "2026-10-24T08:55:13.727799+00:00",
+  "branch": "uat",
+  "head": "3928901f24aad1f82919c10b901dd03b32b0535b",
+  "checkpoint": "/tmp/carteio-phase00-20261024T072637Z",
+  "baselineArchivedFiles": 523,
+  "unchangedArchivedFiles": 510,
+  "modifiedExistingFiles": [
+    {
+      "path": "backend/src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts",
+      "beforeSha256": "d763cf537dc5a8d67551258e026cf468809388180e35aea5b865278e792a0ac3",
+      "afterSha256": "7b6a0775a7e49b4d0eb2554e41cfde3e490f0caba423eaab2e8156fa8344d014",
+      "classification": "test"
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector-sync-worker.service.spec.ts",
+      "beforeSha256": "1a194cb802c9b29d45960f832063ebcecb1fede0aa79b4a08785ca3685da5a8d",
+      "afterSha256": "130c1fe1e6b49fae09eb96945adc1c29495a8b757c3679b83e3a3118777ddb6d",
+      "classification": "test"
+    },
+    {
+      "path": "backend/src/modules/workspaces/playground-diagnostics.spec.ts",
+      "beforeSha256": "9118714e6e85379afc1e77474eeb679be6667a7afd96679d65a31681ae7c7aad",
+      "afterSha256": "a04b0fd6efcf6b5ed0e85f5c39f9f6cf961b13ffc173c129aae4088dce0419fe",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/assistant.playground.spec.ts",
+      "beforeSha256": "53f6233f9b368f112e2ceeed939ab1cbba5eae131e0e80ea54389669fa2445f7",
+      "afterSha256": "85ef0c513caf3d62a07804cfd3f2288ed830362c232c8617e0a3262f800b00b3",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/assistant.service.spec.ts",
+      "beforeSha256": "f0f9313b0a8f9eea52100c64a83a0d2df0776aa1ae2ad99a40afc437af26a88d",
+      "afterSha256": "0e053617efce8ae55516f27f5e61a4b50c1f711483b247837e9f41eda40550ab",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/conversation-provider.spec.ts",
+      "beforeSha256": "fd9851dc7de56529ee3c39fce68f31b01b78e57e34675450f0fb27703a349724",
+      "afterSha256": "94a6a9ff8840ca85fd280de82a72118a8c8a2070063610b04a81f088d10aa3ab",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/health.e2e-spec.ts",
+      "beforeSha256": "c2f557cb17fcfed3c3a021f6b45d4f6297269c86917d2082884a23c67ca2645d",
+      "afterSha256": "6a1ef8b5baf091adb3b73e94ccecad64daa38491e153eec21ba626493d3a106f",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/knowledge-base.faq-import.spec.ts",
+      "beforeSha256": "574511c7b49db03647abcdc5900b122839b9971a91b60093ff2ef0f58db0cac8",
+      "afterSha256": "77acf5e680d0fc9d5110ef17b35b4cdc62ee6990d6e86c6a924d7d2515c371f4",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/knowledge-controller.routes.spec.ts",
+      "beforeSha256": "4ef8d5800b5b9b7db1408283667ac21fd339ef329f7b16cdcb693fdd007e18e0",
+      "afterSha256": "12320f4bdb0c7973817b5a0b05e958806f625f92e499a560ef72f0b0c4642f23",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/workspace.service.spec.ts",
+      "beforeSha256": "8b512e9ed533451fc0ac933c51886e8be3e67a961b3b907c52eb5dc5a1597f2d",
+      "afterSha256": "13987395d012f5db9441e26ed34dfc51e89af4223be9842f45a4dad1472f4aec",
+      "classification": "test"
+    },
+    {
+      "path": "docs/development-verification.md",
+      "beforeSha256": "85c98f91a7e69656bbdd89f649911f104d79477dd17d972bd8f5450aa54b7b7c",
+      "afterSha256": "d026fe896002a53b28e0f7bd303c59d529ab9e01f2dca0e24cd450a91dec5893",
+      "classification": "documentation"
+    },
+    {
+      "path": "frontend/src/tests/api-client.test.ts",
+      "beforeSha256": "6a606dfd08a5fbb58f57a97c72e5541a424b69809f591e176c297c1c38e83d0d",
+      "afterSha256": "99dee04721242eb98a8e90495d47c137e002b88bcc1d473867a14ae726a0a67d",
+      "classification": "test"
+    },
+    {
+      "path": "frontend/src/tests/widget-runtime.test.ts",
+      "beforeSha256": "27b8dfae6e0661a167a5b45950075133c704ca6fbc621842cc6fe71f6f16d209",
+      "afterSha256": "60dd5deadf6eb712c4a6f303c87b6de1d63a976d4d26637c2ba78ac25e2311c2",
+      "classification": "test"
+    }
+  ],
+  "newFiles": [
+    {
+      "path": "backend/jest.phase00.config.cjs",
+      "sha256": "9569fff6ebf7d5f05f255fe6e324de2bcdd279a82d9d1d2467bfd6ce3514a8bf",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/phase00-api-contracts.spec.ts",
+      "sha256": "c62e17d4897e90a65894b6fa44fe509eeffb100c951001688d4ffab431fe0c99",
+      "classification": "test"
+    },
+    {
+      "path": "backend/test/phase00-flow-storage.spec.ts",
+      "sha256": "1ac8fed8f107d577b5e742d5a0ba4cb534162478d9b0d5e9975eeb46540d6323",
+      "classification": "test"
+    },
+    {
+      "path": "docs/development/architecture-baseline.md",
+      "sha256": "e8281d3616bd5e1f38344d6dfdc065324f78a9e36505e445522802304a3dd2ce",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/capability-inventory.md",
+      "sha256": "bd436bc67c1600f18606e236c90bc2c587836bb7a56bccac0ad95d761cf80ca0",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/README.md",
+      "sha256": "e0bf8e42b7b85bf4da466cccd8c80ec26110ff39d9d258c7252b35da7ff69bb6",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/added-regressions.json",
+      "sha256": "a3c3cb49759af3fca973ae048e1afec42151a451c86b894cda9f0aa3970f0d87",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/backend-baseline.json",
+      "sha256": "5b3a7ab5196d708554390fb8ed21761bbcf5b72f1c60d04ba6055773640ce6aa",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/backend-latest-assertions.json",
+      "sha256": "eb1babe03f58bee2e6ed42cf2e65fae78d0035c3e8578b2a0c6ed1a1adce2205",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/backend-smoke-retry.json",
+      "sha256": "f0464a81a1a0d77a279353f7245988b4962b1bb904a79e4cc6cca0ea52a90a2b",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/baseline-summary.json",
+      "sha256": "85d8640145eaa30fec3e04b116979a834599f307a60626f67931bc060459108d",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/behavior-final.json",
+      "sha256": "5ab8b6cbe735d12ffd9c4ca3a926a141ce8aadcd5f0eb3822f3a4334a08de2ad",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/checkpoint-metadata.json",
+      "sha256": "aa8b132908d281565a6422de945dc925e38be0bb3f162eb578b49cb7309d43eb",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/contract-final.json",
+      "sha256": "8aec10e476b99c5715d32fe231d0f6a2fe0b991db6d3fb1f6f89ce0714978cab",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/executed-commands.json",
+      "sha256": "0b7de2da2f3da06337604cc4c00026c6bb209994736efc80ae97ff2736ec9d7d",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/flow-storage-retry.json",
+      "sha256": "75e8ead15dcede91bc048bffb62740145469af17df0af97249f7246159b0a9aa",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-active-regressions-final.json",
+      "sha256": "dc6cc93e049cd5cfc83096089b4e243980ba64336feb8b401380f76f0eba56e2",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-api-final.json",
+      "sha256": "21beb87842b89750bcd81cfe97466bbcab4e25b8c389b83c1edb45bc44cbe3a7",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-focused.json",
+      "sha256": "eb5a0fadf126947a6434a899d48800827f9a565f6af5c639c0ae1e3d2b864175",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-latest-assertions.json",
+      "sha256": "8b426bccb13a2f445e230130d219c8a010af23a90e70bc007965de3aeabb169c",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-protection.json",
+      "sha256": "5ed56d547663625f625d0d9498c29bcd3c3c1db770ded4eb6e6f533a0c7a5a7a",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-remaining-command.json",
+      "sha256": "1bf38026f62c386bce1a12095f32514716b7ff2e4b844a1368ee331339fc6582",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-remaining.json",
+      "sha256": "e21d0417c5fd1da893c2322331655ad3594c7bca501b5feb6612c2dfa0d3c4e4",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/frontend-threads-partial.json",
+      "sha256": "8ade4a1648684c870a3e1d7ca4c2ec58c1fdbf298d23ca107431ccdad160a9a1",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/git-status-before.txt",
+      "sha256": "26c2cdd1d2b34f69a879a40bc79fc695ff22d25e72e641f7fad526d45e11c96a",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/grounding-date-diagnostic.json",
+      "sha256": "5667f064e6ad0dd6c3f87272f5b96c794d6c49a87922312d928c8b6d55ce53d9",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/harness-recheck.json",
+      "sha256": "9c2f4f329bc90f39a638d40081e05d2dc270c7d0366f03e735b0623316f3414e",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/health-integration-final.json",
+      "sha256": "ff980e8df053d584a70a65dfa5bb054fdee8c2ecf0c66f5998bbcff9bd96880b",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/health-integration-recheck.json",
+      "sha256": "bf389f67e12e86125a43b0c9a89165cbdc1e6e42eb0adf28e0c568d1356f9b78",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/health-integration.json",
+      "sha256": "09b9e29a590500ed74814cdfa9f2a5de6ad91088ceafd14dc106649a9fac2b6a",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/offline-guard-final.tap",
+      "sha256": "2d4939dfe96a9a4a9cce9acdb66712bd2b007e92786481672ccc9dadd652872b",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/offline-guard.tap",
+      "sha256": "90020f413ea2c8ff286e680e85555169887374c6cd4d618589b931251a26832f",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/product-tool-recheck.json",
+      "sha256": "3839674057767bba206986a4fb092ea6aa5ed96686a4b0a7dad975bc18c227ab",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/remaining-harness.json",
+      "sha256": "c285c0de6deb991c940b47a0f9db6c40a2beff40428ca0aa2581ad33a8a57e9a",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/source-sha256-before.json",
+      "sha256": "aac90e6bf4bf78f8802df9993ebddb7e5cad6c36800c2d9f03d85723ef2e42d6",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/test-suite-ledger.md",
+      "sha256": "7225db65effffed37f3ed27a29434cca2b1b91e51e0b2b8e0b050d8d91efb561",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/widget-runtime-final.json",
+      "sha256": "ca78cdfec94d1945a79d9a33512185553f5746385105c950fc20dfe0edda58f5",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/evidence/workspace-ui-final.json",
+      "sha256": "627431e200037ff7b3bb42e051ff8e350de1df0bb3e3301c60a234ad3af91313",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/known-defects.md",
+      "sha256": "6b98037e864d2ef4df51f29cbadfb144b120a7ad1a16bb2bb848964495819cbf",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/phase-00-verification.md",
+      "sha256": "2f7ad701a77d00bee3ed3ec6e690711949ad1b7ac03c840f757ef3bdc4edf75b",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/phase-register.md",
+      "sha256": "76f88dbd91626bfc98137ee9722df23f7bf1ea30c6cfaff59391999e6d29b615",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "docs/development/regression-protection.md",
+      "sha256": "a962d7037aba440b20dc6292a503e3b29b7a7c47ce66e877e8e09d33ae3ee139",
+      "classification": "documentation/evidence"
+    },
+    {
+      "path": "frontend/src/tests/phase00-active-behavior.test.tsx",
+      "sha256": "d5d9b305f9c83e2f9e50d5455821f372338e3f5268c4ee31da9fae4d10298b61",
+      "classification": "test"
+    },
+    {
+      "path": "frontend/src/tests/phase00-workspace-isolation.test.tsx",
+      "sha256": "9cf4aefbdbf2d9b135b3cfa56fe7cd4a363b2f48e75496e14d5aae8f80ebe900",
+      "classification": "test"
+    },
+    {
+      "path": "scripts/phase00/offline.cjs",
+      "sha256": "0b3b199f2eb6381a03d30964f0e1e9d5c422f5e7e6ed749e4f251a19a6396cb8",
+      "classification": "test"
+    },
+    {
+      "path": "scripts/phase00/offline.test.cjs",
+      "sha256": "958d9574c822574b1ae08dea2b88c8986d84b5b5bba601c9fd498b7b1366d691",
+      "classification": "test"
+    }
+  ],
+  "deletedSinceCheckpoint": [],
+  "changedProductionFiles": [],
+  "unexpectedNewFiles": [],
+  "manifestSelf": "docs/development/evidence/phase-00-file-manifest.json",
+  "manifestSelfHashExcluded": true,
+  "privateEnvironmentFilesAndDependenciesExcluded": true,
+  "notes": "Exact phase differences from the pre-phase working tree, not from clean HEAD. No application implementation, schema, package manifest/lockfile or persisted environment/provider setting was changed.",
+  "continuationCheckpoint": "/tmp/carteio-phase00-repair-20261025/source-before.tar.gz",
+  "continuationHashManifest": "/tmp/carteio-phase00-repair-20261025/source-sha256-before.json",
+  "continuationAssertionsLedger": "docs/development/evidence/phase00-continuation-dispositions.json",
+  "continuationChangesNotPartOfOriginalHistoricalCheckpoint": [
+    "frontend/src/pages/knowledge/BusinessDataVisibility.tsx",
+    "frontend/src/pages/saas/WidgetInstallationPage.tsx",
+    "frontend/src/pages/source/SourceTicketsPage.tsx",
+    "frontend/src/tests/app.test.tsx",
+    "frontend/src/tests/business-data-visibility.test.tsx",
+    "frontend/src/tests/chatflow-builder.test.tsx",
+    "frontend/src/tests/error-states.test.tsx",
+    "frontend/src/tests/faq-import-dashboard.test.tsx",
+    "frontend/src/tests/widget-installation.test.tsx",
+    "frontend/src/tests/workspace-onboarding.test.tsx",
+    "docs/development/architecture-baseline.md",
+    "docs/development/known-defects.md",
+    "docs/development/phase-00-verification.md",
+    "docs/development/phase-register.md",
+    "docs/development/regression-protection.md",
+    "docs/development/evidence/baseline-summary.json",
+    "docs/development/evidence/test-suite-ledger.md",
+    "docs/development/evidence/phase00-continuation-dispositions.json",
+    "docs/development/evidence/phase-00-file-manifest.json",
+    "docs/development/capability-inventory.md"
+  ],
+  "continuationVerification": "No test/build/typecheck or external operation executed in this continuation; edits are pending test rerun."
+}

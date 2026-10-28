@@ -1,0 +1,1065 @@
+{
+  "run": "F10",
+  "sourceReport": "/tmp/carteio-phase00-frontend-remaining.json",
+  "exitCode": 1,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 37,
+    "numPassedTestSuites": 12,
+    "numFailedTestSuites": 25,
+    "numRuntimeErrorTestSuites": null,
+    "numTotalTests": 184,
+    "numPassedTests": 116,
+    "numFailedTests": 68,
+    "numPendingTests": 0
+  },
+  "fileCount": 18,
+  "files": [
+    {
+      "path": "frontend/src/tests/auth-redirect.test.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "post-login redirect validation preserves internal destinations and rejects open redirects",
+          "title": "preserves internal destinations and rejects open redirects",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/business-data-visibility.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "BusinessDataVisibility renders real saved website records and exposes stored content on authorized detail inspection",
+          "title": "renders real saved website records and exposes stored content on authorized detail inspection",
+          "status": "passed"
+        },
+        {
+          "name": "BusinessDataVisibility shows linked assistants separately from widget eligibility",
+          "title": "shows linked assistants separately from widget eligibility",
+          "status": "failed"
+        },
+        {
+          "name": "BusinessDataVisibility uses the existing manual crawl queue only for verified website sources",
+          "title": "uses the existing manual crawl queue only for verified website sources",
+          "status": "failed"
+        },
+        {
+          "name": "BusinessDataVisibility registers a website and explains that the initial crawl is queued automatically without DNS verification",
+          "title": "registers a website and explains that the initial crawl is queued automatically without DNS verification",
+          "status": "failed"
+        },
+        {
+          "name": "BusinessDataVisibility allows an owner to refresh public website content without source-level DNS verification",
+          "title": "allows an owner to refresh public website content without source-level DNS verification",
+          "status": "failed"
+        },
+        {
+          "name": "BusinessDataVisibility reports when the background worker is disabled after a manual crawl is queued",
+          "title": "reports when the background worker is disabled after a manual crawl is queued",
+          "status": "failed"
+        },
+        {
+          "name": "BusinessDataVisibility offers authorized Shopify refresh using existing sync controls",
+          "title": "offers authorized Shopify refresh using existing sync controls",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/chatflow-builder.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ChatflowBuilder renders the workspace used by the active Agent Builder route",
+          "title": "renders the workspace used by the active Agent Builder route",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps only Save in the builder toolbar and omits unsupported toolbar actions",
+          "title": "keeps only Save in the builder toolbar and omits unsupported toolbar actions",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows all nine requested palette entries",
+          "title": "shows all nine requested palette entries",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder marks unsupported Shopify, API and handoff nodes as preview only",
+          "title": "marks unsupported Shopify, API and handoff nodes as preview only",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder adds a node by clicking its palette item",
+          "title": "adds a node by clicking its palette item",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder accepts palette drag-and-drop onto the canvas",
+          "title": "accepts palette drag-and-drop onto the canvas",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder selects a canvas node and displays its configuration inspector",
+          "title": "selects a canvas node and displays its configuration inspector",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows effective public Knowledge Base access for the selected assistant in a Knowledge node",
+          "title": "shows effective public Knowledge Base access for the selected assistant in a Knowledge node",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder moves a node with pointer dragging",
+          "title": "moves a node with pointer dragging",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder drags an output handle to an input and adds a live curved edge",
+          "title": "drags an output handle to an input and adds a live curved edge",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder supports keyboard accessible click-to-connect as well as pointer dragging",
+          "title": "supports keyboard accessible click-to-connect as well as pointer dragging",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder cancels a wire dropped on empty canvas and cancels on Escape",
+          "title": "cancels a wire dropped on empty canvas and cancels on Escape",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder reconnects an edge target without removing its source",
+          "title": "reconnects an edge target without removing its source",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder reconnects an edge source to another output handle",
+          "title": "reconnects an edge source to another output handle",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder supports multiple outputs and inputs as editable but non-runnable topology",
+          "title": "supports multiple outputs and inputs as editable but non-runnable topology",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder blocks Live Bot Test for a saved topology the backend runner cannot execute",
+          "title": "blocks Live Bot Test for a saved topology the backend runner cannot execute",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder keeps Condition True and False outputs separately addressable in tuple order",
+          "title": "keeps Condition True and False outputs separately addressable in tuple order",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder updates connected edge geometry when a node moves",
+          "title": "updates connected edge geometry when a node moves",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder keeps connection editing accurate after Fit changes the pan and zoom transform",
+          "title": "keeps connection editing accurate after Fit changes the pan and zoom transform",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder rejects duplicate edges and reports the reason",
+          "title": "rejects duplicate edges and reports the reason",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder keeps edge edits in undo and redo history",
+          "title": "keeps edge edits in undo and redo history",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder supports keyboard edge selection and deletion",
+          "title": "supports keyboard edge selection and deletion",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder rejects a connection to an incompatible Start input with a clear explanation",
+          "title": "rejects a connection to an incompatible Start input with a clear explanation",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder rejects a second edge on an already occupied Condition branch handle",
+          "title": "rejects a second edge on an already occupied Condition branch handle",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder prevents cycles that the Flow API refuses to save",
+          "title": "prevents cycles that the Flow API refuses to save",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder requires backend-supported Condition settings before save",
+          "title": "requires backend-supported Condition settings before save",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder saves and reloads tuple connections with stable handle identities",
+          "title": "saves and reloads tuple connections with stable handle identities",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps newly added nodes arranged left-to-right on the X axis",
+          "title": "keeps newly added nodes arranged left-to-right on the X axis",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder selects an existing edge and removes it with the visible edge action",
+          "title": "selects an existing edge and removes it with the visible edge action",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder deletes a selected node with its incident connections",
+          "title": "deletes a selected node with its incident connections",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder supports undo and redo for palette edits",
+          "title": "supports undo and redo for palette edits",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder zooms in and fits the canvas",
+          "title": "zooms in and fits the canvas",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder serializes only the supported FlowGraph contract on save",
+          "title": "serializes only the supported FlowGraph contract on save",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder uses create for new flows and update with the expected version for saved flows",
+          "title": "uses create for new flows and update with the expected version for saved flows",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows a saved state after successful persistence",
+          "title": "shows a saved state after successful persistence",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps unsaved edits and exposes the actual save error on failure",
+          "title": "keeps unsaved edits and exposes the actual save error on failure",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder retries a failed save without losing the edit",
+          "title": "retries a failed save without losing the edit",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps Live Bot Test closed by default",
+          "title": "keeps Live Bot Test closed by default",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder renders the floating launcher and toggles the chat without resetting the graph",
+          "title": "renders the floating launcher and toggles the chat without resetting the graph",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder closes the chat from its panel close control",
+          "title": "closes the chat from its panel close control",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps messages when closing and reopening the chat drawer",
+          "title": "keeps messages when closing and reopening the chat drawer",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder sends chat through the existing run endpoint and renders its actual reply",
+          "title": "sends chat through the existing run endpoint and renders its actual reply",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows actual executed node and traversed edge metadata returned by FlowService",
+          "title": "shows actual executed node and traversed edge metadata returned by FlowService",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps the graph rendered when a flow run fails",
+          "title": "keeps the graph rendered when a flow run fails",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder shows flow loading errors in the workspace instead of crashing",
+          "title": "shows flow loading errors in the workspace instead of crashing",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder uses the right drawer layout at mobile widths through responsive classes",
+          "title": "uses the right drawer layout at mobile widths through responsive classes",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps the canvas as the flexible desktop workspace",
+          "title": "keeps the canvas as the flexible desktop workspace",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows the selected assistant without inventing online presence",
+          "title": "shows the selected assistant without inventing online presence",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder filters the node palette from the compact search input",
+          "title": "filters the node palette from the compact search input",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows and clears the no-match palette state",
+          "title": "shows and clears the no-match palette state",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder renders the palette search as one compact text input with its clear action",
+          "title": "renders the palette search as one compact text input with its clear action",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder opens with a compact empty chat composer and the requested placeholder",
+          "title": "opens with a compact empty chat composer and the requested placeholder",
+          "status": "failed"
+        },
+        {
+          "name": "ChatflowBuilder grows the composer for multiline content and caps it for internal scrolling",
+          "title": "grows the composer for multiline content and caps it for internal scrolling",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder sends on Enter, keeps Shift+Enter as newline, and does not send during IME composition",
+          "title": "sends on Enter, keeps Shift+Enter as newline, and does not send during IME composition",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder shows a disabled sending state while the existing flow request is pending",
+          "title": "shows a disabled sending state while the existing flow request is pending",
+          "status": "passed"
+        },
+        {
+          "name": "ChatflowBuilder keeps the canvas graph and node positions intact while the isolated chat draft changes",
+          "title": "keeps the canvas graph and node positions intact while the isolated chat draft changes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/config.test.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "routing configuration keeps browser API configuration same-origin and non-secret",
+          "title": "keeps browser API configuration same-origin and non-secret",
+          "status": "passed"
+        },
+        {
+          "name": "routing configuration proxies the exact API prefix to the single NestJS service",
+          "title": "proxies the exact API prefix to the single NestJS service",
+          "status": "failed"
+        },
+        {
+          "name": "routing configuration keeps nested SPA fallback and API routing separate in production template",
+          "title": "keeps nested SPA fallback and API routing separate in production template",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/connectors-page.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConnectorsPage shows the real platform setup flows without inventing connection activity",
+          "title": "shows the real platform setup flows without inventing connection activity",
+          "status": "failed"
+        },
+        {
+          "name": "ConnectorsPage uses the committed PATCH snapshot without a redundant GET and recalculates API operation readiness",
+          "title": "uses the committed PATCH snapshot without a redundant GET and recalculates API operation readiness",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorsPage restores the selected assistant after a page reload instead of silently showing another assistant permission",
+          "title": "restores the selected assistant after a page reload instead of silently showing another assistant permission",
+          "status": "failed"
+        },
+        {
+          "name": "ConnectorsPage keeps the saved checkbox value after a failed PATCH and reconciles a timed out PATCH from persisted GET data",
+          "title": "keeps the saved checkbox value after a failed PATCH and reconciles a timed out PATCH from persisted GET data",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/conversations-inbox.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConversationsPage renders persisted customer content as text without executing markup",
+          "title": "renders persisted customer content as text without executing markup",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/dashboard-capabilities.test.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "workspace dashboard business profile resolution resolves ECOMMERCE to a supported dashboard profile",
+          "title": "resolves ECOMMERCE to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves E-commerce to a supported dashboard profile",
+          "title": "resolves E-commerce to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves HEALTHCARE to a supported dashboard profile",
+          "title": "resolves HEALTHCARE to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves landing-page to a supported dashboard profile",
+          "title": "resolves landing-page to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves service business to a supported dashboard profile",
+          "title": "resolves service business to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves GENERAL_BUSINESS to a supported dashboard profile",
+          "title": "resolves GENERAL_BUSINESS to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves null to a supported dashboard profile",
+          "title": "resolves null to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution resolves unrecognized legacy value to a supported dashboard profile",
+          "title": "resolves unrecognized legacy value to a supported dashboard profile",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution only exposes the five supported business classifications as selectable values",
+          "title": "only exposes the five supported business classifications as selectable values",
+          "status": "passed"
+        },
+        {
+          "name": "workspace dashboard business profile resolution keeps profile copy honest about capabilities that require real data",
+          "title": "keeps profile copy honest about capabilities that require real data",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/error-states.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "shared Carteio error states distinguishes initial loading from a successfully empty result",
+          "title": "distinguishes initial loading from a successfully empty result",
+          "status": "passed"
+        },
+        {
+          "name": "shared Carteio error states runs the requested retry action",
+          "title": "runs the requested retry action",
+          "status": "passed"
+        },
+        {
+          "name": "shared Carteio error states contains dashboard render crashes and retries without replacing the dashboard shell",
+          "title": "contains dashboard render crashes and retries without replacing the dashboard shell",
+          "status": "failed"
+        },
+        {
+          "name": "shared Carteio error states offers a safe home action for an unknown route",
+          "title": "offers a safe home action for an unknown route",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/knowledge-base.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Knowledge Base workspace UI renders the Knowledge Base summary including linked assistants",
+          "title": "renders the Knowledge Base summary including linked assistants",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI creates a collection and exposes only supported knowledge entry methods",
+          "title": "creates a collection and exposes only supported knowledge entry methods",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI selects all filtered available sources and assigns them to the current base in bounded bulk batches",
+          "title": "selects all filtered available sources and assigns them to the current base in bounded bulk batches",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI clears collection rows from the previous workspace and ignores its stale response",
+          "title": "clears collection rows from the previous workspace and ignores its stale response",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI adds multiple FAQs in one focused workflow",
+          "title": "adds multiple FAQs in one focused workflow",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI saves an optional source language hint for Text Knowledge",
+          "title": "saves an optional source language hint for Text Knowledge",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI connects an assistant from Overview and confirms the persisted relationship after refresh",
+          "title": "connects an assistant from Overview and confirms the persisted relationship after refresh",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI prevents duplicate connection submissions while waiting for server confirmation",
+          "title": "prevents duplicate connection submissions while waiting for server confirmation",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI shows a permission error returned by the assignment API without claiming success",
+          "title": "shows a permission error returned by the assignment API without claiming success",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI shows an empty assistant state and a retryable assistant-list error",
+          "title": "shows an empty assistant state and a retryable assistant-list error",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI shows existing connections and excludes connected assistants from available choices",
+          "title": "shows existing connections and excludes connected assistants from available choices",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI uses the workspace default without manual linking and lets the knowledge preview choose an active assistant",
+          "title": "uses the workspace default without manual linking and lets the knowledge preview choose an active assistant",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI uses server effective eligibility instead of a stale page diagnostic and keeps partial crawl warnings",
+          "title": "uses server effective eligibility instead of a stale page diagnostic and keeps partial crawl warnings",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base workspace UI disconnects only the Knowledge Base relationship and confirms it in the refreshed list",
+          "title": "disconnects only the Knowledge Base relationship and confirms it in the refreshed list",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/playground-chat.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "PlaygroundChat copies all paginated history in order from the header and Copy History actions",
+          "title": "copies all paginated history in order from the header and Copy History actions",
+          "status": "failed"
+        },
+        {
+          "name": "PlaygroundChat clearly warns when a conversation exceeds the safe 1000-message export cap",
+          "title": "clearly warns when a conversation exceeds the safe 1000-message export cap",
+          "status": "failed"
+        },
+        {
+          "name": "PlaygroundChat does not copy a pending export after switching to another assistant conversation",
+          "title": "does not copy a pending export after switching to another assistant conversation",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat copies only the selected message text and reports clipboard failure",
+          "title": "copies only the selected message text and reports clipboard failure",
+          "status": "failed"
+        },
+        {
+          "name": "PlaygroundChat offers diagnostic export only when an authorized manager has trace data",
+          "title": "offers diagnostic export only when an authorized manager has trace data",
+          "status": "failed"
+        },
+        {
+          "name": "PlaygroundChat sends a real chat request and displays the returned answer and source citation",
+          "title": "sends a real chat request and displays the returned answer and source citation",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat renders trusted AI_GENERATED response provenance",
+          "title": "renders trusted AI_GENERATED response provenance",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat renders trusted KNOWLEDGE_GROUNDED response provenance",
+          "title": "renders trusted KNOWLEDGE_GROUNDED response provenance",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat renders trusted SYSTEM_RESPONSE response provenance",
+          "title": "renders trusted SYSTEM_RESPONSE response provenance",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat shows neutral provenance for legacy history without trusted provenance metadata",
+          "title": "shows neutral provenance for legacy history without trusted provenance metadata",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat keeps no-match feedback inside the assistant answer instead of appending retrieval diagnostics",
+          "title": "keeps no-match feedback inside the assistant answer instead of appending retrieval diagnostics",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat restores trusted response provenance with the saved chat history",
+          "title": "restores trusted response provenance with the saved chat history",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat restores the same authorized session after provider configuration changes",
+          "title": "restores the same authorized session after provider configuration changes",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat shows the actual provider on a newly generated reply instead of relying on current settings",
+          "title": "shows the actual provider on a newly generated reply instead of relying on current settings",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat shows a truthful pending state while a chat request is unresolved",
+          "title": "shows a truthful pending state while a chat request is unresolved",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat ignores malformed stored session IDs instead of requesting their history",
+          "title": "ignores malformed stored session IDs instead of requesting their history",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat renders an unknown API failure safely without exposing internal response text",
+          "title": "renders an unknown API failure safely without exposing internal response text",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat clears an expired stored session but waits for explicit New Chat before sending without it",
+          "title": "clears an expired stored session but waits for explicit New Chat before sending without it",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat clears a session that expires during chat and waits for explicit New Chat",
+          "title": "clears a session that expires during chat and waits for explicit New Chat",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat shows a safe sign-in recovery message after authentication expires",
+          "title": "shows a safe sign-in recovery message after authentication expires",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat resets conversation messages when New Chat is selected",
+          "title": "resets conversation messages when New Chat is selected",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat uses automatic text direction for right-to-left replies and customer input",
+          "title": "uses automatic text direction for right-to-left replies and customer input",
+          "status": "passed"
+        },
+        {
+          "name": "PlaygroundChat shows the server-managed provider read-only and saves only explicit routing policy",
+          "title": "shows the server-managed provider read-only and saves only explicit routing policy",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/playground-copy.test.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Playground copy formatting formats every message in chronological order with origin, timestamp, source, Unicode and multiline text",
+          "title": "formats every message in chronological order with origin, timestamp, source, Unicode and multiline text",
+          "status": "failed"
+        },
+        {
+          "name": "Playground copy formatting copies only the selected message body for individual copy",
+          "title": "copies only the selected message body for individual copy",
+          "status": "passed"
+        },
+        {
+          "name": "Playground copy formatting marks export incomplete when message or byte limits omit content",
+          "title": "marks export incomplete when message or byte limits omit content",
+          "status": "passed"
+        },
+        {
+          "name": "Playground copy formatting exports only safe trace metadata and excludes evidence excerpts",
+          "title": "exports only safe trace metadata and excludes evidence excerpts",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/playground-live-flow.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "active dashboard Playground passes lowercase owner role to the Inspector and renders the compact four-tab workspace",
+          "title": "passes lowercase owner role to the Inspector and renders the compact four-tab workspace",
+          "status": "passed"
+        },
+        {
+          "name": "active dashboard Playground preserves Shift+Enter and submits with Enter while rendering only observed backend stages",
+          "title": "preserves Shift+Enter and submits with Enter while rendering only observed backend stages",
+          "status": "passed"
+        },
+        {
+          "name": "active dashboard Playground mounts Copy History and header Copy entire conversation in the active workspace route, fetching paginated history chronologically",
+          "title": "mounts Copy History and header Copy entire conversation in the active workspace route, fetching paginated history chronologically",
+          "status": "failed"
+        },
+        {
+          "name": "active dashboard Playground copies only the selected individual message and reports clipboard failures",
+          "title": "copies only the selected individual message and reports clipboard failures",
+          "status": "failed"
+        },
+        {
+          "name": "active dashboard Playground does not expose copy/history diagnostics controls to a non-manager workspace role",
+          "title": "does not expose copy/history diagnostics controls to a non-manager workspace role",
+          "status": "passed"
+        },
+        {
+          "name": "active dashboard Playground shows an explicit error when authorized history loading fails",
+          "title": "shows an explicit error when authorized history loading fails",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/playground-provenance.test.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Playground response source attribution uses model provenance without inventing external evidence",
+          "title": "uses model provenance without inventing external evidence",
+          "status": "passed"
+        },
+        {
+          "name": "Playground response source attribution labels only the source types returned as validated citations",
+          "title": "labels only the source types returned as validated citations",
+          "status": "passed"
+        },
+        {
+          "name": "Playground response source attribution keeps deterministic replies classified as system responses",
+          "title": "keeps deterministic replies classified as system responses",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/shopify-dashboard-regression.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Shopify dashboard connection regression shows authorization-pending verification instead of mislabeling a stored OAuth grant as Draft or disconnected",
+          "title": "shows authorization-pending verification instead of mislabeling a stored OAuth grant as Draft or disconnected",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression renders connected-store management and counts from the API response",
+          "title": "renders connected-store management and counts from the API response",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression does not offer sync when the verified connector lacks an effective granted sync permission",
+          "title": "does not offer sync when the verified connector lacks an effective granted sync permission",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression shows backend sync failures and error codes from sync history",
+          "title": "shows backend sync failures and error codes from sync history",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression refreshes the connector state after explicit verification",
+          "title": "refreshes the connector state after explicit verification",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression keeps API failures distinct from a disconnected store",
+          "title": "keeps API failures distinct from a disconnected store",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression offers verification retry instead of OAuth when final verification persistence failed",
+          "title": "offers verification retry instead of OAuth when final verification persistence failed",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression shows the connection skeleton while the initial connector request is pending",
+          "title": "shows the connection skeleton while the initial connector request is pending",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression keeps the store-domain form visible while connector discovery is loading",
+          "title": "keeps the store-domain form visible while connector discovery is loading",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression rejects malformed store domains and starts OAuth only after explicit submission",
+          "title": "rejects malformed store domains and starts OAuth only after explicit submission",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression offers management for an already connected store instead of starting a duplicate OAuth flow",
+          "title": "offers management for an already connected store instead of starting a duplicate OAuth flow",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression retries connector discovery after an API error without presenting that error as an empty store list",
+          "title": "retries connector discovery after an API error without presenting that error as an empty store list",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression lists all Shopify connectors because the backend permits multiple connector instances per workspace",
+          "title": "lists all Shopify connectors because the backend permits multiple connector instances per workspace",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression retains loaded store details while a background refresh is pending",
+          "title": "retains loaded store details while a background refresh is pending",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression shows an explicit verification progress state and never treats a failed verify as connected",
+          "title": "shows an explicit verification progress state and never treats a failed verify as connected",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression bounds status polling for a CONNECTING connector and offers an explicit retry when polling expires",
+          "title": "bounds status polling for a CONNECTING connector and offers an explicit retry when polling expires",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression shows recovery immediately when the persisted CONNECTING timestamp is already stale",
+          "title": "shows recovery immediately when the persisted CONNECTING timestamp is already stale",
+          "status": "failed"
+        },
+        {
+          "name": "Shopify dashboard connection regression keeps the last product results visible during refresh and after a refresh error",
+          "title": "keeps the last product results visible during refresh and after a refresh error",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression polls only an active Shopify sync job and pauses after a bounded period",
+          "title": "polls only an active Shopify sync job and pauses after a bounded period",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression scopes products by the selected Shopify store and hides the prior store results on switch",
+          "title": "scopes products by the selected Shopify store and hides the prior store results on switch",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression scopes the sync monitor product request to its selected Shopify connection",
+          "title": "scopes the sync monitor product request to its selected Shopify connection",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression does not issue a workspace-wide Products request when a Shopify connector has no linked commerce record",
+          "title": "does not issue a workspace-wide Products request when a Shopify connector has no linked commerce record",
+          "status": "passed"
+        },
+        {
+          "name": "Shopify dashboard connection regression provides a retry for an independently failed sync-history request",
+          "title": "provides a retry for an independently failed sync-history request",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery renders the Integrations page and loading skeleton on first load",
+          "title": "renders the Integrations page and loading skeleton on first load",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery renders a genuine empty state for an empty connector list",
+          "title": "renders a genuine empty state for an empty connector list",
+          "status": "passed"
+        },
+        {
+          "name": "Integrations route and application error recovery renders DRAFT connectors with verification required",
+          "title": "renders DRAFT connectors with verification required",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery renders connected-store management controls",
+          "title": "renders connected-store management controls",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery keeps API errors separate from an empty connector list",
+          "title": "keeps API errors separate from an empty connector list",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery renders every Shopify connector returned by the workspace API",
+          "title": "renders every Shopify connector returned by the workspace API",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery does not crash if a legacy connector has non-object JSON configuration",
+          "title": "does not crash if a legacy connector has non-object JSON configuration",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery mounts the Shopify permissions panel when connector permissions load",
+          "title": "mounts the Shopify permissions panel when connector permissions load",
+          "status": "failed"
+        },
+        {
+          "name": "Integrations route and application error recovery renders the Shopify detail route without an undefined openShopify reference",
+          "title": "renders the Shopify detail route without an undefined openShopify reference",
+          "status": "passed"
+        },
+        {
+          "name": "Integrations route and application error recovery shows current-theme recovery UI in the global error boundary",
+          "title": "shows current-theme recovery UI in the global error boundary",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/shopify-permissions-panel.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ShopifyPermissionsPanel does not request a grant refresh unless the connector is connected",
+          "title": "does not request a grant refresh unless the connector is connected",
+          "status": "passed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel distinguishes static inventory count, verified grant count, and unavailable app declaration",
+          "title": "distinguishes static inventory count, verified grant count, and unavailable app declaration",
+          "status": "failed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel paginates all Shopify grants and displays unknown grants without treating inventory as grants",
+          "title": "paginates all Shopify grants and displays unknown grants without treating inventory as grants",
+          "status": "failed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel keeps full static inventory separate and paginated",
+          "title": "keeps full static inventory separate and paginated",
+          "status": "failed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel shows effective AI readiness and gives contextual missing grant and data reasons",
+          "title": "shows effective AI readiness and gives contextual missing grant and data reasons",
+          "status": "failed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel persists assistant toggle intent through the existing permission callback",
+          "title": "persists assistant toggle intent through the existing permission callback",
+          "status": "failed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel does not present assistant access as effective while workspace AI is off",
+          "title": "does not present assistant access as effective while workspace AI is off",
+          "status": "failed"
+        },
+        {
+          "name": "ShopifyPermissionsPanel labels stale grants as cached and requires verification for operation readiness",
+          "title": "labels stale grants as cached and requires verification for operation readiness",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/theme-switcher.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "landing theme picker uses Ocean Blue by default and falls back when stored theme is invalid",
+          "title": "uses Ocean Blue by default and falls back when stored theme is invalid",
+          "status": "passed"
+        },
+        {
+          "name": "landing theme picker changes the theme from the keyboard and updates the page immediately",
+          "title": "changes the theme from the keyboard and updates the page immediately",
+          "status": "passed"
+        },
+        {
+          "name": "landing theme picker persists the selected theme after remounting",
+          "title": "persists the selected theme after remounting",
+          "status": "passed"
+        },
+        {
+          "name": "landing theme picker returns focus to the trigger when the picker is dismissed with Escape",
+          "title": "returns focus to the trigger when the picker is dismissed with Escape",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/tickets-page.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "TicketsPage shows persisted ticket data and never presents unsupported transport as delivered",
+          "title": "shows persisted ticket data and never presents unsupported transport as delivered",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/workspace-onboarding.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "workspace onboarding creates a workspace, remembers its authorized route, and opens the real dashboard",
+          "title": "creates a workspace, remembers its authorized route, and opens the real dashboard",
+          "status": "failed"
+        },
+        {
+          "name": "workspace onboarding shows duplicate slugs as a field-level error",
+          "title": "shows duplicate slugs as a field-level error",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+export const KNOWLEDGE_SECTIONS = [
+  'BUSINESS_INTRODUCTION',
+  'SHIPPING_DELIVERY',
+  'RETURNS_REFUNDS',
+  'PAYMENT_CANCELLATION',
+  'WARRANTY_SUPPORT_FAQS',
+] as const;
+
+export type KnowledgeSection = (typeof KNOWLEDGE_SECTIONS)[number];

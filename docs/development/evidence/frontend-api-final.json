@@ -1,0 +1,91 @@
+{
+  "run": "F5",
+  "sourceReport": "/tmp/carteio-phase00-frontend-api-final.json",
+  "exitCode": 0,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 2,
+    "numPassedTestSuites": 2,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": null,
+    "numTotalTests": 13,
+    "numPassedTests": 13,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "frontend/src/tests/api-client.test.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "API client returns a successful JSON response from the same-origin API path",
+          "title": "returns a successful JSON response from the same-origin API path",
+          "status": "passed"
+        },
+        {
+          "name": "API client sends the selected FAQ workbook as multipart file bytes without overriding the browser boundary",
+          "title": "sends the selected FAQ workbook as multipart file bytes without overriding the browser boundary",
+          "status": "passed"
+        },
+        {
+          "name": "API client supports explicit no-store reads for mutable connector and catalog status",
+          "title": "supports explicit no-store reads for mutable connector and catalog status",
+          "status": "passed"
+        },
+        {
+          "name": "API client always reads mutable assistant permissions without browser cache reuse",
+          "title": "always reads mutable assistant permissions without browser cache reuse",
+          "status": "passed"
+        },
+        {
+          "name": "API client normalizes network and non-JSON HTTP failures",
+          "title": "normalizes network and non-JSON HTTP failures",
+          "status": "passed"
+        },
+        {
+          "name": "API client preserves safe structured API error codes for feature-specific messaging",
+          "title": "preserves safe structured API error codes for feature-specific messaging",
+          "status": "passed"
+        },
+        {
+          "name": "API client uses safe session, access and server messages without exposing raw 5xx details",
+          "title": "uses safe session, access and server messages without exposing raw 5xx details",
+          "status": "passed"
+        },
+        {
+          "name": "API client aborts on caller cancellation and applies its timeout",
+          "title": "aborts on caller cancellation and applies its timeout",
+          "status": "passed"
+        },
+        {
+          "name": "API client allows an AI request budget and correlation ID without changing ordinary API timeouts",
+          "title": "allows an AI request budget and correlation ID without changing ordinary API timeouts",
+          "status": "passed"
+        },
+        {
+          "name": "API client delivers correlated SSE events in wire order and waits for the terminal response",
+          "title": "delivers correlated SSE events in wire order and waits for the terminal response",
+          "status": "passed"
+        },
+        {
+          "name": "API client rejects invalid JSON instead of treating it as success",
+          "title": "rejects invalid JSON instead of treating it as success",
+          "status": "passed"
+        },
+        {
+          "name": "API client deduplicates concurrent exact-match GETs while allowing one caller to cancel independently",
+          "title": "deduplicates concurrent exact-match GETs while allowing one caller to cancel independently",
+          "status": "passed"
+        },
+        {
+          "name": "API client keeps concurrent workspace reads isolated by their exact tenant-scoped path",
+          "title": "keeps concurrent workspace reads isolated by their exact tenant-scoped path",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

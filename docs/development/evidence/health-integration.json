@@ -1,0 +1,69 @@
+{
+  "run": "E1",
+  "sourceReport": "/tmp/carteio-phase00-health-integration.json",
+  "exitCode": 1,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 1,
+    "numPassedTestSuites": 0,
+    "numFailedTestSuites": 1,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 7,
+    "numPassedTests": 1,
+    "numFailedTests": 6,
+    "numPendingTests": 0
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "backend/test/health.e2e-spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [
+        "Phase 01 API foundation returns the health contract",
+        "Phase 01 API foundation reports the intentional no-database local mode as limited",
+        "Phase 01 API foundation returns a safe not found response",
+        "Phase 01 API foundation returns stable machine-readable error codes and the request ID",
+        "Phase 01 API foundation allows only the configured CORS origin",
+        "Phase 01 API foundation adds a request ID and safely reuses a validated caller ID"
+      ],
+      "assertions": [
+        {
+          "name": "Phase 01 API foundation returns the health contract",
+          "title": "returns the health contract",
+          "status": "failed"
+        },
+        {
+          "name": "Phase 01 API foundation reports the intentional no-database local mode as limited",
+          "title": "reports the intentional no-database local mode as limited",
+          "status": "failed"
+        },
+        {
+          "name": "Phase 01 API foundation returns a safe not found response",
+          "title": "returns a safe not found response",
+          "status": "failed"
+        },
+        {
+          "name": "Phase 01 API foundation returns stable machine-readable error codes and the request ID",
+          "title": "returns stable machine-readable error codes and the request ID",
+          "status": "failed"
+        },
+        {
+          "name": "Phase 01 API foundation allows only the configured CORS origin",
+          "title": "allows only the configured CORS origin",
+          "status": "failed"
+        },
+        {
+          "name": "Phase 01 API foundation adds a request ID and safely reuses a validated caller ID",
+          "title": "adds a request ID and safely reuses a validated caller ID",
+          "status": "failed"
+        },
+        {
+          "name": "Phase 01 API foundation rejects invalid configuration",
+          "title": "rejects invalid configuration",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

@@ -37,7 +37,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Request-ID $request_id;
+        # Preserve the browser-generated UUID when present; the API validates it and
+        # generates its own UUID when absent or malformed.
+        proxy_set_header X-Request-ID $http_x_request_id;
         proxy_buffering off; # Supports future SSE without changing the API prefix.
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
@@ -48,6 +50,15 @@ server {
     location = /robots.txt { try_files $uri =404; }
     location = /sitemap.xml { try_files $uri =404; }
     location = /index.html { expires -1; }
+    location = /widget.js {
+        try_files $uri =404;
+        default_type application/javascript;
+        expires off;
+        etag off;
+        if_modified_since off;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
     location /assets/ {
         try_files $uri =404;
         expires 1y;

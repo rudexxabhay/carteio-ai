@@ -1,0 +1,108 @@
+{
+  "run": "H2",
+  "sourceReport": "/tmp/carteio-phase00-remaining-harness.json",
+  "exitCode": 0,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 2,
+    "numPassedTestSuites": 2,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 15,
+    "numPassedTests": 15,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "fileCount": 2,
+  "files": [
+    {
+      "path": "backend/test/knowledge-base.faq-import.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Knowledge Base FAQ import routes registers the authenticated preview and import routes under the selected Knowledge Base",
+          "title": "registers the authenticated preview and import routes under the selected Knowledge Base",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base FAQ import routes returns a specific missing-file error when the multipart field is not received",
+          "title": "returns a specific missing-file error when the multipart field is not received",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/connector-sync-worker.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "ConnectorSyncWorker lease behavior reconciles missing products only after a complete full Shopify product snapshot",
+          "title": "reconciles missing products only after a complete full Shopify product snapshot",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior rejects an incomplete page whose cursor is repeated in its persisted checkpoint trail",
+          "title": "rejects an incomplete page whose cursor is repeated in its persisted checkpoint trail",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior refuses to persist Shopify product records whose image page is incomplete",
+          "title": "refuses to persist Shopify product records whose image page is incomplete",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior accepts a complete Shopify product page with complete variants and images",
+          "title": "accepts a complete Shopify product page with complete variants and images",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior locks the tenant-scoped Shopify connector before checking a leased sync for publication",
+          "title": "locks the tenant-scoped Shopify connector before checking a leased sync for publication",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior claims only due, connected tenant-scoped work with PostgreSQL skip-locked semantics",
+          "title": "claims only due, connected tenant-scoped work with PostgreSQL skip-locked semantics",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior enqueues a due refresh policy once and advances its persisted schedule",
+          "title": "enqueues a due refresh policy once and advances its persisted schedule",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior does not enqueue scheduled Shopify work when the verified grant snapshot is stale",
+          "title": "does not enqueue scheduled Shopify work when the verified grant snapshot is stale",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior does not create another scheduled job while the resource already has active work",
+          "title": "does not create another scheduled job while the resource already has active work",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior persists normalized Shopify product and variants idempotently with bounded safe image evidence",
+          "title": "persists normalized Shopify product and variants idempotently with bounded safe image evidence",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior does not let an older Shopify product update overwrite a newer persisted version",
+          "title": "does not let an older Shopify product update overwrite a newer persisted version",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior does not revive a product with an update at or before its delete watermark",
+          "title": "does not revive a product with an update at or before its delete watermark",
+          "status": "passed"
+        },
+        {
+          "name": "ConnectorSyncWorker lease behavior marks a provider-deleted product unavailable for retrieval within its tenant connection",
+          "title": "marks a provider-deleted product unavailable for retrieval within its tenant connection",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

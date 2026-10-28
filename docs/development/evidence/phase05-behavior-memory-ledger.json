@@ -1,0 +1,263 @@
+{
+  "phase": "05",
+  "sourceStatus": "CODE_IMPLEMENTED",
+  "runtimeStatus": "RUNTIME_UNVERIFIED",
+  "date": "2026-10-26",
+  "carryForward": {
+    "phase00": {
+      "status": "BLOCKED",
+      "originalFailures": {
+        "backend": 116,
+        "frontend": 85,
+        "total": 201
+      },
+      "historicalDisposition": {
+        "passingInSavedEvidence": 181,
+        "repairAwaitingRerun": 11,
+        "unresolvedLatestFailures": 9,
+        "causeClassificationUnresolved": 47
+      },
+      "latestCompleteSavedResults": {
+        "backend": "813 PASS / 0 FAIL",
+        "frontend": "217 PASS / 26 FAIL",
+        "targetedFrontend": "97 PASS / 3 FAIL",
+        "http": "7/7 PASS",
+        "offlineSafety": "3/3 PASS"
+      },
+      "ledger": "phase00-continuation-dispositions.json"
+    },
+    "phase01": "CODE_IMPLEMENTED / runtime unverified; see phase01-connectivity-ledger.json",
+    "phase02": "CODE_IMPLEMENTED / runtime unverified; see phase02-data-pipeline-ledger.json",
+    "phase03": "CODE_IMPLEMENTED / runtime unverified; see phase03-assistant-access-ledger.json",
+    "phase04": "CODE_IMPLEMENTED / runtime unverified; see phase04-retrieval-ledger.json",
+    "phase06TargetedDefect": "P06-SOCIAL-01 source repair preserved; tests/runtime unverified; no new Phase 06 optimization in Phase 05"
+  },
+  "beforeChange": {
+    "checkpoint": "/tmp/carteio-phase05-source-checkpoint-20261026",
+    "manifest": "/tmp/carteio-phase05-source-checkpoint-20261026/manifest.json",
+    "sourceOnly": true
+  },
+  "activeSourceTrace": [
+    {
+      "boundary": "Dashboard/save/persistence",
+      "files": [
+        "frontend/src/pages/training/TrainingCenterPage.tsx",
+        "frontend/src/services/api/assistants.ts",
+        "backend/src/modules/workspaces/assistant.controller.ts",
+        "backend/src/modules/workspaces/assistant.service.ts"
+      ],
+      "finding": "Active Bot Behavior form uses updateAssistant. Manager authorization, tenant-qualified Prisma update and audit persist all existing behavior fields. UI save now guards its result with the active workspace/assistant key."
+    },
+    {
+      "boundary": "Fresh configuration/shared execution",
+      "files": [
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+        "backend/src/modules/workspaces/assistant-behavior-context.ts",
+        "backend/src/modules/workspaces/conversation-provider.service.ts"
+      ],
+      "finding": "Each request reloads the authorized assistant. callSelectedProvider inserts the saved behavior once before user messages for every non-interpretation provider call. Interpretation gets descriptive business metadata, not merchant instructions as authority. OpenAI-compatible payload forwards messages; Gemini maps the same instructions/content to its existing system/parts contract."
+    },
+    {
+      "boundary": "Contact facts",
+      "files": [
+        "backend/src/modules/workspaces/assistant-contact-evidence.ts",
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts"
+      ],
+      "finding": "Only explicit, typed HELP CONTACTS values generate assistant-attributed versioned/hashed evidence. Removed lexical relevance gate; existing bounded evidence selection and fresh configuration revalidation still apply."
+    },
+    {
+      "boundary": "Memory/refresh",
+      "files": [
+        "backend/src/modules/workspaces/conversation-diagnostics.ts",
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+        "frontend/src/pages/training/PlaygroundChat.tsx"
+      ],
+      "finding": "Existing tenant/session-scoped persisted history is loaded chronologically and budgeted. Refresh now requests latest=true. Serialized-byte fitting preserves useful escaped text. Actual prior-turn roles/counts are described without customer text."
+    },
+    {
+      "boundary": "Widget",
+      "files": [
+        "backend/src/modules/workspaces/widget.service.ts",
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts"
+      ],
+      "finding": "Existing public session/origin and tenant/assistant guards feed the existing customer/shared engine with fresh assistant configuration. No widget permission changes."
+    }
+  ],
+  "behaviorMatrix": [
+    {
+      "setting": "Role, custom instructions, purpose, description",
+      "status": "WIRED",
+      "execution": "Saved fields in lower-priority behavior layer; descriptive business metadata is also used by existing interpretation/scope guard."
+    },
+    {
+      "setting": "Personality, tone, response style",
+      "status": "WIRED",
+      "execution": "Persisted/reloaded fields included in central behavior JSON."
+    },
+    {
+      "setting": "Language preference",
+      "status": "WIRED",
+      "execution": "Saved defaultLanguage plus existing platform-selected current/session preference; no dictionaries added."
+    },
+    {
+      "setting": "Greeting, fallback, escalation",
+      "status": "WIRED",
+      "execution": "Existing persisted fields reach behavior assembly and existing applicable safety/response paths."
+    },
+    {
+      "setting": "Support contacts",
+      "status": "FIXED",
+      "execution": "Validated explicit HELP CONTACTS are candidates in existing evidence context independent of question language; selection/budget/revalidation flags remain visible."
+    },
+    {
+      "setting": "Provider configuration",
+      "status": "WIRED",
+      "execution": "Existing server-managed provider/model and authorized assistant fallback policy; settings unchanged."
+    },
+    {
+      "setting": "Agent Builder node layer",
+      "status": "NOT_EXECUTED_IN_SHARED_CHAT",
+      "execution": "Inspector remains false for this engine. No new node execution or instruction system implemented."
+    }
+  ],
+  "memoryMatrix": [
+    {
+      "boundary": "User/assistant persistence",
+      "status": "WIRED",
+      "notes": "Existing transaction/sequence and customer idempotency persistence retained."
+    },
+    {
+      "boundary": "Ordering and follow-up references",
+      "status": "WIRED",
+      "notes": "Chronological bounded history and existing validated reference pointers; current message sent separately."
+    },
+    {
+      "boundary": "Refresh",
+      "status": "FIXED",
+      "notes": "Existing route supports latest=true; newest page returned chronologically. Default offset pagination/export unchanged."
+    },
+    {
+      "boundary": "Safe truncation",
+      "status": "FIXED",
+      "notes": "12-message / 16 KiB engine history bounds retained; JSON escape cost considered; message/byte/content truncation reasons exposed. Existing follow-up resolution now receives the content-truncation flag even when no whole message was dropped."
+    },
+    {
+      "boundary": "Session isolation",
+      "status": "WIRED",
+      "notes": "Existing organization/assistant/user/channel/expiry and public session/origin guards retained."
+    },
+    {
+      "boundary": "Inspector",
+      "status": "FIXED",
+      "notes": "Safe configuration/version/section, memory selection/window, actual history role/count and dispatch, and trusted-fact state; no private values exposed."
+    }
+  ],
+  "providerPayloadLayers": {
+    "order": [
+      "Protected platform instructions and safety constraints",
+      "One saved assistant behavior system layer explicitly subordinate to platform/security/grounding",
+      "Authorized evidence JSON when relevant execution path selects and revalidates it",
+      "Untrusted chronological history JSON with original user/assistant labels",
+      "Current user question, once as the current turn"
+    ],
+    "agentNodeInstructions": "Absent in this shared engine; existing flow execution untouched.",
+    "redaction": "Evidence record contains only structure and synthetic test references, not live prompt/contact values.",
+    "limitation": "Assembly/dispatch callbacks do not prove provider response quality or deployed settings. Payload regression tests are unexecuted."
+  },
+  "defects": [
+    "P05-FACT-01",
+    "P05-UI-01",
+    "P05-MEM-01",
+    "P05-MEM-02",
+    "P05-DIAG-01"
+  ],
+  "changedFiles": [
+    "backend/src/modules/workspaces/conversation-diagnostics.ts",
+    "backend/src/modules/workspaces/conversation-intent.ts",
+    "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+    "backend/src/modules/workspaces/playground-diagnostics.ts",
+    "backend/src/modules/workspaces/assistant.controller.ts",
+    "backend/src/modules/workspaces/assistant.service.ts",
+    "frontend/src/services/api/assistants.ts",
+    "frontend/src/pages/training/PlaygroundChat.tsx",
+    "frontend/src/pages/training/TrainingCenterPage.tsx",
+    "backend/src/modules/workspaces/conversation-diagnostics.spec.ts",
+    "backend/src/modules/workspaces/playground-diagnostics.spec.ts",
+    "backend/test/assistant.playground.spec.ts",
+    "backend/test/assistant.service.spec.ts",
+    "frontend/src/tests/playground-chat.test.tsx",
+    "frontend/src/tests/training-center.test.tsx",
+    "docs/development/phase-register.md",
+    "docs/development/known-defects.md",
+    "docs/development/evidence/phase05-behavior-memory-ledger.json"
+  ],
+  "testExecution": {
+    "executed": false,
+    "buildsExecuted": false,
+    "typechecksExecuted": false,
+    "testsAddedOrUpdated": [
+      "backend/src/modules/workspaces/conversation-diagnostics.spec.ts",
+      "backend/src/modules/workspaces/playground-diagnostics.spec.ts",
+      "backend/test/assistant.playground.spec.ts",
+      "backend/test/assistant.service.spec.ts",
+      "frontend/src/tests/playground-chat.test.tsx",
+      "frontend/src/tests/training-center.test.tsx"
+    ],
+    "coverage": [
+      "Tenant-qualified Bot Behavior save/load",
+      "Actual outgoing instructions and updated behavior on a later request in the same session",
+      "Shared Playground/widget context payloads and platform/merchant precedence without an Agent Builder node",
+      "Validated contact evidence for Hindi and a corrective follow-up without lexical keyword overlap",
+      "Chronological user/assistant context and current-message uniqueness",
+      "Newest-page refresh with unchanged session identity and authorization",
+      "Serialized-byte truncation and cause metadata",
+      "Inspector assembly-versus-dispatch and sensitive-text exclusion",
+      "Stale save result cannot replace the newly selected assistant UI"
+    ],
+    "limitations": "Provider/Prisma contracts in tests use offline fixtures. Public widget token/origin tests remain existing coverage; direct shared-context tests assume caller authorization."
+  },
+  "futureCommandsNotExecuted": [
+    "cd backend && node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/assistant.service.spec.ts test/assistant.playground.spec.ts src/modules/workspaces/conversation-diagnostics.spec.ts src/modules/workspaces/playground-diagnostics.spec.ts src/modules/workspaces/assistant-contact-evidence.spec.ts src/modules/workspaces/conversation-orchestrator.customer.spec.ts src/modules/workspaces/widget.service.spec.ts",
+    "cd frontend && node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/training-center.test.tsx src/tests/playground-chat.test.tsx --pool=threads --maxWorkers=1 --minWorkers=1"
+  ],
+  "pending": [
+    "Execute focused offline regression tests when permitted; this continuation explicitly prohibited execution.",
+    "Verify real Bot Behavior persistence/reload, next-turn configuration update, corrective follow-up contact grounding, long-session refresh and authorized public widget behavior.",
+    "No new migration/configuration is required by these edits; deployed database/provider readiness remains unverified.",
+    "The three reported repeated-social-response trace exports/raw interpretations remain unavailable. Confirm exact deployed payloads and conversational outcome before resolving P06-SOCIAL-01.",
+    "Earlier phase blockers and Phase 04 configured/indexed semantic retrieval calibration remain carried."
+  ],
+  "rollback": {
+    "path": "/tmp/carteio-phase05-source-checkpoint-20261026",
+    "procedure": "Compare saved pre-edit copies and selectively reverse Phase 05 changes only; preserve all pre-existing work including the targeted Phase 06 repair. No Git reset/clean/restore or database rollback required.",
+    "ephemeral": true
+  },
+  "safety": {
+    "testsBuildsTypechecks": false,
+    "serversInstallsMigrations": false,
+    "paidProviderCalls": false,
+    "liveCrawlOrShopifyOperations": false,
+    "providerModelOrSecretsChanges": false,
+    "destructiveGitOrDatabaseOperations": false
+  },
+  "phase06Readiness": "Full Phase 06 NOT_STARTED. Existing targeted P06-SOCIAL-01 repair remains unverified; response quality, schema optimization and conversational runtime checks belong there and were not expanded here.",
+  "sourceHashes": {
+    "backend/src/modules/workspaces/conversation-diagnostics.ts": "38b30e63b6b0199283860a101fa000eed3d4d92bc01b280e2787c43426ec5625",
+    "backend/src/modules/workspaces/conversation-intent.ts": "035ed774accdbc64ab1bdb32ee32d62c4846bfe8bd1c717e8403e97e17642b08",
+    "backend/src/modules/workspaces/conversation-orchestrator.service.ts": "bb3af7ea678d994904d4161558f39b44dea5d1d972a9b69301972b2cd068eafe",
+    "backend/src/modules/workspaces/playground-diagnostics.ts": "880ec401f358de0385fd7f85e5732a91884ec8b80e226c9c519821b63ec50243",
+    "backend/src/modules/workspaces/assistant.controller.ts": "ee01d7e26f542563bbb6c9ab3c394f36e03d15e205127c31279d125aaba6fd53",
+    "backend/src/modules/workspaces/assistant.service.ts": "26c64f3370167fb3e64f2a2217b4d33ce978098fb038ee17dc35cc73cc38c93d",
+    "frontend/src/services/api/assistants.ts": "296dc29e1843a93b34e47aad0e4d91721be00c69ae5f7c1930625557ab55090a",
+    "frontend/src/pages/training/PlaygroundChat.tsx": "f5637051712626d8622233399a8d642dc8055969b47f7b053dc86ab451113788",
+    "frontend/src/pages/training/TrainingCenterPage.tsx": "9b804dfebeb9ea3a60cb41f6a84a8b1bf8bae8340e0da0d2b4056bbe67f50fb2",
+    "backend/src/modules/workspaces/conversation-diagnostics.spec.ts": "0f02d1021329b735c7f8eff5450cdabba42b8869408643043e7df3063edcadff",
+    "backend/src/modules/workspaces/playground-diagnostics.spec.ts": "4db6ddd9d6191985b4e8161fd624de585e5b48667a45fb09cc289a5266cd6646",
+    "backend/test/assistant.playground.spec.ts": "a893b6e5edae93c8860a2115fd2e6a1e5606bd3ac73e771a69367b0a9c7d12f3",
+    "backend/test/assistant.service.spec.ts": "3c781da46dbc22a72d1951d9646d5e57b3edcd518d1c38958d3d84acf1db1deb",
+    "frontend/src/tests/playground-chat.test.tsx": "9380a0e9d1bceb3c00c4150716e8908393cc298a7d14eee5d10f088e5c00589f",
+    "frontend/src/tests/training-center.test.tsx": "897b7a80d54b7add1fe84be962d0c803c012bdd18f17f3d718aec65413ed3cbf",
+    "docs/development/phase-register.md": "2aa298068769bc91dffae7b509f24f0ea7376988f849dd101fe5ad15beb8443b",
+    "docs/development/known-defects.md": "34d4ffa90ac5ae19ca9dff82a42a1749e7a7de1bf02618b0b8e0eb853943b1ec"
+  }
+}

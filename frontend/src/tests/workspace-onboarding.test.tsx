@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../app/App';
 
@@ -25,10 +25,13 @@ describe('workspace onboarding', () => {
     window.history.pushState({}, '', '/dashboard');
     render(<App/>);
     expect(await screen.findByRole('heading', { name: 'Create your workspace' })).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Workspace / Company Name'), 'Carteio');
-    expect(screen.getByLabelText('Workspace URL Slug')).toHaveValue('carteio');
+    await user.type(screen.getByLabelText(/Workspace \/ Company Name/), 'Carteio');
+    expect(screen.getByLabelText(/Workspace URL Slug/)).toHaveValue('carteio');
     await user.click(screen.getByRole('button', { name: /create workspace/i }));
-    expect(await screen.findByRole('heading', { name: 'Welcome to Carteio' })).toBeInTheDocument();
+    expect(await screen.findByText('Carteio', { selector: '.workspace-names strong' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/workspace/carteio');
+    const assistantLinks = screen.getAllByRole('navigation', { name: 'Workspace navigation' }).flatMap((navigation) => within(navigation).getAllByRole('link', { name: 'AI Assistants' }));
+    expect(assistantLinks.find((link) => link.getAttribute('href') === '/workspace/carteio/assistants')).toBeInTheDocument();
     expect(createPayload).toEqual({ name: 'Carteio', slug: 'carteio' });
     expect(window.localStorage.getItem('carteio:last-authorized-workspace')).toBe('carteio');
   });
@@ -45,9 +48,9 @@ describe('workspace onboarding', () => {
     window.history.pushState({}, '', '/onboarding');
     render(<App/>);
     await screen.findByRole('heading', { name: 'Create your workspace' });
-    await user.type(screen.getByLabelText('Workspace / Company Name'), 'Existing Company');
+    await user.type(screen.getByLabelText(/Workspace \/ Company Name/), 'Existing Company');
     await user.click(screen.getByRole('button', { name: /create workspace/i }));
     expect(await screen.findByText('That workspace URL is already in use.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Workspace URL Slug')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/Workspace URL Slug/)).toHaveAttribute('aria-invalid', 'true');
   });
 });

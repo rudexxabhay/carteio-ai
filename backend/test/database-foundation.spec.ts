@@ -50,6 +50,10 @@ describe('database foundation', () => {
     expect(schema).toContain('references: [id, organizationId], onDelete: Restrict');
     expect(schema).toContain('verificationStatus WebsiteVerificationStatus @default(UNVERIFIED)');
     expect(schema).toContain('onDelete: Restrict');
-    expect(schema).not.toMatch(/password|accessToken|secretKey/i);
+    // Password hashes and session/token digests are intentionally persisted;
+    // provider credentials must remain environment-only.
+    expect(schema).toContain('passwordHash String');
+    expect(schema).toMatch(/tokenHash\s+String/);
+    expect(schema).not.toMatch(/(?:provider|groq|gemini|openai)ApiKey|apiKey\s+String/i);
   });
 });

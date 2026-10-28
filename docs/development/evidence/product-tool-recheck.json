@@ -1,0 +1,676 @@
+{
+  "run": "P1",
+  "sourceReport": "/tmp/carteio-phase00-product-tool-recheck.json",
+  "exitCode": 0,
+  "selection": "name-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 1,
+    "numPassedTestSuites": 1,
+    "numFailedTestSuites": 0,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 130,
+    "numPassedTests": 9,
+    "numFailedTests": 0,
+    "numPendingTests": 121
+  },
+  "fileCount": 1,
+  "files": [
+    {
+      "path": "backend/test/assistant.playground.spec.ts",
+      "status": "focused",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AssistantService Playground chat routes the compatibility facade through the injected canonical orchestrator",
+          "status": "pending",
+          "title": "routes the compatibility facade through the injected canonical orchestrator"
+        },
+        {
+          "name": "AssistantService Playground chat records a safe failed security stage without inventing a tenant identity",
+          "status": "pending",
+          "title": "records a safe failed security stage without inventing a tenant identity"
+        },
+        {
+          "name": "AssistantService Playground chat keeps customer text and Knowledge excerpts out of successful conversation stage logs",
+          "status": "pending",
+          "title": "keeps customer text and Knowledge excerpts out of successful conversation stage logs"
+        },
+        {
+          "name": "AssistantService Playground chat scopes assistant lookup to the verified workspace and hides cross-workspace assistants",
+          "status": "pending",
+          "title": "scopes assistant lookup to the verified workspace and hides cross-workspace assistants"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another user",
+          "status": "pending",
+          "title": "does not return a session owned by another user"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another assistant",
+          "status": "pending",
+          "title": "does not return a session owned by another assistant"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another organization",
+          "status": "pending",
+          "title": "does not return a session owned by another organization"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another channel",
+          "status": "pending",
+          "title": "does not return a session owned by another channel"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a chat request targeting a session owned by another user before provider or Knowledge access",
+          "status": "pending",
+          "title": "rejects a chat request targeting a session owned by another user before provider or Knowledge access"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a chat request targeting a session owned by another assistant before provider or Knowledge access",
+          "status": "pending",
+          "title": "rejects a chat request targeting a session owned by another assistant before provider or Knowledge access"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a chat request targeting a session owned by another organization before provider or Knowledge access",
+          "status": "pending",
+          "title": "rejects a chat request targeting a session owned by another organization before provider or Knowledge access"
+        },
+        {
+          "name": "AssistantService Playground chat ignores client-supplied tenant and user fields when deriving authorized context",
+          "status": "pending",
+          "title": "ignores client-supplied tenant and user fields when deriving authorized context"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed for a supplied unknown session without creating a replacement",
+          "status": "pending",
+          "title": "fails closed for a supplied unknown session without creating a replacement"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed for a supplied expired session without creating a replacement",
+          "status": "pending",
+          "title": "fails closed for a supplied expired session without creating a replacement"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed for a supplied another channel session without creating a replacement",
+          "status": "pending",
+          "title": "fails closed for a supplied another channel session without creating a replacement"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a clientTurnId already committed to another session before Knowledge or provider access",
+          "status": "pending",
+          "title": "rejects a clientTurnId already committed to another session before Knowledge or provider access"
+        },
+        {
+          "name": "AssistantService Playground chat rejects reuse of a committed clientTurnId with changed content in the same session",
+          "status": "pending",
+          "title": "rejects reuse of a committed clientTurnId with changed content in the same session"
+        },
+        {
+          "name": "AssistantService Playground chat replays a stable clientTurnId after a lost initial response without creating another session",
+          "status": "pending",
+          "title": "replays a stable clientTurnId after a lost initial response without creating another session"
+        },
+        {
+          "name": "AssistantService Playground chat aggregates known interpretation and generation token usage for one committed turn",
+          "status": "pending",
+          "title": "aggregates known interpretation and generation token usage for one committed turn"
+        },
+        {
+          "name": "AssistantService Playground chat replays legacy messages without inventing response provenance",
+          "status": "pending",
+          "title": "replays legacy messages without inventing response provenance"
+        },
+        {
+          "name": "AssistantService Playground chat allows only one concurrent submission for a clientTurnId under the session lease",
+          "status": "pending",
+          "title": "allows only one concurrent submission for a clientTurnId under the session lease"
+        },
+        {
+          "name": "AssistantService Playground chat interprets cross-language queries, retrieves public-safe evidence, and calls only the selected provider",
+          "status": "pending",
+          "title": "interprets cross-language queries, retrieves public-safe evidence, and calls only the selected provider"
+        },
+        {
+          "name": "AssistantService Playground chat executes a provider-issued Knowledge tool call and grounds the follow-up answer in its evidence",
+          "status": "pending",
+          "title": "executes a provider-issued Knowledge tool call and grounds the follow-up answer in its evidence"
+        },
+        {
+          "name": "AssistantService Playground chat searches authorized English Knowledge for a Hinglish shipping question despite an advisory out-of-scope estimate",
+          "status": "pending",
+          "title": "searches authorized English Knowledge for a Hinglish shipping question despite an advisory out-of-scope estimate"
+        },
+        {
+          "name": "AssistantService Playground chat retrieves English policy evidence and follows the latest English message over the assistant default language",
+          "status": "pending",
+          "title": "retrieves English policy evidence and follows the latest English message over the assistant default language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for What is Carteio’s shipping policy? while preserving customer response language",
+          "status": "pending",
+          "title": "plans source-language retrieval for What is Carteio’s shipping policy? while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for carteio ki shipping policy kya h while preserving customer response language",
+          "status": "pending",
+          "title": "plans source-language retrieval for carteio ki shipping policy kya h while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for Shipping policy batao while preserving customer response language",
+          "status": "pending",
+          "title": "plans source-language retrieval for Shipping policy batao while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for कार्टेयो की शिपिंग पॉलिसी क्या है? while preserving customer response language",
+          "status": "pending",
+          "title": "plans source-language retrieval for कार्टेयो की शिपिंग पॉलिसी क्या है? while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for Tell me your shipping rules while preserving customer response language",
+          "status": "pending",
+          "title": "plans source-language retrieval for Tell me your shipping rules while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for Delivery policy samjhao while preserving customer response language",
+          "status": "pending",
+          "title": "plans source-language retrieval for Delivery policy samjhao while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat uses the exact authorized English policy for the multilingual question India ke bahar shipping krte ho",
+          "status": "pending",
+          "title": "uses the exact authorized English policy for the multilingual question India ke bahar shipping krte ho"
+        },
+        {
+          "name": "AssistantService Playground chat uses the exact authorized English policy for the multilingual question Kya India me delivery hoti hai?",
+          "status": "pending",
+          "title": "uses the exact authorized English policy for the multilingual question Kya India me delivery hoti hai?"
+        },
+        {
+          "name": "AssistantService Playground chat uses model-generated uncertainty when retrieval has no matching business evidence",
+          "status": "pending",
+          "title": "uses model-generated uncertainty when retrieval has no matching business evidence"
+        },
+        {
+          "name": "AssistantService Playground chat supplies complete saved Bot Behavior and validated support contacts to the actual grounded provider request",
+          "status": "pending",
+          "title": "supplies complete saved Bot Behavior and validated support contacts to the actual grounded provider request"
+        },
+        {
+          "name": "AssistantService Playground chat routes conversation feedback with bounded prior context instead of repeating the no-evidence path",
+          "status": "pending",
+          "title": "routes conversation feedback with bounded prior context instead of repeating the no-evidence path"
+        },
+        {
+          "name": "AssistantService Playground chat sends a contextual acknowledgment through the model instead of a fixed customer-facing reply",
+          "status": "pending",
+          "title": "sends a contextual acknowledgment through the model instead of a fixed customer-facing reply"
+        },
+        {
+          "name": "AssistantService Playground chat routes an acknowledged missing-evidence answer as social even when the legacy intent is stale",
+          "status": "pending",
+          "title": "routes an acknowledged missing-evidence answer as social even when the legacy intent is stale"
+        },
+        {
+          "name": "AssistantService Playground chat uses only a minimal fact-free technical fallback when no-evidence generation is unavailable",
+          "status": "pending",
+          "title": "uses only a minimal fact-free technical fallback when no-evidence generation is unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat uses an owned prior user topic to ground a follow-up through the normal Knowledge path",
+          "status": "pending",
+          "title": "uses an owned prior user topic to ground a follow-up through the normal Knowledge path"
+        },
+        {
+          "name": "AssistantService Playground chat accepts a valid structured interpretation surrounded by provider prose and markdown fences",
+          "status": "pending",
+          "title": "accepts a valid structured interpretation surrounded by provider prose and markdown fences"
+        },
+        {
+          "name": "AssistantService Playground chat runs multilingual semantic output through the existing interpretation call and preserves the original negated identifier query",
+          "status": "pending",
+          "title": "runs multilingual semantic output through the existing interpretation call and preserves the original negated identifier query"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed when semantic interpretation receives a provider permission failure",
+          "status": "pending",
+          "title": "fails closed when semantic interpretation receives a provider permission failure"
+        },
+        {
+          "name": "AssistantService Playground chat falls back to the original bounded lexical query when interpretation is not JSON",
+          "status": "pending",
+          "title": "falls back to the original bounded lexical query when interpretation is not JSON"
+        },
+        {
+          "name": "AssistantService Playground chat does not revive the prior business request when a short reply follows a social turn and interpretation fails",
+          "status": "pending",
+          "title": "does not revive the prior business request when a short reply follows a social turn and interpretation fails"
+        },
+        {
+          "name": "AssistantService Playground chat recovers a standalone Hinglish wellbeing message without Knowledge retrieval and keeps the reply model-generated",
+          "status": "pending",
+          "title": "recovers a standalone Hinglish wellbeing message without Knowledge retrieval and keeps the reply model-generated"
+        },
+        {
+          "name": "AssistantService Playground chat retries one explicit OpenRouter JSON-mode incompatibility using prompt-only validated JSON",
+          "status": "pending",
+          "title": "retries one explicit OpenRouter JSON-mode incompatibility using prompt-only validated JSON"
+        },
+        {
+          "name": "AssistantService Playground chat lets the answer model choose the authorized catalog tool after invalid interpretation without keyword intent recovery",
+          "status": "pending",
+          "title": "lets the answer model choose the authorized catalog tool after invalid interpretation without keyword intent recovery"
+        },
+        {
+          "name": "AssistantService Playground chat keeps quoted prompt-injection text in the customer role and allows the question through normal retrieval",
+          "status": "pending",
+          "title": "keeps quoted prompt-injection text in the customer role and allows the question through normal retrieval"
+        },
+        {
+          "name": "AssistantService Playground chat serializes malicious Knowledge as escaped reference data without creating provider roles",
+          "status": "pending",
+          "title": "serializes malicious Knowledge as escaped reference data without creating provider roles"
+        },
+        {
+          "name": "AssistantService Playground chat keeps injected prior turns inside a user data envelope instead of promoting historical roles",
+          "status": "pending",
+          "title": "keeps injected prior turns inside a user data envelope instead of promoting historical roles"
+        },
+        {
+          "name": "AssistantService Playground chat does not execute provider output that asks for tools or a provider switch",
+          "status": "pending",
+          "title": "does not execute provider output that asks for tools or a provider switch"
+        },
+        {
+          "name": "AssistantService Playground chat keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ¿Cuál es la política de devolución?",
+          "status": "pending",
+          "title": "keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ¿Cuál es la política de devolución?"
+        },
+        {
+          "name": "AssistantService Playground chat keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ما سياسة الإرجاع؟",
+          "status": "pending",
+          "title": "keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ما سياسة الإرجاع؟"
+        },
+        {
+          "name": "AssistantService Playground chat keeps arbitrary language/script/style metadata and multilingual retrieval candidates for Can I return यह product?",
+          "status": "pending",
+          "title": "keeps arbitrary language/script/style metadata and multilingual retrieval candidates for Can I return यह product?"
+        },
+        {
+          "name": "AssistantService Playground chat does not call any provider when no provider is explicitly configured",
+          "status": "pending",
+          "title": "does not call any provider when no provider is explicitly configured"
+        },
+        {
+          "name": "AssistantService Playground chat states uncertainty when eligible Knowledge has no relevant matches",
+          "status": "pending",
+          "title": "states uncertainty when eligible Knowledge has no relevant matches"
+        },
+        {
+          "name": "AssistantService Playground chat recovers Hinglish response language after semantic metadata rejection without suggesting an unrelated catalog lookup",
+          "status": "pending",
+          "title": "recovers Hinglish response language after semantic metadata rejection without suggesting an unrelated catalog lookup"
+        },
+        {
+          "name": "AssistantService Playground chat drops evidence invalidated after search before provider submission",
+          "status": "pending",
+          "title": "drops evidence invalidated after search before provider submission"
+        },
+        {
+          "name": "AssistantService Playground chat returns the safe fallback if evidence loses authorization while the provider is responding",
+          "status": "pending",
+          "title": "returns the safe fallback if evidence loses authorization while the provider is responding"
+        },
+        {
+          "name": "AssistantService Playground chat does not persist a grounded answer if evidence is invalidated at the persistence boundary",
+          "status": "pending",
+          "title": "does not persist a grounded answer if evidence is invalidated at the persistence boundary"
+        },
+        {
+          "name": "AssistantService Playground chat retries one invalid citation and does not claim authorized evidence was missing when citations still fail",
+          "status": "pending",
+          "title": "retries one invalid citation and does not claim authorized evidence was missing when citations still fail"
+        },
+        {
+          "name": "AssistantService Playground chat accepts a single citation repair only after strict validation against the same authorized evidence",
+          "status": "pending",
+          "title": "accepts a single citation repair only after strict validation against the same authorized evidence"
+        },
+        {
+          "name": "AssistantService Playground chat hides historical grounded messages whose source authorization has since been removed",
+          "status": "pending",
+          "title": "hides historical grounded messages whose source authorization has since been removed"
+        },
+        {
+          "name": "AssistantService Playground chat returns an authorized chronological history page with a bounded continuation offset",
+          "status": "pending",
+          "title": "returns an authorized chronological history page with a bounded continuation offset"
+        },
+        {
+          "name": "AssistantService Playground chat restores knowledge provenance only after historical evidence revalidation",
+          "status": "pending",
+          "title": "restores knowledge provenance only after historical evidence revalidation"
+        },
+        {
+          "name": "AssistantService Playground chat replays the configured fallback instead of stale grounded content after source authorization is removed",
+          "status": "pending",
+          "title": "replays the configured fallback instead of stale grounded content after source authorization is removed"
+        },
+        {
+          "name": "AssistantService Playground chat does not send stale historical grounded answers back to the provider as conversation context",
+          "status": "pending",
+          "title": "does not send stale historical grounded answers back to the provider as conversation context"
+        },
+        {
+          "name": "AssistantService Playground chat keeps only recent whole history messages and bounds the complete provider context",
+          "status": "pending",
+          "title": "keeps only recent whole history messages and bounds the complete provider context"
+        },
+        {
+          "name": "AssistantService Playground chat sends the current customer message once, separately from bounded prior history",
+          "status": "pending",
+          "title": "sends the current customer message once, separately from bounded prior history"
+        },
+        {
+          "name": "AssistantService Playground chat returns a configured greeting without requiring knowledge retrieval or provider connectivity",
+          "status": "pending",
+          "title": "returns a configured greeting without requiring knowledge retrieval or provider connectivity"
+        },
+        {
+          "name": "AssistantService Playground chat preserves the Playground response contract and keeps customer ticket handling out of the Playground adapter",
+          "status": "pending",
+          "title": "preserves the Playground response contract and keeps customer ticket handling out of the Playground adapter"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment OK without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment OK without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Okay without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Okay without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Okey without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Okey without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Okie without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Okie without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Thik hai without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Thik hai without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Samajh gya without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Samajh gya without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment ठीक है without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment ठीक है without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Got it without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Got it without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Understood without a Knowledge search or provider request",
+          "status": "pending",
+          "title": "handles standalone acknowledgment Understood without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat uses the validated acknowledgment contract after a grounded turn without another answer call or retrieval",
+          "status": "pending",
+          "title": "uses the validated acknowledgment contract after a grounded turn without another answer call or retrieval"
+        },
+        {
+          "name": "AssistantService Playground chat answers pure social message नमस्ते without provider or retrieval calls",
+          "status": "pending",
+          "title": "answers pure social message नमस्ते without provider or retrieval calls"
+        },
+        {
+          "name": "AssistantService Playground chat answers pure social message Thank you without provider or retrieval calls",
+          "status": "pending",
+          "title": "answers pure social message Thank you without provider or retrieval calls"
+        },
+        {
+          "name": "AssistantService Playground chat uses semantic interpretation and the selected provider for an informal Hinglish wellbeing message",
+          "status": "pending",
+          "title": "uses semantic interpretation and the selected provider for an informal Hinglish wellbeing message"
+        },
+        {
+          "name": "AssistantService Playground chat answers an interpreted assistant-origin question truthfully without treating it as a greeting",
+          "status": "pending",
+          "title": "answers an interpreted assistant-origin question truthfully without treating it as a greeting"
+        },
+        {
+          "name": "AssistantService Playground chat uses the configured en language for interpreted social replies",
+          "status": "pending",
+          "title": "uses the configured en language for interpreted social replies"
+        },
+        {
+          "name": "AssistantService Playground chat uses the configured hi language for interpreted social replies",
+          "status": "pending",
+          "title": "uses the configured hi language for interpreted social replies"
+        },
+        {
+          "name": "AssistantService Playground chat routes company location questions to authorized Knowledge instead of assistant identity handling",
+          "status": "pending",
+          "title": "routes company location questions to authorized Knowledge instead of assistant identity handling"
+        },
+        {
+          "name": "AssistantService Playground chat uses a truthful system-provenance wellbeing fallback when the answer provider is unavailable",
+          "status": "pending",
+          "title": "uses a truthful system-provenance wellbeing fallback when the answer provider is unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat uses the selected model for social replies in languages outside deterministic shortcuts",
+          "status": "pending",
+          "title": "uses the selected model for social replies in languages outside deterministic shortcuts"
+        },
+        {
+          "name": "AssistantService Playground chat does not swallow a greeting followed by a real business question",
+          "status": "pending",
+          "title": "does not swallow a greeting followed by a real business question"
+        },
+        {
+          "name": "AssistantService Playground chat does not let a model labeled greeting turn a personal order status into a Knowledge answer",
+          "status": "pending",
+          "title": "does not let a model labeled greeting turn a personal order status into a Knowledge answer"
+        },
+        {
+          "name": "AssistantService Playground chat does not answer a personal order status from otherwise eligible policy Knowledge without a live connector",
+          "status": "pending",
+          "title": "does not answer a personal order status from otherwise eligible policy Knowledge without a live connector"
+        },
+        {
+          "name": "AssistantService Playground chat ignores user-supplied webhook claims and never fetches an arbitrary endpoint",
+          "status": "pending",
+          "title": "ignores user-supplied webhook claims and never fetches an arbitrary endpoint"
+        },
+        {
+          "name": "AssistantService Playground chat routes a static logistics POD policy question to authorized Knowledge and preserves citations",
+          "status": "pending",
+          "title": "routes a static logistics POD policy question to authorized Knowledge and preserves citations"
+        },
+        {
+          "name": "AssistantService Playground chat answers the public portion of a mixed policy and personal-status request and states live lookup is unavailable",
+          "status": "pending",
+          "title": "answers the public portion of a mixed policy and personal-status request and states live lookup is unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat does not fabricate either half of a mixed request when public evidence and live lookup are absent",
+          "status": "pending",
+          "title": "does not fabricate either half of a mixed request when public evidence and live lookup are absent"
+        },
+        {
+          "name": "AssistantService Playground chat clarifies ambiguous payment versus refund intent without asking for sensitive transaction details",
+          "status": "pending",
+          "title": "clarifies ambiguous payment versus refund intent without asking for sensitive transaction details"
+        },
+        {
+          "name": "AssistantService Playground chat redirects an unrelated question when trusted assistant business scope is configured",
+          "status": "pending",
+          "title": "redirects an unrelated question when trusted assistant business scope is configured"
+        },
+        {
+          "name": "AssistantService Playground chat does not send the unrelated part of a partial-scope request to answer generation",
+          "status": "pending",
+          "title": "does not send the unrelated part of a partial-scope request to answer generation"
+        },
+        {
+          "name": "AssistantService Playground chat answers only a verbatim in-scope span of a mixed-scope request and retains a server-owned scope note",
+          "status": "pending",
+          "title": "answers only a verbatim in-scope span of a mixed-scope request and retains a server-owned scope note"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a mixed-request provider claim of refund approval and does not expose citations as proof of status",
+          "status": "pending",
+          "title": "rejects a mixed-request provider claim of refund approval and does not expose citations as proof of status"
+        },
+        {
+          "name": "AssistantService Playground chat appends the server-owned live limitation when the mixed response omits it",
+          "status": "pending",
+          "title": "appends the server-owned live limitation when the mixed response omits it"
+        },
+        {
+          "name": "AssistantService Playground chat uses existing refusal handling when a greeting contains a private-data instruction",
+          "status": "pending",
+          "title": "uses existing refusal handling when a greeting contains a private-data instruction"
+        },
+        {
+          "name": "AssistantService Playground chat keeps provider HTTP failures distinct from grounded-knowledge fallback",
+          "status": "pending",
+          "title": "keeps provider HTTP failures distinct from grounded-knowledge fallback"
+        },
+        {
+          "name": "AssistantService Playground chat saturates the database-backed user quota before retrieval and returns a bounded retry delay",
+          "status": "pending",
+          "title": "saturates the database-backed user quota before retrieval and returns a bounded retry delay"
+        },
+        {
+          "name": "AssistantService Playground chat uses separate PostgreSQL rate buckets for the same user in different workspaces",
+          "status": "pending",
+          "title": "uses separate PostgreSQL rate buckets for the same user in different workspaces"
+        },
+        {
+          "name": "AssistantService Playground chat ignores customer-supplied provider and model overrides",
+          "status": "pending",
+          "title": "ignores customer-supplied provider and model overrides"
+        },
+        {
+          "name": "AssistantService Playground chat does not fall back on provider authentication failure or expose provider error text",
+          "status": "pending",
+          "title": "does not fall back on provider authentication failure or expose provider error text"
+        },
+        {
+          "name": "AssistantService Playground chat does not fall back when the selected provider credential is missing",
+          "status": "pending",
+          "title": "does not fall back when the selected provider credential is missing"
+        },
+        {
+          "name": "AssistantService Playground chat uses only the configured approved fallback for provider rate limits and keeps safety blocks non-retryable",
+          "status": "pending",
+          "title": "uses only the configured approved fallback for provider rate limits and keeps safety blocks non-retryable"
+        },
+        {
+          "name": "AssistantService Playground chat does not leave the selected route on a provider 429 when fallback mode is manual",
+          "status": "pending",
+          "title": "does not leave the selected route on a provider 429 when fallback mode is manual"
+        },
+        {
+          "name": "AssistantService Playground chat uses the approved fallback after interpretation succeeded but answer generation became unavailable",
+          "status": "pending",
+          "title": "uses the approved fallback after interpretation succeeded but answer generation became unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat stops before fallback when the original conversation deadline has expired",
+          "status": "pending",
+          "title": "stops before fallback when the original conversation deadline has expired"
+        },
+        {
+          "name": "AssistantService Playground chat uses an owner-approved Gemini fallback after the environment primary has a transient failure",
+          "status": "pending",
+          "title": "uses an owner-approved Gemini fallback after the environment primary has a transient failure"
+        },
+        {
+          "name": "AssistantService Playground chat routes a MANUAL assistant through the environment Gemini route despite stale stored Groq settings",
+          "status": "pending",
+          "title": "routes a MANUAL assistant through the environment Gemini route despite stale stored Groq settings"
+        },
+        {
+          "name": "AssistantService Playground chat reports when the assistant has no public ready linked knowledge",
+          "status": "pending",
+          "title": "reports when the assistant has no public ready linked knowledge"
+        },
+        {
+          "name": "AssistantService Playground chat plans separate grounded answer aspects from one interpretation and retains both source identities",
+          "status": "pending",
+          "title": "plans separate grounded answer aspects from one interpretation and retains both source identities"
+        },
+        {
+          "name": "AssistantService Playground chat searches the authorized catalog for broad product discovery even when legacy interpretation says capability",
+          "status": "pending",
+          "title": "searches the authorized catalog for broad product discovery even when legacy interpretation says capability"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"What products do you sell?\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"What products do you sell?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Tumhare store mein kya kya milta?\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Tumhare store mein kya kya milta?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Show me bracelets under ₹700.\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Show me bracelets under ₹700.\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Is Ocean Horizon Bracelet Stack available?\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Is Ocean Horizon Bracelet Stack available?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Tell me about this product.\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Tell me about this product.\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Is it in stock?\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Is it in stock?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Show me similar products.\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Show me similar products.\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"What is the price?\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"What is the price?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Can you recommend a gift?\" and grounds the final answer",
+          "status": "passed",
+          "title": "uses the authorized Shopify tool for \"Can you recommend a gift?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat keeps the exact anonymous order question outside customer order lookup and exposes no order tool",
+          "status": "pending",
+          "title": "keeps the exact anonymous order question outside customer order lookup and exposes no order tool"
+        }
+      ]
+    }
+  ]
+}

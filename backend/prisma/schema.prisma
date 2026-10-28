@@ -34,6 +34,12 @@ enum WebsiteVerificationStatus {
   FAILED
 }
 
+enum KnowledgeSyncPolicy {
+  MANUAL
+  DAILY
+  WEEKLY
+}
+
 enum AssistantStatus {
   DRAFT
   ACTIVE
@@ -60,6 +66,167 @@ enum KnowledgeProcessingStatus {
   FAILED
 }
 
+enum KnowledgeSemanticStatus {
+  NOT_CONFIGURED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum KnowledgeVisibility {
+  INTERNAL_RESTRICTED
+  PUBLIC_REFERENCE
+}
+
+enum KnowledgeBaseStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum KnowledgeJobStatus {
+  QUEUED
+  PROCESSING
+  RETRY_WAIT
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum IntegrationPlatform {
+  SHOPIFY
+  WOOCOMMERCE
+  WORDPRESS
+  CUSTOM_API
+  STATIC_WEBSITE
+}
+
+enum IntegrationConnectionState {
+  DRAFT
+  PENDING_VERIFICATION
+  CONNECTED
+  SYNCING
+  CONNECTED_WITH_WARNINGS
+  ERROR
+  DISCONNECTED
+  REVOKED
+}
+
+enum CommerceSyncState {
+  PENDING
+  SYNCING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ConnectorInstanceState {
+  DRAFT
+  CONNECTING
+  CONNECTED
+  DEGRADED
+  ERROR
+  DISCONNECTED
+}
+
+enum ConnectorSyncJobState {
+  PENDING
+  RUNNING
+  RETRY_WAIT
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ConnectorSyncMode {
+  FULL
+  INCREMENTAL
+}
+
+enum ConnectorWebhookState {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum PlatformRole {
+  SUPPORT
+  OPERATIONS
+  ADMIN
+}
+
+enum SubscriptionState {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  SETUP_REQUIRED
+}
+
+enum InboxConversationState {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum InboxMessageKind {
+  CUSTOMER
+  AI
+  HUMAN
+  BUSINESS_TEAM
+  INTERNAL_NOTE
+  SYSTEM
+}
+
+enum TicketStatus {
+  OPEN
+  ACTIVE
+  PENDING
+  CLOSED
+}
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+enum TicketDraftState {
+  COLLECTING
+  AWAITING_CONFIRMATION
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+enum OutboundDeliveryState {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  UNSUPPORTED_CHANNEL
+}
+
+enum WorkflowExecutionState {
+  PROPOSED
+  AWAITING_APPROVAL
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum WorkflowStepState {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
 model User {
   id                String                   @id @default(uuid()) @db.Uuid
   email             String                   @unique @db.VarChar(320)
@@ -77,6 +244,19 @@ model User {
   identities        AuthIdentity[]
   createdChatbots    Chatbot[]                @relation("ChatbotCreator")
   createdKnowledgeSources KnowledgeSource[]    @relation("KnowledgeSourceCreator")
+  createdKnowledgeBases KnowledgeBase[]       @relation("KnowledgeBaseCreator")
+  playgroundConversations PlaygroundConversation[]
+  platformOperator PlatformOperator?
+  platformAuditEvents PlatformAuditEvent[]
+  assignedInboxConversations SupportConversation[] @relation("InboxAssignee")
+  supportConversationReadStates SupportConversationReadState[]
+  supportMessages SupportMessage[] @relation("SupportMessageAuthor")
+  ticketsAssigned Ticket[] @relation("TicketAssignee")
+  ticketEvents TicketEvent[]
+  ticketNotes TicketInternalNote[]
+  workflowApprovals WorkflowApproval[]
+  workflowRequests WorkflowExecution[] @relation("WorkflowRequester")
+  shopifyOAuthStates ShopifyOAuthState[]
 
   @@index([status, createdAt])
 }
@@ -159,18 +339,70 @@ model Organization {
   slug        String                   @unique @db.VarChar(63)
   websiteUrl  String?                  @db.VarChar(2048)
   businessType String?                 @db.VarChar(80)
+  timezone    String                   @default("UTC") @db.VarChar(80)
+  locale      String                   @default("en") @db.VarChar(35)
   status      RecordStatus             @default(ACTIVE)
   createdAt   DateTime                 @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime                 @updatedAt @db.Timestamptz(3)
   memberships OrganizationMembership[]
   websites    Website[]
   chatbots    Chatbot[]
+  flowDefinitions FlowDefinition[]
   integrations Integration[]
   auditEvents AuditEvent[]
   knowledgeSources KnowledgeSource[]
+  knowledgeBases KnowledgeBase[]
+  knowledgeBaseSources KnowledgeBaseSource[]
   assistantKnowledgeSources AssistantKnowledgeSource[]
+  assistantKnowledgeBases AssistantKnowledgeBase[]
+  assistantBusinessRules AssistantBusinessRule[]
+  knowledgeJobs KnowledgeProcessingJob[]
+  knowledgePages KnowledgePage[]
+  knowledgeChunks KnowledgeChunk[]
+  knowledgeSyncRuns KnowledgeSyncRun[]
+  connectorDataPermissions ConnectorDataPermission[]
+  assistantConnectorDataPermissions AssistantConnectorDataPermission[]
+  playgroundConversations PlaygroundConversation[]
+  integrationConnections IntegrationConnection[]
+  commerceProducts CommerceProduct[]
+  commerceOrders CommerceOrder[]
+  subscriptions WorkspaceSubscription[]
+  usageLedger UsageLedgerEntry[]
+  supportConversations SupportConversation[]
+  tickets Ticket[]
+  ticketDrafts TicketDraft[]
+  ticketEvents TicketEvent[]
+  ticketNotes TicketInternalNote[]
+  outboundDeliveries OutboundDelivery[]
+  outboundDeliveryAttempts OutboundDeliveryAttempt[]
+  workflowExecutions WorkflowExecution[]
+  widgetConfigurations WidgetConfiguration[]
+  widgetSessions WidgetSession[]
+  connectorInstances ConnectorInstance[]
+  connectorCredentials ConnectorCredential[]
+  connectorSyncJobs ConnectorSyncJob[]
+  connectorSyncSchedules ConnectorSyncSchedule[]
+  connectorWebhookEvents ConnectorWebhookEvent[]
+  shopifyOAuthStates ShopifyOAuthState[]
 
   @@index([status, createdAt])
+}
+
+model WidgetConfiguration {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  assistantId String @unique @db.Uuid
+  publicId String @unique @default(cuid()) @db.VarChar(32)
+  enabled Boolean @default(false)
+  allowedDomains Json @default("[]") @db.JsonB
+  appearance Json @default("{}") @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  assistant Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  @@unique([id, organizationId])
+  @@unique([assistantId, organizationId])
+  @@index([organizationId, enabled])
 }
 
 model OrganizationMembership {
@@ -215,22 +447,113 @@ model Chatbot {
   createdById         String?         @db.Uuid
   name                String          @db.VarChar(200)
   description         String?         @db.VarChar(1000)
+  aiProvider          String?         @db.VarChar(20)
+  aiModel             String?         @db.VarChar(120)
+  providerMode        String          @default("MANUAL") @db.VarChar(20)
+  providerFallbacks   Json            @default("[]") @db.JsonB
   businessPurpose     String?         @db.VarChar(500)
   systemInstructions  String?         @db.VarChar(10000)
   defaultLanguage     String          @default("en") @db.VarChar(35)
   responseTone        String          @default("professional") @db.VarChar(32)
+  responseStyle       String          @default("balanced") @db.VarChar(20)
+  useAllEligibleWorkspaceKnowledge Boolean @default(false)
   fallbackMessage     String          @default("I’m not able to help with that right now. Please contact the business directly.") @db.VarChar(500)
+  greetingMessage     String?         @db.VarChar(500)
+  escalationMessage   String?         @db.VarChar(500)
   status              AssistantStatus @default(DRAFT)
+  archivedAt          DateTime?       @db.Timestamptz(3)
   createdAt           DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
   organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   website             Website?        @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
   createdBy           User?           @relation("ChatbotCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   knowledgeSources    AssistantKnowledgeSource[]
+  connectorDataPermissions AssistantConnectorDataPermission[]
+  knowledgeBases      AssistantKnowledgeBase[]
+  businessRules       AssistantBusinessRule[]
+  playgroundConversations PlaygroundConversation[]
+  supportConversations SupportConversation[]
+  tickets Ticket[]
+  ticketDrafts TicketDraft[]
+  workflowExecutions WorkflowExecution[]
+  flowDefinitions FlowDefinition[]
+  widgetConfiguration WidgetConfiguration?
+  widgetSessions WidgetSession[]
 
   @@unique([id, organizationId])
   @@index([organizationId, status, updatedAt])
+  @@index([organizationId, archivedAt, updatedAt])
   @@index([websiteId, organizationId])
+}
+
+model AssistantBusinessRule {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  assistantId    String       @db.Uuid
+  title          String       @db.VarChar(160)
+  instruction    String       @db.VarChar(2000)
+  enabled        Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant      Chatbot      @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, assistantId, enabled, updatedAt], map: "AssistantBusinessRule_org_assistant_enabled_updated_idx")
+}
+
+model PlaygroundConversation {
+  id                 String               @id @default(uuid()) @db.Uuid
+  organizationId     String               @db.Uuid
+  assistantId        String               @db.Uuid
+  userId             String               @db.Uuid
+  channel            String               @default("PLAYGROUND") @db.VarChar(32)
+  nextSequence       Int                  @default(0)
+  activeRequestId    String?              @db.Uuid
+  activeRequestUntil DateTime?            @db.Timestamptz(3)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+  expiresAt          DateTime             @db.Timestamptz(3)
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assistant          Chatbot              @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  messages           PlaygroundMessage[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, assistantId, userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model PlaygroundMessage {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  conversationId   String                @db.Uuid
+  sequence         Int
+  clientTurnId     String?               @db.Uuid
+  role             String                @db.VarChar(16)
+  content          String                @db.Text
+  responseCategory String?               @db.VarChar(40)
+  answerOrigin     String?               @db.VarChar(40)
+  providerUsed     String?               @db.VarChar(20)
+  modelUsed        String?               @db.VarChar(120)
+  sourceReferences Json?                 @db.JsonB
+  inputTokens      Int?
+  outputTokens     Int?
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  conversation     PlaygroundConversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([conversationId, sequence])
+  @@unique([organizationId, clientTurnId])
+  @@index([organizationId, conversationId, createdAt])
+}
+
+model PlaygroundRateLimit {
+  scopeKey       String   @id @db.VarChar(160)
+  windowStartedAt DateTime @db.Timestamptz(3)
+  requestCount   Int      @default(0)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([updatedAt])
 }
 
 model Integration {
@@ -248,6 +571,163 @@ model Integration {
   @@index([websiteId, organizationId])
 }
 
+model ConnectorInstance {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorId String @db.VarChar(80)
+  connectorType String @db.VarChar(40)
+  connectorVersion String @db.VarChar(32)
+  displayName String @db.VarChar(160)
+  configuration Json @db.JsonB
+  state ConnectorInstanceState @default(DRAFT)
+  verifiedCapabilities Json @default("[]") @db.JsonB
+  webhookPublicId String? @unique @db.VarChar(64)
+  integrationConnectionId String? @unique @db.Uuid
+  lastVerifiedAt DateTime? @db.Timestamptz(3)
+  lastErrorCode String? @db.VarChar(100)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  credential ConnectorCredential?
+  syncJobs ConnectorSyncJob[]
+  syncSchedules ConnectorSyncSchedule[]
+  webhookEvents ConnectorWebhookEvent[]
+  dataPermissions ConnectorDataPermission[]
+  assistantDataPermissions AssistantConnectorDataPermission[]
+  shopifyOAuthStates ShopifyOAuthState[]
+  commerceConnection IntegrationConnection? @relation(fields: [integrationConnectionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
+  @@unique([id, organizationId])
+  @@unique([integrationConnectionId, organizationId])
+  @@index([organizationId, state, updatedAt])
+  @@index([organizationId, connectorId, createdAt])
+}
+
+model ConnectorDataPermission {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorInstanceId String @db.Uuid
+  category String @db.VarChar(40)
+  enabled Boolean @default(false)
+  syncEnabled Boolean @default(false)
+  updatedById String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@unique([organizationId, connectorInstanceId, category])
+  @@index([organizationId, category, enabled])
+}
+
+model AssistantConnectorDataPermission {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorInstanceId String @db.Uuid
+  assistantId String @db.Uuid
+  category String @db.VarChar(40)
+  enabled Boolean @default(false)
+  updatedById String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  assistant Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@unique([organizationId, connectorInstanceId, assistantId, category])
+  @@index([organizationId, assistantId, category, enabled])
+}
+
+model ConnectorCredential {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorInstanceId String @unique @db.Uuid
+  ciphertext Bytes
+  nonce Bytes @db.ByteA
+  authTag Bytes @db.ByteA
+  keyVersion String @db.VarChar(32)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@unique([connectorInstanceId, organizationId])
+  @@index([organizationId, connectorInstanceId])
+}
+
+model ConnectorSyncJob {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorInstanceId String @db.Uuid
+  resourceType String @db.VarChar(64)
+  mode ConnectorSyncMode @default(INCREMENTAL)
+  state ConnectorSyncJobState @default(PENDING)
+  checkpoint Json? @db.JsonB
+  cursor String? @db.VarChar(2048)
+  idempotencyKey String @db.VarChar(160)
+  attemptCount Int @default(0)
+  maxAttempts Int @default(8)
+  scheduledAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseToken String? @db.VarChar(64)
+  leaseUntil DateTime? @db.Timestamptz(3)
+  lastErrorCode String? @db.VarChar(100)
+  itemCount Int @default(0)
+  startedAt DateTime? @db.Timestamptz(3)
+  finishedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@unique([organizationId, connectorInstanceId, idempotencyKey])
+  @@index([organizationId, connectorInstanceId, createdAt, id])
+  @@index([state, scheduledAt, leaseUntil, createdAt])
+}
+
+model ConnectorSyncSchedule {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorInstanceId String @db.Uuid
+  resourceType String @db.VarChar(64)
+  mode ConnectorSyncMode @default(INCREMENTAL)
+  enabled Boolean @default(false)
+  paused Boolean @default(false)
+  intervalMinutes Int @default(1440)
+  nextRunAt DateTime? @db.Timestamptz(3)
+  lastRunAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@unique([organizationId, connectorInstanceId, resourceType])
+  @@index([enabled, paused, nextRunAt, id])
+  @@index([organizationId, connectorInstanceId, enabled])
+}
+
+model ConnectorWebhookEvent {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  connectorInstanceId String @db.Uuid
+  externalEventId String @db.VarChar(200)
+  eventType String @db.VarChar(120)
+  rawBodyCiphertext Bytes
+  rawBodyNonce Bytes @db.ByteA
+  rawBodyAuthTag Bytes @db.ByteA
+  rawBodyKeyVersion String @db.VarChar(32)
+  payloadHash String @db.Char(64)
+  state ConnectorWebhookState @default(RECEIVED)
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseToken String? @db.VarChar(64)
+  leaseUntil DateTime? @db.Timestamptz(3)
+  receivedAt DateTime @default(now()) @db.Timestamptz(3)
+  triggeredAt DateTime? @db.Timestamptz(3)
+  processedAt DateTime? @db.Timestamptz(3)
+  lastErrorCode String? @db.VarChar(100)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@unique([connectorInstanceId, externalEventId])
+  @@index([organizationId, connectorInstanceId, receivedAt, id])
+  @@index([state, nextAttemptAt, leaseUntil, receivedAt, id])
+}
+
 model KnowledgeSource {
   id                   String                    @id @default(uuid()) @db.Uuid
   organizationId       String                    @db.Uuid
@@ -255,28 +735,169 @@ model KnowledgeSource {
   type                 KnowledgeSourceType
   status               KnowledgeSourceStatus     @default(REGISTERED)
   processingStatus     KnowledgeProcessingStatus @default(NOT_PROCESSED)
+  semanticIndexStatus  KnowledgeSemanticStatus  @default(NOT_CONFIGURED)
+  semanticIndexErrorCode String?                @db.VarChar(100)
+  visibility           KnowledgeVisibility       @default(INTERNAL_RESTRICTED)
   name                 String                    @db.VarChar(200)
   description          String?                   @db.VarChar(1000)
   sourceUrl            String?                   @db.VarChar(2048)
   contentBody          String?                   @db.Text
+  document             Json?
   category             String?                   @db.VarChar(120)
+  knowledgeSection     String?                   @db.VarChar(40)
   languageHint         String?                   @db.VarChar(35)
   canonicalKey         String                    @db.VarChar(80)
+  connectorInstanceId String?                   @db.Uuid
+  connectorDataCategory String?                 @db.VarChar(40)
   sourceVersion        Int                       @default(1)
+  activeIndexGeneration Int?
+  processingErrorCode  String?                   @db.VarChar(100)
   lastSyncAt           DateTime?                 @db.Timestamptz(3)
   lastSuccessfulSyncAt DateTime?                 @db.Timestamptz(3)
   lastSyncErrorCode    String?                   @db.VarChar(100)
+  verificationStatus   WebsiteVerificationStatus @default(UNVERIFIED)
+  verificationTokenHash String?                  @db.Char(64)
+  verificationExpiresAt DateTime?                @db.Timestamptz(3)
+  verifiedAt           DateTime?                 @db.Timestamptz(3)
+  syncPolicy           KnowledgeSyncPolicy       @default(MANUAL)
+  syncPaused           Boolean                   @default(false)
+  nextSyncAt           DateTime?                 @db.Timestamptz(3)
+  lastSyncAttemptAt    DateTime?                 @db.Timestamptz(3)
+  crawlPathPrefix      String?                   @db.VarChar(2048)
+  crawlMaxPages        Int                       @default(50)
+  crawlMaxDepth        Int                       @default(3)
   deletedAt            DateTime?                 @db.Timestamptz(3)
   createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
   organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy            User?                     @relation("KnowledgeSourceCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assistantLinks       AssistantKnowledgeSource[]
+  knowledgeBaseLinks   KnowledgeBaseSource[]
+  processingJobs       KnowledgeProcessingJob[]
+  pages                KnowledgePage[]
+  chunks               KnowledgeChunk[]
+  syncRuns             KnowledgeSyncRun[]
 
   @@unique([id, organizationId])
   @@unique([organizationId, canonicalKey])
   @@index([organizationId, status, updatedAt])
   @@index([organizationId, type, processingStatus])
+  @@index([organizationId, status, processingStatus, visibility], map: "KnowledgeSource_org_status_processing_visibility_idx")
+  @@index([organizationId, status, name], map: "KnowledgeSource_org_status_name_idx")
+  @@index([organizationId, knowledgeSection, status], map: "KnowledgeSource_org_section_status_idx")
+  @@index([organizationId, connectorInstanceId, connectorDataCategory])
+  @@index([syncPolicy, nextSyncAt], map: "KnowledgeSource_sync_schedule_idx")
+}
+
+model KnowledgeProcessingJob {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  sourceId       String             @db.Uuid
+  sourceVersion  Int
+  kind           String             @db.VarChar(32)
+  stage          String?            @db.VarChar(32)
+  status         KnowledgeJobStatus @default(QUEUED)
+  attempts       Int                @default(0)
+  availableAt   DateTime           @default(now()) @db.Timestamptz(3)
+  leasedAt       DateTime?          @db.Timestamptz(3)
+  leaseOwner     String?            @db.VarChar(120)
+  heartbeatAt    DateTime?          @db.Timestamptz(3)
+  errorCode      String?            @db.VarChar(100)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @db.Timestamptz(3)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "KnowledgeProcessingJob_org_fkey")
+  source         KnowledgeSource    @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "KnowledgeProcessingJob_source_org_fkey")
+
+  @@index([status, availableAt, createdAt], map: "KnowledgeProcessingJob_status_available_created_idx")
+  @@index([organizationId, sourceId, sourceVersion, status], map: "KnowledgeProcessingJob_org_source_version_status_idx")
+}
+
+model KnowledgePage {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  sourceId       String          @db.Uuid
+  canonicalUrl   String          @db.VarChar(2048)
+  extractionMethod String        @default("HTML") @db.VarChar(24)
+  title          String          @db.VarChar(500)
+  pageCategory   String?         @db.VarChar(40)
+  languageHint   String?         @db.VarChar(35)
+  content        String          @db.Text
+  contentHash    String          @db.Char(64)
+  etag           String?         @db.VarChar(1024)
+  lastModified   String?         @db.VarChar(128)
+  sourceVersion  Int
+  generation     Int             @default(0)
+  status         String          @default("READY") @db.VarChar(24)
+  fetchedAt      DateTime        @db.Timestamptz(3)
+  indexedAt      DateTime?       @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "KnowledgePage_org_fkey")
+  source         KnowledgeSource @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "KnowledgePage_source_org_fkey")
+  chunks         KnowledgeChunk[]
+
+  @@unique([sourceId, canonicalUrl, sourceVersion], map: "KnowledgePage_source_url_version_key")
+  @@unique([id, organizationId])
+  @@index([organizationId, sourceId, sourceVersion, status], map: "KnowledgePage_org_source_version_status_idx")
+  @@index([organizationId, sourceId, generation], map: "KnowledgePage_org_source_generation_idx")
+}
+
+model KnowledgeSyncRun {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @db.Uuid
+  sourceId          String          @db.Uuid
+  jobId             String?         @db.Uuid
+  status             String          @db.VarChar(24)
+  discoveredPages    Int             @default(0)
+  changedPages       Int             @default(0)
+  unchangedPages     Int             @default(0)
+  removedPages       Int             @default(0)
+  failedPages        Int             @default(0)
+  skippedPages       Int             @default(0)
+  unsupportedPages   Int             @default(0)
+  retryableFailures  Int             @default(0)
+  errorCode          String?         @db.VarChar(100)
+  startedAt          DateTime        @default(now()) @db.Timestamptz(3)
+  finishedAt         DateTime?       @db.Timestamptz(3)
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "KnowledgeSyncRun_org_fkey")
+  source             KnowledgeSource @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "KnowledgeSyncRun_source_org_fkey")
+
+  @@index([organizationId, sourceId, startedAt], map: "KnowledgeSyncRun_org_source_started_idx")
+}
+
+// Global hostname pacing shared by all worker instances; no tenant data is stored here.
+model KnowledgeHostRateLimit {
+  hostname      String   @id @db.VarChar(253)
+  nextAllowedAt DateTime @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([updatedAt], map: "KnowledgeHostRateLimit_updated_idx")
+}
+
+model KnowledgeChunk {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @db.Uuid
+  sourceId          String          @db.Uuid
+  pageId            String?         @db.Uuid
+  sourceVersion     Int
+  generation        Int
+  sequence          Int
+  content           String          @db.Text
+  contentHash       String          @db.Char(64)
+  locator           String?         @db.VarChar(2048)
+  embeddingProvider String          @db.VarChar(40)
+  embeddingModel    String          @db.VarChar(120)
+  embeddingDimensions Int           @default(1536)
+  embedding         Unsupported("vector(1536)")?
+  indexedAt         DateTime        @default(now()) @db.Timestamptz(3)
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "KnowledgeChunk_org_fkey")
+  source            KnowledgeSource @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "KnowledgeChunk_source_org_fkey")
+  page              KnowledgePage?  @relation(fields: [pageId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade, map: "KnowledgeChunk_page_org_fkey")
+
+  @@unique([sourceId, generation, sequence], map: "KnowledgeChunk_source_generation_sequence_key")
+  @@unique([id, organizationId])
+  @@index([organizationId, sourceId, sourceVersion, generation], map: "KnowledgeChunk_org_source_version_generation_idx")
 }
 
 model AssistantKnowledgeSource {
@@ -290,6 +911,57 @@ model AssistantKnowledgeSource {
 
   @@id([assistantId, sourceId])
   @@index([organizationId, sourceId])
+}
+
+model KnowledgeBase {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  createdById    String?             @db.Uuid
+  name           String              @db.VarChar(200)
+  nameKey        String              @db.VarChar(500)
+  description    String?             @db.VarChar(1000)
+  status         KnowledgeBaseStatus @default(ACTIVE)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+  archivedAt     DateTime?           @db.Timestamptz(3)
+  autoAddEligibleSources Boolean      @default(false)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy      User?               @relation("KnowledgeBaseCreator", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  sources        KnowledgeBaseSource[]
+  assistantLinks AssistantKnowledgeBase[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, nameKey])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, name])
+}
+
+model KnowledgeBaseSource {
+  organizationId  String         @db.Uuid
+  knowledgeBaseId String         @db.Uuid
+  sourceId        String         @db.Uuid
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  knowledgeBase   KnowledgeBase  @relation(fields: [knowledgeBaseId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  source          KnowledgeSource @relation(fields: [sourceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([knowledgeBaseId, sourceId])
+  @@index([organizationId, sourceId])
+  @@index([organizationId, knowledgeBaseId, createdAt], map: "KnowledgeBaseSource_org_base_created_idx")
+}
+
+model AssistantKnowledgeBase {
+  organizationId  String        @db.Uuid
+  assistantId     String        @db.Uuid
+  knowledgeBaseId String        @db.Uuid
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant       Chatbot       @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([assistantId, knowledgeBaseId])
+  @@index([organizationId, assistantId])
+  @@index([organizationId, knowledgeBaseId])
 }
 
 model AuditEvent {
@@ -308,4 +980,568 @@ model AuditEvent {
   @@index([organizationId, createdAt])
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId, createdAt])
+}
+
+model ShopifyOAuthState {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  userId String @db.Uuid
+  connectorInstanceId String @db.Uuid
+  shopDomain String @db.VarChar(253)
+  requestedScopes String[] @default([])
+  stateHash String @unique @db.Char(64)
+  expiresAt DateTime @db.Timestamptz(3)
+  consumedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  connector ConnectorInstance @relation(fields: [connectorInstanceId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@index([organizationId, connectorInstanceId, expiresAt])
+  @@index([expiresAt])
+}
+
+// Credentials are deliberately represented by an opaque secret reference. This
+// application has no configured KMS/secret vault, so connection rows never
+// accept or persist raw credentials.
+model IntegrationConnection {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  organizationId     String                     @db.Uuid
+  platform           IntegrationPlatform
+  displayName        String                     @db.VarChar(200)
+  siteUrl            String?                    @db.VarChar(2048)
+  externalAccountId  String?                    @db.VarChar(255)
+  state              IntegrationConnectionState @default(DRAFT)
+  secretReference    String?                    @db.VarChar(512)
+  grantedScopes      String[]                   @default([])
+  grantedScopeMetadata Json                     @default("[]") @db.JsonB
+  grantedScopesVerifiedAt DateTime?              @db.Timestamptz(3)
+  lastErrorCode      String?                    @db.VarChar(100)
+  lastSyncAt         DateTime?                  @db.Timestamptz(3)
+  lastSuccessfulSyncAt DateTime?                @db.Timestamptz(3)
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                   @updatedAt @db.Timestamptz(3)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  syncJobs           CommerceSyncJob[]
+  products           CommerceProduct[]
+  orders             CommerceOrder[]
+  commerceConnector ConnectorInstance?
+
+  @@unique([id, organizationId])
+  @@index([organizationId, state, updatedAt])
+  @@index([organizationId, platform, createdAt])
+}
+
+model CommerceSyncJob {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  connectionId   String          @db.Uuid
+  resourceType   String          @db.VarChar(40)
+  state          CommerceSyncState @default(PENDING)
+  cursor         String?         @db.VarChar(2048)
+  errorCode      String?         @db.VarChar(100)
+  itemCount      Int             @default(0)
+  startedAt      DateTime?       @db.Timestamptz(3)
+  finishedAt     DateTime?       @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  connection     IntegrationConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([organizationId, connectionId, createdAt])
+  @@index([state, createdAt])
+}
+
+model CommerceProduct {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  connectionId   String   @db.Uuid
+  externalId     String   @db.VarChar(255)
+  name           String   @db.VarChar(500)
+  description    String?  @db.Text
+  sku            String?  @db.VarChar(160)
+  category       String?  @db.VarChar(200)
+  productType    String?  @db.VarChar(200)
+  taxonomyCategoryId String? @db.VarChar(255)
+  taxonomyCategory String? @db.VarChar(500)
+  vendor         String?  @db.VarChar(200)
+  handle         String?  @db.VarChar(255)
+  collections    Json     @default("[]") @db.JsonB
+  collectionSearchTerms String[] @default([])
+  currency       String?  @db.Char(3)
+  price          Decimal? @db.Decimal(18, 4)
+  compareAtPrice Decimal? @db.Decimal(18, 4)
+  inventory      Int?
+  availabilityStatus String? @db.VarChar(40)
+  rawStatus      String?  @db.VarChar(80)
+  productUrl     String?  @db.VarChar(2048)
+  imageUrl       String?  @db.VarChar(2048)
+  imageAltText   String?  @db.VarChar(500)
+  imageWidth     Int?
+  imageHeight    Int?
+  imageEvidence  Json     @default("[]") @db.JsonB
+  createdAtSource DateTime? @db.Timestamptz(3)
+  externalUpdatedAt DateTime? @db.Timestamptz(3)
+  syncedAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  connection     IntegrationConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  variants       CommerceProductVariant[]
+
+  @@unique([connectionId, externalId])
+  @@index([organizationId, name])
+  @@index([organizationId, sku])
+  @@index([organizationId, category, rawStatus])
+  @@index([organizationId, syncedAt])
+  @@index([organizationId, connectionId, externalUpdatedAt])
+}
+
+model CommerceProductVariant {
+  id             String @id @default(uuid()) @db.Uuid
+  productId      String @db.Uuid
+  externalId     String @db.VarChar(255)
+  title          String @db.VarChar(500)
+  sku            String? @db.VarChar(160)
+  currency       String? @db.Char(3)
+  price          Decimal? @db.Decimal(18, 4)
+  compareAtPrice Decimal? @db.Decimal(18, 4)
+  selectedOptions Json? @db.JsonB
+  inventory      Int?
+  availabilityStatus String? @db.VarChar(40)
+  rawStatus      String? @db.VarChar(80)
+  product        CommerceProduct @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([productId, externalId])
+  @@index([sku])
+}
+
+model CommerceOrder {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @db.Uuid
+  connectionId      String   @db.Uuid
+  externalId        String   @db.VarChar(255)
+  displayReference  String?  @db.VarChar(160)
+  customerReference String?  @db.VarChar(255)
+  financialStatus   String?  @db.VarChar(80)
+  fulfillmentStatus String?  @db.VarChar(80)
+  currency          String?  @db.Char(3)
+  subtotal          Decimal? @db.Decimal(18, 4)
+  discountTotal     Decimal? @db.Decimal(18, 4)
+  shippingTotal     Decimal? @db.Decimal(18, 4)
+  taxTotal          Decimal? @db.Decimal(18, 4)
+  total             Decimal? @db.Decimal(18, 4)
+  refundedTotal     Decimal? @db.Decimal(18, 4)
+  orderedAt         DateTime? @db.Timestamptz(3)
+  externalUpdatedAt DateTime? @db.Timestamptz(3)
+  rawStatus         String?  @db.VarChar(100)
+  syncedAt          DateTime @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  connection        IntegrationConnection @relation(fields: [connectionId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  lines             CommerceOrderLine[]
+
+  @@unique([connectionId, externalId])
+  @@index([organizationId, orderedAt])
+  @@index([organizationId, financialStatus, fulfillmentStatus, orderedAt])
+  @@index([organizationId, displayReference])
+  @@index([organizationId, connectionId, externalUpdatedAt])
+}
+
+model CommerceOrderLine {
+  id             String   @id @default(uuid()) @db.Uuid
+  orderId        String   @db.Uuid
+  externalId     String   @db.VarChar(255)
+  productExternalId String? @db.VarChar(255)
+  name           String   @db.VarChar(500)
+  sku            String?  @db.VarChar(160)
+  quantity       Int
+  currency       String?  @db.Char(3)
+  unitPrice      Decimal? @db.Decimal(18, 4)
+  total          Decimal? @db.Decimal(18, 4)
+  order          CommerceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([orderId, externalId])
+  @@index([productExternalId])
+}
+
+model Plan {
+  id          String @id @default(uuid()) @db.Uuid
+  key         String @unique @db.VarChar(64)
+  displayName String @db.VarChar(120)
+  active      Boolean @default(false)
+  priceMinor  Int?
+  currency    String? @db.Char(3)
+  interval    String? @db.VarChar(20)
+  entitlements Json @default("{}") @db.JsonB
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  subscriptions WorkspaceSubscription[]
+}
+
+model WorkspaceSubscription {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  planId         String @db.Uuid
+  state          SubscriptionState @default(SETUP_REQUIRED)
+  provider       String? @db.VarChar(60)
+  externalId     String? @db.VarChar(255)
+  currentPeriodStart DateTime? @db.Timestamptz(3)
+  currentPeriodEnd DateTime? @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  plan           Plan @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([organizationId, state, updatedAt])
+}
+
+model UsageLedgerEntry {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  idempotencyKey String @db.VarChar(160)
+  metric         String @db.VarChar(80)
+  quantity       Decimal @db.Decimal(18, 6)
+  provider       String? @db.VarChar(40)
+  source         String @db.VarChar(40)
+  occurredAt     DateTime @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, metric, occurredAt])
+}
+
+// Platform access is separate from workspace membership and cannot be self-assigned
+// through workspace APIs. Provisioning is an operator-controlled deployment task.
+model PlatformOperator {
+  userId     String @id @db.Uuid
+  role       PlatformRole
+  enabled    Boolean @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  user       User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+
+model PlatformAuditEvent {
+  id          String @id @default(uuid()) @db.Uuid
+  actorUserId String @db.Uuid
+  action      String @db.VarChar(120)
+  entityType  String @db.VarChar(80)
+  entityId    String? @db.VarChar(128)
+  metadata    Json? @db.JsonB
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  actor       User @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+}
+
+// Durable inbox records only contain content that arrives through an authorized
+// support channel. No route currently creates these from Playground messages.
+model SupportConversation {
+  id                 String @id @default(uuid()) @db.Uuid
+  organizationId     String @db.Uuid
+  assistantId        String @db.Uuid
+  externalSessionHash String @db.Char(64)
+  channel            String @db.VarChar(32)
+  state              InboxConversationState @default(OPEN)
+  assignedToUserId   String? @db.Uuid
+  resolvedAt         DateTime? @db.Timestamptz(3)
+  lastMessageAt      DateTime? @db.Timestamptz(3)
+  lastCustomerMessageAt DateTime? @db.Timestamptz(3)
+  lastMessagePreview String? @db.VarChar(500)
+  messageCount       Int @default(0)
+  activeRequestId    String? @db.Uuid
+  activeRequestUntil DateTime? @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant          Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  assignee           User? @relation("InboxAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  messages           SupportMessage[]
+  readStates         SupportConversationReadState[]
+  tickets Ticket[]
+  ticketDrafts TicketDraft[]
+  widgetSessions WidgetSession[]
+
+  @@unique([organizationId, assistantId, externalSessionHash])
+  @@unique([id, organizationId])
+  @@index([organizationId, state, lastMessageAt])
+  @@index([organizationId, assistantId, state, lastMessageAt])
+  @@index([organizationId, channel, lastMessageAt])
+  @@index([assignedToUserId, state, lastMessageAt])
+}
+
+model WidgetSession {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  assistantId String @db.Uuid
+  conversationId String @db.Uuid
+  accessTokenHash String @unique @db.Char(64)
+  resumeTokenHash String @db.Char(64)
+  visitorSessionId String @db.VarChar(64)
+  origin String @db.VarChar(512)
+  accessExpiresAt DateTime @db.Timestamptz(3)
+  resumeExpiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assistant Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  conversation SupportConversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  @@index([resumeTokenHash, resumeExpiresAt])
+  @@index([organizationId, assistantId, conversationId, accessExpiresAt])
+}
+
+model SupportMessage {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  conversationId String @db.Uuid
+  authorUserId   String? @db.Uuid
+  kind           InboxMessageKind
+  content        String @db.Text
+  provider       String? @db.VarChar(40)
+  model          String? @db.VarChar(120)
+  responseCategory String? @db.VarChar(64)
+  answerOrigin   String? @db.VarChar(40)
+  idempotencyKey String? @db.VarChar(160)
+  sourceRefs     Json? @db.JsonB
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  conversation   SupportConversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  author         User? @relation("SupportMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  outboundDelivery OutboundDelivery?
+  ticketId String? @db.Uuid
+  ticket Ticket? @relation(fields: [ticketId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([organizationId, conversationId, createdAt])
+  @@unique([organizationId, conversationId, idempotencyKey])
+}
+
+model SupportConversationReadState {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  conversationId String @db.Uuid
+  userId         String @db.Uuid
+  readAt         DateTime @default(now()) @db.Timestamptz(3)
+  isRead         Boolean @default(false)
+  conversation  SupportConversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([organizationId, userId, readAt])
+}
+
+
+model Ticket {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  assistantId String @db.Uuid
+  conversationId String @db.Uuid
+  reference String @db.VarChar(24)
+  title String @db.VarChar(180)
+  description String @db.Text
+  category String @db.VarChar(80)
+  priority TicketPriority @default(MEDIUM)
+  status TicketStatus @default(OPEN)
+  customerReference String? @db.VarChar(80)
+  creationSource String @default("AI_CONVERSATION") @db.VarChar(32)
+  assignedToUserId String? @db.Uuid
+  resolutionRemarks String? @db.VarChar(2000)
+  version Int @default(1)
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
+  conversation SupportConversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
+  assignee User? @relation("TicketAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  events TicketEvent[]
+  notes TicketInternalNote[]
+  deliveries OutboundDelivery[]
+  drafts TicketDraft[]
+  messages SupportMessage[]
+  @@unique([organizationId, reference])
+  @@unique([id, organizationId])
+  @@index([organizationId, status, updatedAt, id])
+  @@index([organizationId, title])
+  @@index([organizationId, customerReference])
+  @@index([organizationId, category])
+  @@index([organizationId, priority, updatedAt])
+  @@index([organizationId, assistantId, status, updatedAt])
+  @@index([organizationId, assistantId, conversationId, expiresAt])
+  @@index([organizationId, assignedToUserId, status, updatedAt])
+}
+
+model TicketDraft {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  assistantId String @db.Uuid
+  conversationId String @db.Uuid
+  externalSessionHash String @db.Char(64)
+  state TicketDraftState @default(COLLECTING)
+  version Int @default(1)
+  title String? @db.VarChar(180)
+  description String? @db.Text
+  category String? @db.VarChar(80)
+  priority TicketPriority @default(MEDIUM)
+  idempotencyKey String @db.VarChar(160)
+  ticketId String? @unique @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  conversation SupportConversation @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, assistantId, externalSessionHash, state, expiresAt])
+}
+
+model TicketEvent {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  ticketId String @db.Uuid
+  actorUserId String? @db.Uuid
+  eventType String @db.VarChar(48)
+  fromValue String? @db.VarChar(80)
+  toValue String? @db.VarChar(80)
+  metadata Json? @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  ticket Ticket @relation(fields: [ticketId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  @@index([organizationId, ticketId, createdAt, id])
+}
+
+model TicketInternalNote {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  ticketId String @db.Uuid
+  authorUserId String @db.Uuid
+  content String @db.VarChar(4000)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  ticket Ticket @relation(fields: [ticketId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  author User @relation(fields: [authorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  @@index([organizationId, ticketId, createdAt, id])
+}
+
+model OutboundDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  ticketId String @db.Uuid
+  conversationId String @db.Uuid
+  messageId String @unique @db.Uuid
+  state OutboundDeliveryState @default(QUEUED)
+  channel String @db.VarChar(32)
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime? @db.Timestamptz(3)
+  lastErrorCode String? @db.VarChar(80)
+  leaseToken String? @db.VarChar(64)
+  leaseUntil DateTime? @db.Timestamptz(3)
+  permanentFailure Boolean @default(false)
+  sentAt DateTime? @db.Timestamptz(3)
+  deliveredAt DateTime? @db.Timestamptz(3)
+  failedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  ticket Ticket @relation(fields: [ticketId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attempts OutboundDeliveryAttempt[]
+  @@unique([id, organizationId])
+  @@index([organizationId, state, nextAttemptAt, createdAt])
+  @@index([state, leaseUntil, createdAt])
+  @@index([state, channel, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model OutboundDeliveryAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  deliveryId String @db.Uuid
+  attemptNumber Int
+  state OutboundDeliveryState
+  transportEventId String? @unique @db.VarChar(160)
+  detailCode String? @db.VarChar(80)
+  retryable Boolean @default(false)
+  completedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  delivery OutboundDelivery @relation(fields: [deliveryId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  @@unique([deliveryId, attemptNumber])
+  @@index([organizationId, deliveryId, createdAt])
+}
+
+model FlowDefinition {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  assistantId    String       @db.Uuid
+  name           String       @db.VarChar(200)
+  version        Int          @default(1)
+  graph          Json         @db.JsonB
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assistant      Chatbot      @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, assistantId, name])
+  @@index([organizationId, assistantId, updatedAt])
+}
+
+model WorkflowExecution {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  assistantId    String @db.Uuid
+  requestedBy    String? @db.Uuid
+  idempotencyKey String @db.VarChar(160)
+  actionKey      String @db.VarChar(100)
+  argumentHash   String @db.Char(64)
+  state          WorkflowExecutionState @default(PROPOSED)
+  stepLimit      Int @default(8)
+  deadlineAt     DateTime @db.Timestamptz(3)
+  safeResult     Json? @db.JsonB
+  errorCode      String? @db.VarChar(100)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assistant      Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  requester      User? @relation("WorkflowRequester", fields: [requestedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  steps          WorkflowStep[]
+  approval       WorkflowApproval?
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@index([organizationId, state, createdAt])
+  @@index([deadlineAt, state])
+}
+
+model WorkflowStep {
+  id           String @id @default(uuid()) @db.Uuid
+  executionId  String @db.Uuid
+  sequence     Int
+  toolKey      String @db.VarChar(100)
+  state        WorkflowStepState @default(PENDING)
+  safeInput    Json @db.JsonB
+  safeOutput   Json? @db.JsonB
+  errorCode    String? @db.VarChar(100)
+  startedAt    DateTime? @db.Timestamptz(3)
+  finishedAt   DateTime? @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  execution    WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([executionId, sequence])
+  @@index([state, createdAt])
+}
+
+model WorkflowApproval {
+  id           String @id @default(uuid()) @db.Uuid
+  executionId  String @unique @db.Uuid
+  argumentHash String @db.Char(64)
+  status       String @default("PENDING") @db.VarChar(24)
+  approvedById String? @db.Uuid
+  expiresAt    DateTime @db.Timestamptz(3)
+  decidedAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  execution    WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  approvedBy   User? @relation(fields: [approvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([status, expiresAt])
 }

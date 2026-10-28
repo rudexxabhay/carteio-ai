@@ -72,3 +72,5 @@ Thumbs.db
 
 # Existing project-specific generated output.
 backend/src/generated/prisma/
+
+/velora-ui-main/

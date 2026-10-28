@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Shield, Users } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { Meta } from '../../components/common/Meta';
 import { ApiError } from '../../services/api/client';
 import { listWorkspaceMembers, type WorkspaceMember, type WorkspaceMembersPage } from '../../services/api/workspaces';
 import { useWorkspaceRoute } from '../../layouts/DashboardLayout/DashboardLayout';
+import { PageHeader } from '../../layouts/DashboardLayout/dashboard-v2-ui';
 
 export function WorkspaceTeamPage() {
   const { workspace } = useWorkspaceRoute();
@@ -27,7 +28,7 @@ export function WorkspaceTeamPage() {
 
   return <>
     <Meta title="Workspace team" description={`Authorized members of ${workspace.name}.`} path={`/workspace/${workspace.slug}/team`} noIndex/>
-    <header className="workspace-page-heading"><span className="workspace-feature-icon"><Users size={19}/></span><div><span className="eyebrow">TEAM & WORKSPACE</span><h1>Workspace members</h1><p>People with active access to {workspace.name}.</p></div></header>
+    <PageHeader eyebrow="Team & Workspace" title="Workspace members" desc={`People with active access to ${workspace.name}.`}/>
     <section className="workspace-panel member-panel">
       <div className="workspace-panel-heading"><div><h2>Members</h2><p>{members ? `${members.total} active ${members.total === 1 ? 'member' : 'members'}` : 'Loading authorized members…'}</p></div><span className="workspace-role-chip">You are {workspace.currentUserRole || workspace.role}</span></div>
       {current?.error && <div className="workspace-inline-error" role="alert">{current.error}<button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>}

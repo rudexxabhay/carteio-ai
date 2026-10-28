@@ -1,0 +1,1313 @@
+{
+  "run": "H1",
+  "sourceReport": "/tmp/carteio-phase00-harness-recheck.json",
+  "exitCode": 1,
+  "selection": "unfiltered",
+  "reportedCounters": {
+    "numTotalTestSuites": 7,
+    "numPassedTestSuites": 5,
+    "numFailedTestSuites": 2,
+    "numRuntimeErrorTestSuites": 0,
+    "numTotalTests": 249,
+    "numPassedTests": 185,
+    "numFailedTests": 64,
+    "numPendingTests": 0
+  },
+  "fileCount": 7,
+  "files": [
+    {
+      "path": "backend/test/assistant.playground.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AssistantService Playground chat routes the compatibility facade through the injected canonical orchestrator",
+          "status": "failed",
+          "title": "routes the compatibility facade through the injected canonical orchestrator"
+        },
+        {
+          "name": "AssistantService Playground chat records a safe failed security stage without inventing a tenant identity",
+          "status": "passed",
+          "title": "records a safe failed security stage without inventing a tenant identity"
+        },
+        {
+          "name": "AssistantService Playground chat keeps customer text and Knowledge excerpts out of successful conversation stage logs",
+          "status": "passed",
+          "title": "keeps customer text and Knowledge excerpts out of successful conversation stage logs"
+        },
+        {
+          "name": "AssistantService Playground chat scopes assistant lookup to the verified workspace and hides cross-workspace assistants",
+          "status": "passed",
+          "title": "scopes assistant lookup to the verified workspace and hides cross-workspace assistants"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another user",
+          "status": "passed",
+          "title": "does not return a session owned by another user"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another assistant",
+          "status": "passed",
+          "title": "does not return a session owned by another assistant"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another organization",
+          "status": "passed",
+          "title": "does not return a session owned by another organization"
+        },
+        {
+          "name": "AssistantService Playground chat does not return a session owned by another channel",
+          "status": "passed",
+          "title": "does not return a session owned by another channel"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a chat request targeting a session owned by another user before provider or Knowledge access",
+          "status": "passed",
+          "title": "rejects a chat request targeting a session owned by another user before provider or Knowledge access"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a chat request targeting a session owned by another assistant before provider or Knowledge access",
+          "status": "passed",
+          "title": "rejects a chat request targeting a session owned by another assistant before provider or Knowledge access"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a chat request targeting a session owned by another organization before provider or Knowledge access",
+          "status": "passed",
+          "title": "rejects a chat request targeting a session owned by another organization before provider or Knowledge access"
+        },
+        {
+          "name": "AssistantService Playground chat ignores client-supplied tenant and user fields when deriving authorized context",
+          "status": "passed",
+          "title": "ignores client-supplied tenant and user fields when deriving authorized context"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed for a supplied unknown session without creating a replacement",
+          "status": "passed",
+          "title": "fails closed for a supplied unknown session without creating a replacement"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed for a supplied expired session without creating a replacement",
+          "status": "passed",
+          "title": "fails closed for a supplied expired session without creating a replacement"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed for a supplied another channel session without creating a replacement",
+          "status": "passed",
+          "title": "fails closed for a supplied another channel session without creating a replacement"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a clientTurnId already committed to another session before Knowledge or provider access",
+          "status": "passed",
+          "title": "rejects a clientTurnId already committed to another session before Knowledge or provider access"
+        },
+        {
+          "name": "AssistantService Playground chat rejects reuse of a committed clientTurnId with changed content in the same session",
+          "status": "passed",
+          "title": "rejects reuse of a committed clientTurnId with changed content in the same session"
+        },
+        {
+          "name": "AssistantService Playground chat replays a stable clientTurnId after a lost initial response without creating another session",
+          "status": "passed",
+          "title": "replays a stable clientTurnId after a lost initial response without creating another session"
+        },
+        {
+          "name": "AssistantService Playground chat aggregates known interpretation and generation token usage for one committed turn",
+          "status": "passed",
+          "title": "aggregates known interpretation and generation token usage for one committed turn"
+        },
+        {
+          "name": "AssistantService Playground chat replays legacy messages without inventing response provenance",
+          "status": "passed",
+          "title": "replays legacy messages without inventing response provenance"
+        },
+        {
+          "name": "AssistantService Playground chat allows only one concurrent submission for a clientTurnId under the session lease",
+          "status": "passed",
+          "title": "allows only one concurrent submission for a clientTurnId under the session lease"
+        },
+        {
+          "name": "AssistantService Playground chat interprets cross-language queries, retrieves public-safe evidence, and calls only the selected provider",
+          "status": "failed",
+          "title": "interprets cross-language queries, retrieves public-safe evidence, and calls only the selected provider"
+        },
+        {
+          "name": "AssistantService Playground chat executes a provider-issued Knowledge tool call and grounds the follow-up answer in its evidence",
+          "status": "failed",
+          "title": "executes a provider-issued Knowledge tool call and grounds the follow-up answer in its evidence"
+        },
+        {
+          "name": "AssistantService Playground chat searches authorized English Knowledge for a Hinglish shipping question despite an advisory out-of-scope estimate",
+          "status": "failed",
+          "title": "searches authorized English Knowledge for a Hinglish shipping question despite an advisory out-of-scope estimate"
+        },
+        {
+          "name": "AssistantService Playground chat retrieves English policy evidence and follows the latest English message over the assistant default language",
+          "status": "failed",
+          "title": "retrieves English policy evidence and follows the latest English message over the assistant default language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for What is Carteio’s shipping policy? while preserving customer response language",
+          "status": "failed",
+          "title": "plans source-language retrieval for What is Carteio’s shipping policy? while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for carteio ki shipping policy kya h while preserving customer response language",
+          "status": "failed",
+          "title": "plans source-language retrieval for carteio ki shipping policy kya h while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for Shipping policy batao while preserving customer response language",
+          "status": "failed",
+          "title": "plans source-language retrieval for Shipping policy batao while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for कार्टेयो की शिपिंग पॉलिसी क्या है? while preserving customer response language",
+          "status": "failed",
+          "title": "plans source-language retrieval for कार्टेयो की शिपिंग पॉलिसी क्या है? while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for Tell me your shipping rules while preserving customer response language",
+          "status": "failed",
+          "title": "plans source-language retrieval for Tell me your shipping rules while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat plans source-language retrieval for Delivery policy samjhao while preserving customer response language",
+          "status": "failed",
+          "title": "plans source-language retrieval for Delivery policy samjhao while preserving customer response language"
+        },
+        {
+          "name": "AssistantService Playground chat uses the exact authorized English policy for the multilingual question India ke bahar shipping krte ho",
+          "status": "failed",
+          "title": "uses the exact authorized English policy for the multilingual question India ke bahar shipping krte ho"
+        },
+        {
+          "name": "AssistantService Playground chat uses the exact authorized English policy for the multilingual question Kya India me delivery hoti hai?",
+          "status": "failed",
+          "title": "uses the exact authorized English policy for the multilingual question Kya India me delivery hoti hai?"
+        },
+        {
+          "name": "AssistantService Playground chat uses model-generated uncertainty when retrieval has no matching business evidence",
+          "status": "passed",
+          "title": "uses model-generated uncertainty when retrieval has no matching business evidence"
+        },
+        {
+          "name": "AssistantService Playground chat supplies complete saved Bot Behavior and validated support contacts to the actual grounded provider request",
+          "status": "passed",
+          "title": "supplies complete saved Bot Behavior and validated support contacts to the actual grounded provider request"
+        },
+        {
+          "name": "AssistantService Playground chat routes conversation feedback with bounded prior context instead of repeating the no-evidence path",
+          "status": "passed",
+          "title": "routes conversation feedback with bounded prior context instead of repeating the no-evidence path"
+        },
+        {
+          "name": "AssistantService Playground chat sends a contextual acknowledgment through the model instead of a fixed customer-facing reply",
+          "status": "failed",
+          "title": "sends a contextual acknowledgment through the model instead of a fixed customer-facing reply"
+        },
+        {
+          "name": "AssistantService Playground chat routes an acknowledged missing-evidence answer as social even when the legacy intent is stale",
+          "status": "passed",
+          "title": "routes an acknowledged missing-evidence answer as social even when the legacy intent is stale"
+        },
+        {
+          "name": "AssistantService Playground chat uses only a minimal fact-free technical fallback when no-evidence generation is unavailable",
+          "status": "passed",
+          "title": "uses only a minimal fact-free technical fallback when no-evidence generation is unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat uses an owned prior user topic to ground a follow-up through the normal Knowledge path",
+          "status": "failed",
+          "title": "uses an owned prior user topic to ground a follow-up through the normal Knowledge path"
+        },
+        {
+          "name": "AssistantService Playground chat accepts a valid structured interpretation surrounded by provider prose and markdown fences",
+          "status": "passed",
+          "title": "accepts a valid structured interpretation surrounded by provider prose and markdown fences"
+        },
+        {
+          "name": "AssistantService Playground chat runs multilingual semantic output through the existing interpretation call and preserves the original negated identifier query",
+          "status": "failed",
+          "title": "runs multilingual semantic output through the existing interpretation call and preserves the original negated identifier query"
+        },
+        {
+          "name": "AssistantService Playground chat fails closed when semantic interpretation receives a provider permission failure",
+          "status": "passed",
+          "title": "fails closed when semantic interpretation receives a provider permission failure"
+        },
+        {
+          "name": "AssistantService Playground chat falls back to the original bounded lexical query when interpretation is not JSON",
+          "status": "passed",
+          "title": "falls back to the original bounded lexical query when interpretation is not JSON"
+        },
+        {
+          "name": "AssistantService Playground chat does not revive the prior business request when a short reply follows a social turn and interpretation fails",
+          "status": "failed",
+          "title": "does not revive the prior business request when a short reply follows a social turn and interpretation fails"
+        },
+        {
+          "name": "AssistantService Playground chat recovers a standalone Hinglish wellbeing message without Knowledge retrieval and keeps the reply model-generated",
+          "status": "passed",
+          "title": "recovers a standalone Hinglish wellbeing message without Knowledge retrieval and keeps the reply model-generated"
+        },
+        {
+          "name": "AssistantService Playground chat retries one explicit OpenRouter JSON-mode incompatibility using prompt-only validated JSON",
+          "status": "passed",
+          "title": "retries one explicit OpenRouter JSON-mode incompatibility using prompt-only validated JSON"
+        },
+        {
+          "name": "AssistantService Playground chat lets the answer model choose the authorized catalog tool after invalid interpretation without keyword intent recovery",
+          "status": "failed",
+          "title": "lets the answer model choose the authorized catalog tool after invalid interpretation without keyword intent recovery"
+        },
+        {
+          "name": "AssistantService Playground chat keeps quoted prompt-injection text in the customer role and allows the question through normal retrieval",
+          "status": "failed",
+          "title": "keeps quoted prompt-injection text in the customer role and allows the question through normal retrieval"
+        },
+        {
+          "name": "AssistantService Playground chat serializes malicious Knowledge as escaped reference data without creating provider roles",
+          "status": "failed",
+          "title": "serializes malicious Knowledge as escaped reference data without creating provider roles"
+        },
+        {
+          "name": "AssistantService Playground chat keeps injected prior turns inside a user data envelope instead of promoting historical roles",
+          "status": "failed",
+          "title": "keeps injected prior turns inside a user data envelope instead of promoting historical roles"
+        },
+        {
+          "name": "AssistantService Playground chat does not execute provider output that asks for tools or a provider switch",
+          "status": "passed",
+          "title": "does not execute provider output that asks for tools or a provider switch"
+        },
+        {
+          "name": "AssistantService Playground chat keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ¿Cuál es la política de devolución?",
+          "status": "failed",
+          "title": "keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ¿Cuál es la política de devolución?"
+        },
+        {
+          "name": "AssistantService Playground chat keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ما سياسة الإرجاع؟",
+          "status": "failed",
+          "title": "keeps arbitrary language/script/style metadata and multilingual retrieval candidates for ما سياسة الإرجاع؟"
+        },
+        {
+          "name": "AssistantService Playground chat keeps arbitrary language/script/style metadata and multilingual retrieval candidates for Can I return यह product?",
+          "status": "failed",
+          "title": "keeps arbitrary language/script/style metadata and multilingual retrieval candidates for Can I return यह product?"
+        },
+        {
+          "name": "AssistantService Playground chat does not call any provider when no provider is explicitly configured",
+          "status": "passed",
+          "title": "does not call any provider when no provider is explicitly configured"
+        },
+        {
+          "name": "AssistantService Playground chat states uncertainty when eligible Knowledge has no relevant matches",
+          "status": "failed",
+          "title": "states uncertainty when eligible Knowledge has no relevant matches"
+        },
+        {
+          "name": "AssistantService Playground chat recovers Hinglish response language after semantic metadata rejection without suggesting an unrelated catalog lookup",
+          "status": "failed",
+          "title": "recovers Hinglish response language after semantic metadata rejection without suggesting an unrelated catalog lookup"
+        },
+        {
+          "name": "AssistantService Playground chat drops evidence invalidated after search before provider submission",
+          "status": "failed",
+          "title": "drops evidence invalidated after search before provider submission"
+        },
+        {
+          "name": "AssistantService Playground chat returns the safe fallback if evidence loses authorization while the provider is responding",
+          "status": "failed",
+          "title": "returns the safe fallback if evidence loses authorization while the provider is responding"
+        },
+        {
+          "name": "AssistantService Playground chat does not persist a grounded answer if evidence is invalidated at the persistence boundary",
+          "status": "passed",
+          "title": "does not persist a grounded answer if evidence is invalidated at the persistence boundary"
+        },
+        {
+          "name": "AssistantService Playground chat retries one invalid citation and does not claim authorized evidence was missing when citations still fail",
+          "status": "failed",
+          "title": "retries one invalid citation and does not claim authorized evidence was missing when citations still fail"
+        },
+        {
+          "name": "AssistantService Playground chat accepts a single citation repair only after strict validation against the same authorized evidence",
+          "status": "passed",
+          "title": "accepts a single citation repair only after strict validation against the same authorized evidence"
+        },
+        {
+          "name": "AssistantService Playground chat hides historical grounded messages whose source authorization has since been removed",
+          "status": "passed",
+          "title": "hides historical grounded messages whose source authorization has since been removed"
+        },
+        {
+          "name": "AssistantService Playground chat returns an authorized chronological history page with a bounded continuation offset",
+          "status": "passed",
+          "title": "returns an authorized chronological history page with a bounded continuation offset"
+        },
+        {
+          "name": "AssistantService Playground chat restores knowledge provenance only after historical evidence revalidation",
+          "status": "passed",
+          "title": "restores knowledge provenance only after historical evidence revalidation"
+        },
+        {
+          "name": "AssistantService Playground chat replays the configured fallback instead of stale grounded content after source authorization is removed",
+          "status": "passed",
+          "title": "replays the configured fallback instead of stale grounded content after source authorization is removed"
+        },
+        {
+          "name": "AssistantService Playground chat does not send stale historical grounded answers back to the provider as conversation context",
+          "status": "passed",
+          "title": "does not send stale historical grounded answers back to the provider as conversation context"
+        },
+        {
+          "name": "AssistantService Playground chat keeps only recent whole history messages and bounds the complete provider context",
+          "status": "passed",
+          "title": "keeps only recent whole history messages and bounds the complete provider context"
+        },
+        {
+          "name": "AssistantService Playground chat sends the current customer message once, separately from bounded prior history",
+          "status": "passed",
+          "title": "sends the current customer message once, separately from bounded prior history"
+        },
+        {
+          "name": "AssistantService Playground chat returns a configured greeting without requiring knowledge retrieval or provider connectivity",
+          "status": "failed",
+          "title": "returns a configured greeting without requiring knowledge retrieval or provider connectivity"
+        },
+        {
+          "name": "AssistantService Playground chat preserves the Playground response contract and keeps customer ticket handling out of the Playground adapter",
+          "status": "passed",
+          "title": "preserves the Playground response contract and keeps customer ticket handling out of the Playground adapter"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment OK without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment OK without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Okay without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Okay without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Okey without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Okey without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Okie without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Okie without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Thik hai without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Thik hai without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Samajh gya without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Samajh gya without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment ठीक है without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment ठीक है without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Got it without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Got it without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat handles standalone acknowledgment Understood without a Knowledge search or provider request",
+          "status": "failed",
+          "title": "handles standalone acknowledgment Understood without a Knowledge search or provider request"
+        },
+        {
+          "name": "AssistantService Playground chat uses the validated acknowledgment contract after a grounded turn without another answer call or retrieval",
+          "status": "failed",
+          "title": "uses the validated acknowledgment contract after a grounded turn without another answer call or retrieval"
+        },
+        {
+          "name": "AssistantService Playground chat answers pure social message नमस्ते without provider or retrieval calls",
+          "status": "failed",
+          "title": "answers pure social message नमस्ते without provider or retrieval calls"
+        },
+        {
+          "name": "AssistantService Playground chat answers pure social message Thank you without provider or retrieval calls",
+          "status": "failed",
+          "title": "answers pure social message Thank you without provider or retrieval calls"
+        },
+        {
+          "name": "AssistantService Playground chat uses semantic interpretation and the selected provider for an informal Hinglish wellbeing message",
+          "status": "passed",
+          "title": "uses semantic interpretation and the selected provider for an informal Hinglish wellbeing message"
+        },
+        {
+          "name": "AssistantService Playground chat answers an interpreted assistant-origin question truthfully without treating it as a greeting",
+          "status": "passed",
+          "title": "answers an interpreted assistant-origin question truthfully without treating it as a greeting"
+        },
+        {
+          "name": "AssistantService Playground chat uses the configured en language for interpreted social replies",
+          "status": "failed",
+          "title": "uses the configured en language for interpreted social replies"
+        },
+        {
+          "name": "AssistantService Playground chat uses the configured hi language for interpreted social replies",
+          "status": "failed",
+          "title": "uses the configured hi language for interpreted social replies"
+        },
+        {
+          "name": "AssistantService Playground chat routes company location questions to authorized Knowledge instead of assistant identity handling",
+          "status": "passed",
+          "title": "routes company location questions to authorized Knowledge instead of assistant identity handling"
+        },
+        {
+          "name": "AssistantService Playground chat uses a truthful system-provenance wellbeing fallback when the answer provider is unavailable",
+          "status": "failed",
+          "title": "uses a truthful system-provenance wellbeing fallback when the answer provider is unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat uses the selected model for social replies in languages outside deterministic shortcuts",
+          "status": "failed",
+          "title": "uses the selected model for social replies in languages outside deterministic shortcuts"
+        },
+        {
+          "name": "AssistantService Playground chat does not swallow a greeting followed by a real business question",
+          "status": "passed",
+          "title": "does not swallow a greeting followed by a real business question"
+        },
+        {
+          "name": "AssistantService Playground chat does not let a model labeled greeting turn a personal order status into a Knowledge answer",
+          "status": "passed",
+          "title": "does not let a model labeled greeting turn a personal order status into a Knowledge answer"
+        },
+        {
+          "name": "AssistantService Playground chat does not answer a personal order status from otherwise eligible policy Knowledge without a live connector",
+          "status": "passed",
+          "title": "does not answer a personal order status from otherwise eligible policy Knowledge without a live connector"
+        },
+        {
+          "name": "AssistantService Playground chat ignores user-supplied webhook claims and never fetches an arbitrary endpoint",
+          "status": "failed",
+          "title": "ignores user-supplied webhook claims and never fetches an arbitrary endpoint"
+        },
+        {
+          "name": "AssistantService Playground chat routes a static logistics POD policy question to authorized Knowledge and preserves citations",
+          "status": "passed",
+          "title": "routes a static logistics POD policy question to authorized Knowledge and preserves citations"
+        },
+        {
+          "name": "AssistantService Playground chat answers the public portion of a mixed policy and personal-status request and states live lookup is unavailable",
+          "status": "passed",
+          "title": "answers the public portion of a mixed policy and personal-status request and states live lookup is unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat does not fabricate either half of a mixed request when public evidence and live lookup are absent",
+          "status": "failed",
+          "title": "does not fabricate either half of a mixed request when public evidence and live lookup are absent"
+        },
+        {
+          "name": "AssistantService Playground chat clarifies ambiguous payment versus refund intent without asking for sensitive transaction details",
+          "status": "passed",
+          "title": "clarifies ambiguous payment versus refund intent without asking for sensitive transaction details"
+        },
+        {
+          "name": "AssistantService Playground chat redirects an unrelated question when trusted assistant business scope is configured",
+          "status": "passed",
+          "title": "redirects an unrelated question when trusted assistant business scope is configured"
+        },
+        {
+          "name": "AssistantService Playground chat does not send the unrelated part of a partial-scope request to answer generation",
+          "status": "passed",
+          "title": "does not send the unrelated part of a partial-scope request to answer generation"
+        },
+        {
+          "name": "AssistantService Playground chat answers only a verbatim in-scope span of a mixed-scope request and retains a server-owned scope note",
+          "status": "failed",
+          "title": "answers only a verbatim in-scope span of a mixed-scope request and retains a server-owned scope note"
+        },
+        {
+          "name": "AssistantService Playground chat rejects a mixed-request provider claim of refund approval and does not expose citations as proof of status",
+          "status": "failed",
+          "title": "rejects a mixed-request provider claim of refund approval and does not expose citations as proof of status"
+        },
+        {
+          "name": "AssistantService Playground chat appends the server-owned live limitation when the mixed response omits it",
+          "status": "failed",
+          "title": "appends the server-owned live limitation when the mixed response omits it"
+        },
+        {
+          "name": "AssistantService Playground chat uses existing refusal handling when a greeting contains a private-data instruction",
+          "status": "passed",
+          "title": "uses existing refusal handling when a greeting contains a private-data instruction"
+        },
+        {
+          "name": "AssistantService Playground chat keeps provider HTTP failures distinct from grounded-knowledge fallback",
+          "status": "passed",
+          "title": "keeps provider HTTP failures distinct from grounded-knowledge fallback"
+        },
+        {
+          "name": "AssistantService Playground chat saturates the database-backed user quota before retrieval and returns a bounded retry delay",
+          "status": "passed",
+          "title": "saturates the database-backed user quota before retrieval and returns a bounded retry delay"
+        },
+        {
+          "name": "AssistantService Playground chat uses separate PostgreSQL rate buckets for the same user in different workspaces",
+          "status": "passed",
+          "title": "uses separate PostgreSQL rate buckets for the same user in different workspaces"
+        },
+        {
+          "name": "AssistantService Playground chat ignores customer-supplied provider and model overrides",
+          "status": "passed",
+          "title": "ignores customer-supplied provider and model overrides"
+        },
+        {
+          "name": "AssistantService Playground chat does not fall back on provider authentication failure or expose provider error text",
+          "status": "passed",
+          "title": "does not fall back on provider authentication failure or expose provider error text"
+        },
+        {
+          "name": "AssistantService Playground chat does not fall back when the selected provider credential is missing",
+          "status": "passed",
+          "title": "does not fall back when the selected provider credential is missing"
+        },
+        {
+          "name": "AssistantService Playground chat uses only the configured approved fallback for provider rate limits and keeps safety blocks non-retryable",
+          "status": "passed",
+          "title": "uses only the configured approved fallback for provider rate limits and keeps safety blocks non-retryable"
+        },
+        {
+          "name": "AssistantService Playground chat does not leave the selected route on a provider 429 when fallback mode is manual",
+          "status": "passed",
+          "title": "does not leave the selected route on a provider 429 when fallback mode is manual"
+        },
+        {
+          "name": "AssistantService Playground chat uses the approved fallback after interpretation succeeded but answer generation became unavailable",
+          "status": "passed",
+          "title": "uses the approved fallback after interpretation succeeded but answer generation became unavailable"
+        },
+        {
+          "name": "AssistantService Playground chat stops before fallback when the original conversation deadline has expired",
+          "status": "passed",
+          "title": "stops before fallback when the original conversation deadline has expired"
+        },
+        {
+          "name": "AssistantService Playground chat uses an owner-approved Gemini fallback after the environment primary has a transient failure",
+          "status": "passed",
+          "title": "uses an owner-approved Gemini fallback after the environment primary has a transient failure"
+        },
+        {
+          "name": "AssistantService Playground chat routes a MANUAL assistant through the environment Gemini route despite stale stored Groq settings",
+          "status": "passed",
+          "title": "routes a MANUAL assistant through the environment Gemini route despite stale stored Groq settings"
+        },
+        {
+          "name": "AssistantService Playground chat reports when the assistant has no public ready linked knowledge",
+          "status": "failed",
+          "title": "reports when the assistant has no public ready linked knowledge"
+        },
+        {
+          "name": "AssistantService Playground chat plans separate grounded answer aspects from one interpretation and retains both source identities",
+          "status": "failed",
+          "title": "plans separate grounded answer aspects from one interpretation and retains both source identities"
+        },
+        {
+          "name": "AssistantService Playground chat searches the authorized catalog for broad product discovery even when legacy interpretation says capability",
+          "status": "passed",
+          "title": "searches the authorized catalog for broad product discovery even when legacy interpretation says capability"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"What products do you sell?\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"What products do you sell?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Tumhare store mein kya kya milta?\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Tumhare store mein kya kya milta?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Show me bracelets under ₹700.\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Show me bracelets under ₹700.\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Is Ocean Horizon Bracelet Stack available?\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Is Ocean Horizon Bracelet Stack available?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Tell me about this product.\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Tell me about this product.\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Is it in stock?\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Is it in stock?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Show me similar products.\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Show me similar products.\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"What is the price?\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"What is the price?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat uses the authorized Shopify tool for \"Can you recommend a gift?\" and grounds the final answer",
+          "status": "failed",
+          "title": "uses the authorized Shopify tool for \"Can you recommend a gift?\" and grounds the final answer"
+        },
+        {
+          "name": "AssistantService Playground chat keeps the exact anonymous order question outside customer order lookup and exposes no order tool",
+          "status": "failed",
+          "title": "keeps the exact anonymous order question outside customer order lookup and exposes no order tool"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/conversation-provider.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "effective provider environment configuration resolves Gemini, Groq and OpenAI models from the provider-specific environment variables",
+          "status": "passed",
+          "title": "resolves Gemini, Groq and OpenAI models from the provider-specific environment variables"
+        },
+        {
+          "name": "effective provider environment configuration routes the exact centrally configured OpenRouter model without a model catalogue allow-list",
+          "status": "passed",
+          "title": "routes the exact centrally configured OpenRouter model without a model catalogue allow-list"
+        },
+        {
+          "name": "effective provider environment configuration reports invalid, incomplete and missing-key states without selecting another provider",
+          "status": "passed",
+          "title": "reports invalid, incomplete and missing-key states without selecting another provider"
+        },
+        {
+          "name": "effective provider environment configuration exposes only safe provider readiness metadata",
+          "status": "passed",
+          "title": "exposes only safe provider readiness metadata"
+        },
+        {
+          "name": "ConversationProviderService uses bounded GPT-OSS Groq parameters and returns only final assistant content",
+          "status": "passed",
+          "title": "uses bounded GPT-OSS Groq parameters and returns only final assistant content"
+        },
+        {
+          "name": "ConversationProviderService normalizes successful OpenAI Chat Completions without fabricating absent usage metadata",
+          "status": "passed",
+          "title": "normalizes successful OpenAI Chat Completions without fabricating absent usage metadata"
+        },
+        {
+          "name": "ConversationProviderService sends OpenRouter requests to its trusted endpoint using only its key and exact model ID",
+          "status": "passed",
+          "title": "sends OpenRouter requests to its trusted endpoint using only its key and exact model ID"
+        },
+        {
+          "name": "ConversationProviderService keeps Gemini 2.5 Flash Lite on OpenRouter with JSON mode and the requested output budget",
+          "status": "passed",
+          "title": "keeps Gemini 2.5 Flash Lite on OpenRouter with JSON mode and the requested output budget"
+        },
+        {
+          "name": "ConversationProviderService uses OpenRouter JSON mode only after cached model metadata declares response_format support",
+          "status": "passed",
+          "title": "uses OpenRouter JSON mode only after cached model metadata declares response_format support"
+        },
+        {
+          "name": "ConversationProviderService classifies only an explicit OpenRouter JSON-mode rejection for prompt-only compatibility",
+          "status": "passed",
+          "title": "classifies only an explicit OpenRouter JSON-mode rejection for prompt-only compatibility"
+        },
+        {
+          "name": "ConversationProviderService attempts OpenRouter tools for an unverified route and honors an explicit unsupported result",
+          "status": "passed",
+          "title": "attempts OpenRouter tools for an unverified route and honors an explicit unsupported result"
+        },
+        {
+          "name": "ConversationProviderService groq serializes bounded function tools and validates model-issued tool calls",
+          "status": "passed",
+          "title": "groq serializes bounded function tools and validates model-issued tool calls"
+        },
+        {
+          "name": "ConversationProviderService openai serializes bounded function tools and validates model-issued tool calls",
+          "status": "passed",
+          "title": "openai serializes bounded function tools and validates model-issued tool calls"
+        },
+        {
+          "name": "ConversationProviderService rejects malformed provider tool calls before returning them to orchestration",
+          "status": "passed",
+          "title": "rejects malformed provider tool calls before returning them to orchestration"
+        },
+        {
+          "name": "ConversationProviderService preserves only token usage fields actually supplied by a provider",
+          "status": "passed",
+          "title": "preserves only token usage fields actually supplied by a provider"
+        },
+        {
+          "name": "ConversationProviderService excludes negative and fractional token values while retaining independently valid fields",
+          "status": "passed",
+          "title": "excludes negative and fractional token values while retaining independently valid fields"
+        },
+        {
+          "name": "ConversationProviderService rejects a successful HTTP response whose body is malformed JSON",
+          "status": "passed",
+          "title": "rejects a successful HTTP response whose body is malformed JSON"
+        },
+        {
+          "name": "ConversationProviderService groq rejects empty, malformed, and non-complete provider choices",
+          "status": "passed",
+          "title": "groq rejects empty, malformed, and non-complete provider choices"
+        },
+        {
+          "name": "ConversationProviderService openai rejects empty, malformed, and non-complete provider choices",
+          "status": "passed",
+          "title": "openai rejects empty, malformed, and non-complete provider choices"
+        },
+        {
+          "name": "ConversationProviderService classifies truncated output separately from malformed output",
+          "status": "passed",
+          "title": "classifies truncated output separately from malformed output"
+        },
+        {
+          "name": "ConversationProviderService does not disguise provider authentication failures",
+          "status": "passed",
+          "title": "does not disguise provider authentication failures"
+        },
+        {
+          "name": "ConversationProviderService reports OpenRouter credit failures without retrying or falling back silently",
+          "status": "passed",
+          "title": "reports OpenRouter credit failures without retrying or falling back silently"
+        },
+        {
+          "name": "ConversationProviderService preserves a bounded Retry-After value on provider 429 and classifies it as eligible only for approved route fallback",
+          "status": "passed",
+          "title": "preserves a bounded Retry-After value on provider 429 and classifies it as eligible only for approved route fallback"
+        },
+        {
+          "name": "ConversationProviderService does not classify an unexpected transport exception as a retryable outage",
+          "status": "passed",
+          "title": "does not classify an unexpected transport exception as a retryable outage"
+        },
+        {
+          "name": "ConversationProviderService cancels non-success provider response bodies without exposing their contents",
+          "status": "passed",
+          "title": "cancels non-success provider response bodies without exposing their contents"
+        },
+        {
+          "name": "ConversationProviderService keeps customer prompts, provider bodies and credentials out of failure logs and public errors",
+          "status": "passed",
+          "title": "keeps customer prompts, provider bodies and credentials out of failure logs and public errors"
+        },
+        {
+          "name": "ConversationProviderService fails clearly when the selected provider key is missing",
+          "status": "passed",
+          "title": "fails clearly when the selected provider key is missing"
+        },
+        {
+          "name": "ConversationProviderService uses only the configured groq credential and trusted endpoint",
+          "status": "passed",
+          "title": "uses only the configured groq credential and trusted endpoint"
+        },
+        {
+          "name": "ConversationProviderService uses only the configured gemini credential and trusted endpoint",
+          "status": "passed",
+          "title": "uses only the configured gemini credential and trusted endpoint"
+        },
+        {
+          "name": "ConversationProviderService uses only the configured openai credential and trusted endpoint",
+          "status": "passed",
+          "title": "uses only the configured openai credential and trusted endpoint"
+        },
+        {
+          "name": "ConversationProviderService fails safely when Gemini credentials are absent without attempting a request",
+          "status": "passed",
+          "title": "fails safely when Gemini credentials are absent without attempting a request"
+        },
+        {
+          "name": "ConversationProviderService exposes provider credential presence without returning credential values",
+          "status": "passed",
+          "title": "exposes provider credential presence without returning credential values"
+        },
+        {
+          "name": "ConversationProviderService maps canonical history and output into Gemini generateContent and normalizes text and usage",
+          "status": "passed",
+          "title": "maps canonical history and output into Gemini generateContent and normalizes text and usage"
+        },
+        {
+          "name": "ConversationProviderService exposes Gemini function declarations and round-trips validated function calls and results",
+          "status": "passed",
+          "title": "exposes Gemini function declarations and round-trips validated function calls and results"
+        },
+        {
+          "name": "ConversationProviderService classifies Gemini HTTP 404 from sanitized Google status without logging its free-form error message",
+          "status": "passed",
+          "title": "classifies Gemini HTTP 404 from sanitized Google status without logging its free-form error message"
+        },
+        {
+          "name": "ConversationProviderService preserves provider permission status for Gemini access failures without exposing provider text",
+          "status": "passed",
+          "title": "preserves provider permission status for Gemini access failures without exposing provider text"
+        },
+        {
+          "name": "ConversationProviderService rejects a Gemini response with no candidates or usable text",
+          "status": "passed",
+          "title": "rejects a Gemini response with no candidates or usable text"
+        },
+        {
+          "name": "ConversationProviderService rejects Gemini MAX_TOKENS and unknown finish reasons even when partial text exists",
+          "status": "passed",
+          "title": "rejects Gemini MAX_TOKENS and unknown finish reasons even when partial text exists"
+        },
+        {
+          "name": "ConversationProviderService accepts complete Gemini text when optional usage metadata is absent",
+          "status": "passed",
+          "title": "accepts complete Gemini text when optional usage metadata is absent"
+        },
+        {
+          "name": "ConversationProviderService normalizes a Gemini safety block without exposing provider text",
+          "status": "passed",
+          "title": "normalizes a Gemini safety block without exposing provider text"
+        },
+        {
+          "name": "ConversationProviderService rejects oversized normalized text instead of silently slicing a successful response",
+          "status": "passed",
+          "title": "rejects oversized normalized text instead of silently slicing a successful response"
+        },
+        {
+          "name": "ConversationProviderService keeps the provider timeout active while a Gemini response body is being read",
+          "status": "passed",
+          "title": "keeps the provider timeout active while a Gemini response body is being read"
+        },
+        {
+          "name": "ConversationProviderService keeps caller cancellation connected until Gemini response parsing completes",
+          "status": "passed",
+          "title": "keeps caller cancellation connected until Gemini response parsing completes"
+        },
+        {
+          "name": "ConversationProviderService classifies a Gemini safety block separately from missing knowledge",
+          "status": "passed",
+          "title": "classifies a Gemini safety block separately from missing knowledge"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/playground-diagnostics.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "Playground diagnostics reports loaded behavior metadata and whether the behavior layer reached an outbound request without exposing content",
+          "status": "passed",
+          "title": "reports loaded behavior metadata and whether the behavior layer reached an outbound request without exposing content"
+        },
+        {
+          "name": "Playground diagnostics records bounded provider calls with purpose, timing, usage and retry reason",
+          "status": "passed",
+          "title": "records bounded provider calls with purpose, timing, usage and retry reason"
+        },
+        {
+          "name": "Playground diagnostics requires an explicit flag and permits only development or UAT",
+          "status": "passed",
+          "title": "requires an explicit flag and permits only development or UAT"
+        },
+        {
+          "name": "Playground diagnostics tracks the retrieved → selected → revalidated → supplied → cited evidence chain without retaining the query",
+          "status": "passed",
+          "title": "tracks the retrieved → selected → revalidated → supplied → cited evidence chain without retaining the query"
+        },
+        {
+          "name": "Playground diagnostics does not claim retrieved but uncited evidence supported the answer",
+          "status": "passed",
+          "title": "does not claim retrieved but uncited evidence supported the answer"
+        },
+        {
+          "name": "Playground diagnostics records safe citation rejection separately from missing retrieval evidence",
+          "status": "passed",
+          "title": "records safe citation rejection separately from missing retrieval evidence"
+        },
+        {
+          "name": "Playground diagnostics records no eligible sources and an empty retrieval separately from search not attempted",
+          "status": "passed",
+          "title": "records no eligible sources and an empty retrieval separately from search not attempted"
+        },
+        {
+          "name": "Playground diagnostics keeps public-widget and internal-preview audience labels explicit",
+          "status": "passed",
+          "title": "keeps public-widget and internal-preview audience labels explicit"
+        },
+        {
+          "name": "Playground diagnostics exposes bounded server retrieval counts and safe rejection reasons without retaining query text",
+          "status": "passed",
+          "title": "exposes bounded server retrieval counts and safe rejection reasons without retaining query text"
+        },
+        {
+          "name": "Playground diagnostics records language handling labels without storing message or query text",
+          "status": "passed",
+          "title": "records language handling labels without storing message or query text"
+        },
+        {
+          "name": "Playground diagnostics shows rejected revalidation, provider failure and citation rejection without claiming evidence was supplied or cited",
+          "status": "passed",
+          "title": "shows rejected revalidation, provider failure and citation rejection without claiming evidence was supplied or cited"
+        },
+        {
+          "name": "Playground diagnostics keeps concurrent authorized traces isolated by correlation ID",
+          "status": "passed",
+          "title": "keeps concurrent authorized traces isolated by correlation ID"
+        },
+        {
+          "name": "Playground diagnostics does not expose query text or locator credentials and bounds excerpts",
+          "status": "passed",
+          "title": "does not expose query text or locator credentials and bounds excerpts"
+        },
+        {
+          "name": "Playground diagnostics reports deterministic answers as system responses even when a retrieval occurred",
+          "status": "passed",
+          "title": "reports deterministic answers as system responses even when a retrieval occurred"
+        },
+        {
+          "name": "Playground diagnostics keeps failed turns unknown and records an actual failed terminal event",
+          "status": "passed",
+          "title": "keeps failed turns unknown and records an actual failed terminal event"
+        },
+        {
+          "name": "Playground diagnostics emits bounded correlated tool execution events in sequence order",
+          "status": "passed",
+          "title": "emits bounded correlated tool execution events in sequence order"
+        },
+        {
+          "name": "Playground diagnostics records safely redacted tool inputs, normalized data source, elapsed time, and tool evidence delivery",
+          "status": "passed",
+          "title": "records safely redacted tool inputs, normalized data source, elapsed time, and tool evidence delivery"
+        },
+        {
+          "name": "Playground diagnostics keeps a failed interpretation visible when original-query recovery succeeds and records product routing safely",
+          "status": "passed",
+          "title": "keeps a failed interpretation visible when original-query recovery succeeds and records product routing safely"
+        },
+        {
+          "name": "Playground diagnostics preserves truncation and empty-response categories separately from schema-invalid output",
+          "status": "passed",
+          "title": "preserves truncation and empty-response categories separately from schema-invalid output"
+        }
+      ]
+    },
+    {
+      "path": "backend/src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary requires an active assistant in the same tenant and scopes product search to that tenant",
+          "status": "passed",
+          "title": "requires an active assistant in the same tenant and scopes product search to that tenant"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary uses an explicit model-selected browse operation and returns real tenant-scoped products",
+          "status": "passed",
+          "title": "uses an explicit model-selected browse operation and returns real tenant-scoped products"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not manufacture a product result when an authorized broad catalog query has no synchronized rows",
+          "status": "passed",
+          "title": "does not manufacture a product result when an authorized broad catalog query has no synchronized rows"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary supports model-selected broad catalog browsing for natural-language queries without English browse keywords",
+          "status": "passed",
+          "title": "supports model-selected broad catalog browsing for natural-language queries without English browse keywords"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary parses only explicit INR price ceilings",
+          "status": "passed",
+          "title": "parses only explicit INR price ceilings"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary filters by authorized persisted variant prices and returns only qualifying variants",
+          "status": "passed",
+          "title": "filters by authorized persisted variant prices and returns only qualifying variants"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary searches persisted selected option values such as a Shopify variant color",
+          "status": "passed",
+          "title": "searches persisted selected option values such as a Shopify variant color"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not expose customer orders until the channel can verify order ownership",
+          "status": "passed",
+          "title": "does not expose customer orders until the channel can verify order ownership"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary requires Owner/Admin membership for workspace operator order reads",
+          "status": "passed",
+          "title": "requires Owner/Admin membership for workspace operator order reads"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary omits price and inventory evidence unless both workspace and assistant permissions and Shopify scopes allow it",
+          "status": "passed",
+          "title": "omits price and inventory evidence unless both workspace and assistant permissions and Shopify scopes allow it"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not query catalog data if the assistant has no enabled product permission",
+          "status": "passed",
+          "title": "does not query catalog data if the assistant has no enabled product permission"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary offers product search only when current Shopify permissions and query-ready catalog rows exist",
+          "status": "passed",
+          "title": "offers product search only when current Shopify permissions and query-ready catalog rows exist"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not query catalog data when workspace AI permission is disabled",
+          "status": "passed",
+          "title": "does not query catalog data when workspace AI permission is disabled"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary does not query catalog data when the Shopify grant snapshot is stale",
+          "status": "passed",
+          "title": "does not query catalog data when the Shopify grant snapshot is stale"
+        },
+        {
+          "name": "CommerceReadContracts tenant and privacy boundary rejects previously cached commerce evidence after assistant permission is removed",
+          "status": "passed",
+          "title": "rejects previously cached commerce evidence after assistant permission is removed"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/assistant.service.spec.ts",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "AssistantService OWNER can create an assistant for the authorized organization",
+          "status": "passed",
+          "title": "OWNER can create an assistant for the authorized organization"
+        },
+        {
+          "name": "AssistantService ADMIN can create an assistant for the authorized organization",
+          "status": "passed",
+          "title": "ADMIN can create an assistant for the authorized organization"
+        },
+        {
+          "name": "AssistantService uses the effective environment provider for new assistants and ignores stale stored routes without changing records",
+          "status": "passed",
+          "title": "uses the effective environment provider for new assistants and ignores stale stored routes without changing records"
+        },
+        {
+          "name": "AssistantService returns explicit safe not-ready metadata when the environment provider configuration is missing",
+          "status": "passed",
+          "title": "returns explicit safe not-ready metadata when the environment provider configuration is missing"
+        },
+        {
+          "name": "AssistantService rejects member creation and preserves member read access",
+          "status": "passed",
+          "title": "rejects member creation and preserves member read access"
+        },
+        {
+          "name": "AssistantService scopes list and detail queries to the server-authorized tenant",
+          "status": "passed",
+          "title": "scopes list and detail queries to the server-authorized tenant"
+        },
+        {
+          "name": "AssistantService filters archived assistants within the authorized organization and validates list status values",
+          "status": "passed",
+          "title": "filters archived assistants within the authorized organization and validates list status values"
+        },
+        {
+          "name": "AssistantService requires manager access before archiving an assistant",
+          "status": "passed",
+          "title": "requires manager access before archiving an assistant"
+        },
+        {
+          "name": "AssistantService does not reactivate an assistant if archive wins the concurrent lifecycle update",
+          "status": "passed",
+          "title": "does not reactivate an assistant if archive wins the concurrent lifecycle update"
+        },
+        {
+          "name": "AssistantService persists updates and activation changes with tenant scope and audit events",
+          "status": "passed",
+          "title": "persists updates and activation changes with tenant scope and audit events"
+        },
+        {
+          "name": "AssistantService saves the full Bot Behavior fields and returns the persisted assistant configuration",
+          "status": "passed",
+          "title": "saves the full Bot Behavior fields and returns the persisted assistant configuration"
+        },
+        {
+          "name": "AssistantService persists assistant-level all-eligible workspace knowledge access only through owner-authorized updates",
+          "status": "passed",
+          "title": "persists assistant-level all-eligible workspace knowledge access only through owner-authorized updates"
+        },
+        {
+          "name": "AssistantService archives an active assistant without deleting its linked or historical records, and records the audit event",
+          "status": "failed",
+          "title": "archives an active assistant without deleting its linked or historical records, and records the audit event"
+        },
+        {
+          "name": "AssistantService restores an archived assistant as inactive and never reactivates it implicitly",
+          "status": "passed",
+          "title": "restores an archived assistant as inactive and never reactivates it implicitly"
+        },
+        {
+          "name": "AssistantService refuses permanent deletion while cascade relationships could erase retained records",
+          "status": "passed",
+          "title": "refuses permanent deletion while cascade relationships could erase retained records"
+        },
+        {
+          "name": "AssistantService allows only authorized managers to change fallback routing and rejects direct provider/model overrides",
+          "status": "passed",
+          "title": "allows only authorized managers to change fallback routing and rejects direct provider/model overrides"
+        },
+        {
+          "name": "AssistantService keeps fallback owner-approved and validates duplicates against the effective environment primary",
+          "status": "passed",
+          "title": "keeps fallback owner-approved and validates duplicates against the effective environment primary"
+        },
+        {
+          "name": "AssistantService rejects invalid create payload values",
+          "status": "passed",
+          "title": "rejects invalid create payload values"
+        },
+        {
+          "name": "AssistantService rejects client-supplied primary provider and model fields at the DTO boundary",
+          "status": "passed",
+          "title": "rejects client-supplied primary provider and model fields at the DTO boundary"
+        },
+        {
+          "name": "AssistantService persists Bot Behavior preferences and accepts automatic language as a future setting",
+          "status": "passed",
+          "title": "persists Bot Behavior preferences and accepts automatic language as a future setting"
+        },
+        {
+          "name": "AssistantService stores rules within the authorized assistant and blocks MEMBER mutations",
+          "status": "passed",
+          "title": "stores rules within the authorized assistant and blocks MEMBER mutations"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/workspace.service.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "workspace authorization and creation requires a verified authenticated session on workspace endpoints",
+          "status": "passed",
+          "title": "requires a verified authenticated session on workspace endpoints"
+        },
+        {
+          "name": "workspace authorization and creation fails closed for an invalid credential before attaching a trusted identity",
+          "status": "passed",
+          "title": "fails closed for an invalid credential before attaching a trusted identity"
+        },
+        {
+          "name": "workspace authorization and creation fails closed for a malformed encoded credential before attaching a trusted identity",
+          "status": "passed",
+          "title": "fails closed for a malformed encoded credential before attaching a trusted identity"
+        },
+        {
+          "name": "workspace authorization and creation derives request identity from the verified session, not client fields",
+          "status": "passed",
+          "title": "derives request identity from the verified session, not client fields"
+        },
+        {
+          "name": "workspace authorization and creation passes only the guard-established identity to Playground session access",
+          "status": "passed",
+          "title": "passes only the guard-established identity to Playground session access"
+        },
+        {
+          "name": "workspace authorization and creation normalizes workspace slugs consistently and rejects reserved or invalid values",
+          "status": "passed",
+          "title": "normalizes workspace slugs consistently and rejects reserved or invalid values"
+        },
+        {
+          "name": "workspace authorization and creation creates an organization, owner membership, and audit event in one transaction",
+          "status": "passed",
+          "title": "creates an organization, owner membership, and audit event in one transaction"
+        },
+        {
+          "name": "workspace authorization and creation maps a slug uniqueness race to a safe conflict response",
+          "status": "passed",
+          "title": "maps a slug uniqueness race to a safe conflict response"
+        },
+        {
+          "name": "workspace authorization and creation rolls back the complete creation callback when owner membership or audit creation fails",
+          "status": "passed",
+          "title": "rolls back the complete creation callback when owner membership or audit creation fails"
+        },
+        {
+          "name": "workspace authorization and creation allows the database unique constraint to resolve concurrent slug creation races",
+          "status": "passed",
+          "title": "allows the database unique constraint to resolve concurrent slug creation races"
+        },
+        {
+          "name": "workspace authorization and creation lists only active memberships belonging to the current user",
+          "status": "passed",
+          "title": "lists only active memberships belonging to the current user"
+        },
+        {
+          "name": "workspace authorization and creation hides unauthorized or inactive organizations as not found",
+          "status": "passed",
+          "title": "hides unauthorized or inactive organizations as not found"
+        },
+        {
+          "name": "workspace authorization and creation returns a generic not-found API error without revealing organization identifiers",
+          "status": "passed",
+          "title": "returns a generic not-found API error without revealing organization identifiers"
+        },
+        {
+          "name": "workspace authorization and creation prevents members from changing settings and never reaches the cross-tenant update",
+          "status": "passed",
+          "title": "prevents members from changing settings and never reaches the cross-tenant update"
+        },
+        {
+          "name": "workspace authorization and creation rejects cross-tenant updates without exposing whether the slug exists",
+          "status": "passed",
+          "title": "rejects cross-tenant updates without exposing whether the slug exists"
+        },
+        {
+          "name": "workspace authorization and creation returns member names and roles without emails or other private fields",
+          "status": "passed",
+          "title": "returns member names and roles without emails or other private fields"
+        },
+        {
+          "name": "workspace authorization and creation uses a forward-only migration for optional workspace profile fields",
+          "status": "passed",
+          "title": "uses a forward-only migration for optional workspace profile fields"
+        }
+      ]
+    },
+    {
+      "path": "backend/test/knowledge-controller.routes.spec.ts",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "assertions": [
+        {
+          "name": "KnowledgeController website sync route contract registers the secured POST route used by the dashboard under the global API prefix",
+          "status": "passed",
+          "title": "registers the secured POST route used by the dashboard under the global API prefix"
+        },
+        {
+          "name": "KnowledgeController website sync route contract keeps training status on the existing GET website details route",
+          "status": "passed",
+          "title": "keeps training status on the existing GET website details route"
+        },
+        {
+          "name": "KnowledgeController knowledge inspection routes exposes workspace-scoped chunk inspection and runs preview as a public customer retrieval",
+          "status": "passed",
+          "title": "exposes workspace-scoped chunk inspection and runs preview as a public customer retrieval"
+        }
+      ]
+    }
+  ]
+}

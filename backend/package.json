@@ -3,20 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "engines": {
-    "node": "22.x"
+    "node": ">=24.11.0 <25"
   },
   "scripts": {
     "dev": "prisma generate && nest start --watch",
     "build": "prisma generate && nest build",
     "start": "node dist/main.js",
-    "typecheck": "prisma generate && tsc --noEmit",
+    "start:knowledge-worker": "node dist/knowledge-worker.main.js",
+    "dev:knowledge-worker": "ts-node src/knowledge-worker.main.ts",
+    "typecheck": "tsc --noEmit --pretty false",
     "lint": "eslint src test --ext .ts",
-    "test": "prisma generate && jest --runInBand",
+    "test": "jest --runInBand",
+    "diagnose:gemini-models": "ts-node scripts/diagnose-gemini-models.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:status": "prisma migrate status",
-    "test:e2e": "prisma generate && jest --config ./test/jest-e2e.json --runInBand"
+    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
@@ -31,6 +34,8 @@
     "express": "^4.21.2",
     "google-auth-library": "^10.5.0",
     "helmet": "^8.0.0",
+    "parse5": "^7.3.0",
+    "pdfjs-dist": "5.4.296",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

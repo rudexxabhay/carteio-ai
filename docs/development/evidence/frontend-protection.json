@@ -1,0 +1,265 @@
+{
+  "run": "F6",
+  "sourceReport": "/tmp/carteio-phase00-frontend-protection.json",
+  "exitCode": 1,
+  "selection": "file-filtered",
+  "reportedCounters": {
+    "numTotalTestSuites": 19,
+    "numPassedTestSuites": 8,
+    "numFailedTestSuites": 11,
+    "numRuntimeErrorTestSuites": null,
+    "numTotalTests": 33,
+    "numPassedTests": 18,
+    "numFailedTests": 15,
+    "numPendingTests": 0
+  },
+  "fileCount": 10,
+  "files": [
+    {
+      "path": "frontend/src/tests/app.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "Carteio AI routes renders the landing page and primary navigation",
+          "title": "renders the landing page and primary navigation",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes groups desktop navbar actions as Theme, Log in, then Get started",
+          "title": "groups desktop navbar actions as Theme, Log in, then Get started",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes keeps landing CTAs linked to the relevant homepage sections",
+          "title": "keeps landing CTAs linked to the relevant homepage sections",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes renders functional login and signup forms",
+          "title": "renders functional login and signup forms",
+          "status": "passed"
+        },
+        {
+          "name": "Carteio AI routes opens and closes mobile navigation accessibly",
+          "title": "opens and closes mobile navigation accessibly",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes opens the real authorized workspace dashboard for a signed-in user",
+          "title": "opens the real authorized workspace dashboard for a signed-in user",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes redirects an unauthenticated dashboard visit to login",
+          "title": "redirects an unauthenticated dashboard visit to login",
+          "status": "passed"
+        },
+        {
+          "name": "Carteio AI routes offers Google, email-code and password sign-in methods",
+          "title": "offers Google, email-code and password sign-in methods",
+          "status": "passed"
+        },
+        {
+          "name": "Carteio AI routes keeps Google loading continuous, ignores duplicate callbacks, and opens the workspace once authorized",
+          "title": "keeps Google loading continuous, ignores duplicate callbacks, and opens the workspace once authorized",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes requests and verifies an email code before opening the authorized workspace",
+          "title": "requests and verifies an email code before opening the authorized workspace",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes creates a new account with OTP only after collecting a name and verifying the code",
+          "title": "creates a new account with OTP only after collecting a name and verifying the code",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes shows a useful delivery error and preserves the email after OTP failure",
+          "title": "shows a useful delivery error and preserves the email after OTP failure",
+          "status": "passed"
+        },
+        {
+          "name": "Carteio AI routes keeps the platform overview and workflow sections in the landing experience",
+          "title": "keeps the platform overview and workflow sections in the landing experience",
+          "status": "failed"
+        },
+        {
+          "name": "Carteio AI routes renders a not found page for unknown routes",
+          "title": "renders a not found page for unknown routes",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/assistant-pages.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "assistant workspace UI creates through the API and opens the persisted assistant detail route",
+          "title": "creates through the API and opens the persisted assistant detail route",
+          "status": "passed"
+        },
+        {
+          "name": "assistant workspace UI clears previous workspace assistants and ignores their stale response after switching",
+          "title": "clears previous workspace assistants and ignores their stale response after switching",
+          "status": "passed"
+        },
+        {
+          "name": "assistant workspace UI requires confirmation before restoring an archived assistant and leaves activation explicit",
+          "title": "requires confirmation before restoring an archived assistant and leaves activation explicit",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/auth-bootstrap.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "authenticated dashboard bootstrap shares the session bootstrap across StrictMode effect replay",
+          "title": "shares the session bootstrap across StrictMode effect replay",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/faq-import-dashboard.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "active dashboard FAQ file import keeps a failed file selected, retries that same file, imports only after preview, and reports indexing as queued",
+          "title": "keeps a failed file selected, retries that same file, imports only after preview, and reports indexing as queued",
+          "status": "failed"
+        },
+        {
+          "name": "active dashboard FAQ file import clears the selected file and blocks import when the user removes it",
+          "title": "clears the selected file and blocks import when the user removes it",
+          "status": "passed"
+        },
+        {
+          "name": "active dashboard FAQ file import renders owner bulk visibility review in the active dashboard and persists only selected FAQ IDs",
+          "title": "renders owner bulk visibility review in the active dashboard and persists only selected FAQ IDs",
+          "status": "passed"
+        },
+        {
+          "name": "active dashboard FAQ file import does not render the visibility mutation control for non-owners",
+          "title": "does not render the visibility mutation control for non-owners",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/knowledge-bases.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "Knowledge Base collection dashboard shows API counts and server-side collection records",
+          "title": "shows API counts and server-side collection records",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base collection dashboard creates a collection and navigates to its detail route",
+          "title": "creates a collection and navigates to its detail route",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base collection dashboard shows source details and explicitly assigns the existing source without replacing its record",
+          "title": "shows source details and explicitly assigns the existing source without replacing its record",
+          "status": "passed"
+        },
+        {
+          "name": "Knowledge Base collection dashboard makes website sources discoverable in the unassigned-source filter",
+          "title": "makes website sources discoverable in the unassigned-source filter",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/phase00-active-behavior.test.tsx",
+      "status": "passed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "Phase 00 active dashboard Bot Behavior saves the selected assistant settings and reloads the persisted values in the actual route component",
+          "title": "saves the selected assistant settings and reloads the persisted values in the actual route component",
+          "status": "passed"
+        },
+        {
+          "name": "Phase 00 active dashboard Bot Behavior keeps the draft and reports denied persistence without claiming a successful save",
+          "title": "keeps the draft and reports denied persistence without claiming a successful save",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/training-center.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "AI Training Center shows real assistant-linked overview and saves behavior preferences",
+          "title": "shows real assistant-linked overview and saves behavior preferences",
+          "status": "failed"
+        },
+        {
+          "name": "AI Training Center opens the shared chat dialog from the compact Playground launcher",
+          "title": "opens the shared chat dialog from the compact Playground launcher",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/widget-installation.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "WidgetInstallationPage exposes labeled controls and a customer-free live preview",
+          "title": "exposes labeled controls and a customer-free live preview",
+          "status": "failed"
+        },
+        {
+          "name": "WidgetInstallationPage keeps the preview default icon behind a custom avatar and after image failure",
+          "title": "keeps the preview default icon behind a custom avatar and after image failure",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/tests/widget-runtime.test.ts",
+      "status": "failed",
+      "diagnosticCodes": [
+        "INVALID_BROWSER_ASSET_URL_FOR_NODE_FS"
+      ],
+      "runtimeBlockedAssertions": [],
+      "assertions": []
+    },
+    {
+      "path": "frontend/src/tests/workspace-switching.test.tsx",
+      "status": "failed",
+      "diagnosticCodes": [],
+      "runtimeBlockedAssertions": [],
+      "assertions": [
+        {
+          "name": "workspace switching switches only to listed workspaces and clears the previous tenant while the next one loads",
+          "title": "switches only to listed workspaces and clears the previous tenant while the next one loads",
+          "status": "failed"
+        }
+      ]
+    }
+  ]
+}

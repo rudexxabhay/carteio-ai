@@ -1,0 +1,319 @@
+{
+  "phase": "06",
+  "sourceStatus": "CODE_IMPLEMENTED",
+  "runtimeStatus": "RUNTIME_UNVERIFIED",
+  "date": "2026-10-26",
+  "masterReliabilityCorrection": {
+    "date": "2026-10-27",
+    "sourceStatus": "CODE_IMPLEMENTED",
+    "runtimeStatus": "RUNTIME_UNVERIFIED",
+    "report": "rors/carteio-ai-orchestrator-critical-corrections.md",
+    "tests": "NOT RUN — USER RESTRICTION",
+    "implemented": ["independent validated semantic recovery with failed-stage preservation", "optional language preference normalization", "nonfactual scope/language aspect contract", "affirmative product routing and catalog-only native RAG deferral", "one distinct zero-match Knowledge tool opportunity", "current evidence plan before tool follow-ups", "failed draft and reason in one bounded citation recovery", "verified visitor rate bucket", "uncited candidate history retention", "widget clarification metadata", "metadata-only development opt-in"],
+    "blockedOrPartial": ["historical provider formatting and shipping rejection need raw reproduction evidence", "Shopify stale scope snapshot requires an authorized external refresh; gates unchanged", "changed cited history and public widget historical disclosure policy unresolved", "widget token accounting requires approved persistence/analytics contract", "durable structured memory is not implemented", "raw draft capture is not implemented because arbitrary-text PII redaction cannot be guaranteed"],
+    "schemaChanges": false,
+    "providerOrModelChanges": false,
+    "runtimeOperationsExecuted": false
+  },
+  "carryForward": {
+    "phase00": {
+      "status": "BLOCKED",
+      "historicalFailures": {
+        "backend": 116,
+        "frontend": 85,
+        "total": 201
+      },
+      "latestHistoricalDisposition": {
+        "passingInSavedPerFileEvidence": 181,
+        "repairAwaitingRerun": 11,
+        "unresolvedLatestFailures": 9,
+        "causeClassificationUnresolved": 47
+      },
+      "savedCompleteResults": {
+        "backend": "813 PASS / 0 FAIL",
+        "frontend": "217 PASS / 26 FAIL",
+        "targetedFrontend": "97 PASS / 3 FAIL",
+        "http": "7/7 PASS",
+        "offlineSafety": "3/3 PASS"
+      },
+      "ledger": "phase00-continuation-dispositions.json"
+    },
+    "phases01Through05": "CODE_IMPLEMENTED / runtime unverified; all existing phase evidence ledgers and dependencies retained",
+    "P06_SOCIAL_01": "Prior focused source corrections reused, not reimplemented; original three-trace repetition incident remains runtime unverified."
+  },
+  "sourceBoundaries": [
+    {
+      "boundary": "Interpretation",
+      "files": [
+        "backend/src/modules/workspaces/multilingual-semantics.ts",
+        "backend/src/modules/workspaces/conversation-intent.ts",
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts"
+      ],
+      "finding": "One existing LLM interpretation stage. New semantic continuation act is validated without message keywords; optional invalid context hints are discarded. Unsupported root/legacy fields and invalid factual aspects still reject. Ticket/tool/record authorization contracts remain strict."
+    },
+    {
+      "boundary": "Generation and memory",
+      "files": [
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts"
+      ],
+      "finding": "Existing central saved behavior injection remains intact. Affected generation paths retain all already-bounded chronological turns and one current message. Existing interpretation pointer indexing remains eight turns. Non-factual continuation is handled only under explicit semantic guards with no tools or facts; substantive follow-ups retain RAG."
+    },
+    {
+      "boundary": "Shopify tools",
+      "files": [
+        "backend/src/modules/workspaces/conversation-orchestrator.service.ts"
+      ],
+      "finding": "Existing authorized search_store_products execution/normalization/attribution retained. Cache now distinguishes browse. Whole-entry byte budgeting preserves JSON and removes newly acquired unsupplied evidence. No order tool or operation permission added."
+    },
+    {
+      "boundary": "Grounding/provider",
+      "files": [
+        "backend/src/modules/workspaces/grounded-response-validation.ts",
+        "backend/src/modules/workspaces/conversation-provider.service.ts"
+      ],
+      "finding": "Reviewed, unchanged. Prior whole-date snapshot fix exists; price/currency/stock/contact/URL checks retained. Adapter already checks duplicate IDs, allowed tools and JSON args and classifies 429/timeouts. Citation repair remains bounded."
+    }
+  ],
+  "executionMatrix": [
+    {
+      "component": "Interpretation",
+      "status": "FIXED",
+      "runtime": "UNVERIFIED",
+      "notes": "Semantic continuation contract and non-authorizing optional metadata handling; no arbitrary alias acceptance or action validation relaxation."
+    },
+    {
+      "component": "Memory/Bot Behavior",
+      "status": "FIXED",
+      "runtime": "UNVERIFIED",
+      "notes": "Phase 05 preserved; consistent bounded generation context with one current message and existing lower-priority saved behavior layer."
+    },
+    {
+      "component": "Natural conversation",
+      "status": "FIXED",
+      "runtime": "MODEL_QUALITY_UNVERIFIED",
+      "notes": "LLM-generated continuation/identity/scope/clarification. No rotation, output filter, language dictionary or fixed business reply added."
+    },
+    {
+      "component": "Tools",
+      "status": "FIXED",
+      "runtime": "UNVERIFIED",
+      "notes": "Search/browse cache and complete bounded results corrected; actual permission-gated catalog operations unchanged. Private orders remain blocked pending verified identity/ownership."
+    },
+    {
+      "component": "RAG",
+      "status": "WIRED",
+      "runtime": "EARLIER_CONFIGURATION_AND_INDEX_DEPENDENCIES_REMAIN",
+      "notes": "Phase 04 lexical/configured semantic retrieval, source/tenant/current generation gates preserved."
+    },
+    {
+      "component": "Grounding",
+      "status": "WIRED",
+      "runtime": "NOT_RERUN",
+      "notes": "Prior snapshot-date correction present. Strict citation/factual checks unchanged; no entailment or production correctness claim."
+    },
+    {
+      "component": "Fallback/error handling",
+      "status": "FIXED",
+      "runtime": "UNVERIFIED",
+      "notes": "Normal missing-evidence/scope/clarification responses use the model. Provider or response-validation failures in these routes propagate structured errors rather than canned AI replies. Server security denials remain."
+    },
+    {
+      "component": "Provider reliability",
+      "status": "FIXED",
+      "runtime": "UNVERIFIED",
+      "notes": "Optional recovery limited to the interpretation boundary; no-tool 400 compatibility retry removed. Existing configured routes, timeout and Retry-After/429 behavior retained."
+    }
+  ],
+  "defects": [
+    "P06-INTENT-02",
+    "P06-DIALOGUE-03",
+    "P06-CONTEXT-04",
+    "P06-GENERATION-05",
+    "P06-ERROR-06",
+    "P06-TOOL-07",
+    "P06-TOOL-08",
+    "P06-RETRY-09"
+  ],
+  "changedFiles": [
+    "backend/src/modules/workspaces/multilingual-semantics.ts",
+    "backend/src/modules/workspaces/conversation-intent.ts",
+    "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+    "backend/test/conversation-intent.recovery.spec.ts",
+    "backend/test/assistant.playground.spec.ts",
+    "docs/development/known-defects.md",
+    "docs/development/phase-register.md",
+    "docs/development/evidence/phase06-conversation-ledger.json",
+    "backend/src/modules/workspaces/business-scope-guard.ts",
+    "backend/src/modules/workspaces/business-source-router.ts",
+    "backend/src/modules/workspaces/response-safety.ts",
+    "backend/test/business-scope-guard.spec.ts",
+    "backend/test/response-safety.spec.ts"
+  ],
+  "testExecution": {
+    "executed": false,
+    "buildsExecuted": false,
+    "typechecksExecuted": false,
+    "addedOrUpdated": [
+      "backend/test/conversation-intent.recovery.spec.ts",
+      "backend/test/assistant.playground.spec.ts"
+    ],
+    "coverageAdded": [
+      "English/Hindi/Hinglish semantic continuations and repeated inputs with actual prior model outputs in later payloads",
+      "Optional malformed metadata retains valid semantic understanding and bounded pointers",
+      "Strict unsupported intent, mixed factual-aspect and ticket-authorization-field rejection",
+      "Social/no-evidence/out-of-scope provider outages propagate original errors without canned chat output",
+      "Answer truncation cannot restart interpretation/RAG",
+      "Model-driven identity with no personal biography or private customer access",
+      "No-tools provider 400 has no tool-compatibility retry",
+      "Whole bounded no-evidence history and separate current message",
+      "Catalog search/browse cache separation with tenant/assistant execution binding",
+      "Oversized catalog result remains complete bounded JSON; unsupplied new evidence excluded",
+      "Partial-scope malformed optional split uses natural clarification without fixed reply anchor",
+      "Actual grounded payloads for authorized Playground/public-widget contexts"
+    ],
+    "existingProtectionRetained": [
+      "Hinglish questions with English Knowledge evidence",
+      "Grounded Shopify names/prices/variants/inventory/snapshot dates",
+      "Unsupported facts, wrong dates, citations, contacts and URLs rejected",
+      "Contextual corrections and follow-up source attribution",
+      "Tenant/assistant/session/customer and public-widget authorization",
+      "Approved provider fallback, 429/Retry-After and response-body timeout"
+    ],
+    "limitation": "Offline mocked provider responses and database contracts test input/output wiring only. They do not demonstrate real multilingual understanding, natural response variation, deployed Shopify access or semantic entailment. Tests were not executed."
+  },
+  "callBudgets": {
+    "semanticContinuation": "Existing interpretation plus one conversational generation; no RAG/citation repair for validated non-factual acts.",
+    "normalGroundedToolFlow": "Existing bounded tool reasoning and citation repair retained. No tools offered means no tool-protocol compatibility retry.",
+    "identityAndUnsplitPartialScope": "One model generation replaces the former deterministic identity/partial-scope message when required by natural response behavior.",
+    "providerFailures": "Approved transport fallback remains; no additional interpretation/RAG attempt after an answer-stage failure."
+  },
+  "intentionalFailureContractChange": "Failed/invalid conversational, clarification, scope and no-evidence generation now returns the existing structured API error path, not a newly persisted canned assistant answer. Clients already handle structured request errors. Tests updated to require original safe error codes and bounded calls. Live UI behavior remains unverified.",
+  "futureOfflineCommandNotExecuted": "cd backend && node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/conversation-intent.recovery.spec.ts test/conversation-context.spec.ts test/multilingual-semantics.spec.ts test/assistant.playground.spec.ts test/conversation-provider.spec.ts src/modules/workspaces/conversation-diagnostics.spec.ts src/modules/workspaces/conversation-orchestrator.customer.spec.ts src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts src/modules/workspaces/assistant-contact-evidence.spec.ts src/modules/workspaces/widget.service.spec.ts",
+  "pending": [
+    "Run focused offline tests when execution is permitted; TypeScript/SQL/runtime non-regression is not established by this source continuation.",
+    "Use the unchanged configured provider/model for a separately authorized same-session multilingual social/business/continuation/correction runtime conversation. Inspect actual payload history, saved behavior and grounded source/tool results.",
+    "Obtain original trace exports/raw interpretations for cc278bd3-b0ff-4dc3-8272-ba57339df266, 66858506-a289-454e-ac38-aa367e20d8cd and f52afe6e-bf6e-4cb7-8c84-f23de4e8bf33. Repeated-response resolution remains unproven.",
+    "Phase 04 embedding configuration/indexed vectors and similarity calibration, and all Phase 00–05 deployment/persistence/security/runtime dependencies, remain carried.",
+    "No new schema migration, dependency installation, provider switch or secret/configuration modification required."
+  ],
+  "rollback": {
+    "checkpoint": "/tmp/carteio-phase06-source-checkpoint-20261026",
+    "manifest": "/tmp/carteio-phase06-source-checkpoint-20261026/manifest.json",
+    "method": "Compare pre-edit file copies and selectively reverse Phase 06 edits only. Preserve all earlier phase and user changes; no Git reset/clean/restore and no database rollback.",
+    "ephemeral": true
+  },
+  "safety": {
+    "testsOrBuildsOrTypechecks": false,
+    "serversOrBackgroundRunners": false,
+    "paidRequestsOrLiveExternalCalls": false,
+    "crawlingOrShopifySync": false,
+    "installsMigrationsDeployments": false,
+    "providerModelOrSecretChanges": false,
+    "destructiveGitOrDatabaseOperations": false
+  },
+  "phase07Readiness": "NOT_STARTED. Existing capability/tool/evidence contracts can be reused later; execute focused regressions and resolve carried gates/runtime dependencies before treating them as verified. No new Agent Builder implementation.",
+  "sourceHashes": {
+    "backend/src/modules/workspaces/multilingual-semantics.ts": "a3847c7e0cfa6dfda65c6470b64752cf61131a31ec9c7e5bea04968ab98c81b4",
+    "backend/src/modules/workspaces/conversation-intent.ts": "90cfb8f7643661122ce11794179f3c76d6730a37396ab314ac32eea7093a565f",
+    "backend/src/modules/workspaces/conversation-orchestrator.service.ts": "ddce391b69b30cfb3f7a73f18103c2c0a42ae96e47fa17f44556841d7b4b7251",
+    "backend/test/conversation-intent.recovery.spec.ts": "d7fdce4eb6ba64f85fe944f83c8234087bf1495b5c253c766be1bfba614fed25",
+    "backend/test/assistant.playground.spec.ts": "2512e3266d92d9f342634752d022f7c38a44cfd6f15d28b6a2250c85c3669ba4",
+    "docs/development/known-defects.md": "9293ef4d7e66ea4f924a7d1a81ed64be2124bfcbadbfc1363fcda0903d9b304e",
+    "docs/development/phase-register.md": "76dcad1878ad5e5906b63a5321526e10605b417494afd50889ec4829612280dc",
+    "backend/src/modules/workspaces/social-conversation.ts": "18b84c8e7e380eb75e642ff729848f12adc59d86f9eed9c971e3323c20149537",
+    "backend/src/modules/workspaces/conversation.contracts.ts": "bf7c8bd44b0e04981278fd5263d61fa14a72d1ed73992e4ddea8444dbbe3cca7",
+    "backend/src/modules/workspaces/playground-diagnostics.ts": "fa2a7de993639be5036af4dedd2ff68c714ccf5f3634ebd144b4acd0ccecd349",
+    "backend/src/modules/workspaces/playground-diagnostics.spec.ts": "808559ae4e55795d71cbe3b15564a0580623a82f1a606c5271238514f6091151",
+    "backend/test/social-conversation.spec.ts": "c4408aa440c9bffb47990aaf6c62878bd5770355ab908ac518dc88ab03cb82a4",
+    "frontend/src/services/api/assistants.ts": "06efd162c559990429bf16e8389813f12da9354127925236b84e57a5cb2464bd",
+    "backend/src/modules/workspaces/assistant-behavior-context.ts": "9f90a41e2214b37fbe0990d72804c6178e1830aad4d613f73824e5a0b3f1bc69",
+    "backend/src/modules/workspaces/business-scope-guard.ts": "d469c1d16030972a6dad989117cf59f4f38f534cc818d08f855035f357cee182",
+    "backend/src/modules/workspaces/business-scope-guard.spec.ts": "65a49ef1257e2b86e534ebc767e20a96b0adea960dbb81141c8ce11b5c3c9740",
+    "backend/src/modules/workspaces/assistant-contact-evidence.spec.ts": "558545aa2701aa1214ff325a1aa5f656f48b9c75b19e6a74e1b041a629640b6c"
+  },
+  "citationReliabilityCorrection": {
+    "defect": "A validated standalone semantic social act could be routed into business retrieval solely because the legacy intent label differed; citation validation then required a citation for a non-factual conversational response. Citation-recovery provider errors, including 429, were collapsed into retry_generation_failed and the generic verification fallback.",
+    "fixes": [
+      "Validated semantic classification and matching semantic act now control social routing; legacy intent remains compatibility metadata and cannot veto it. Existing ambiguity, unsafe-input, entity, negation, and mixed-business guards remain.",
+      "Provider rate-limit, timeout, and unavailable errors during the one bounded citation-recovery call now propagate with the existing structured provider status and Retry-After instead of being labeled factual verification rejection.",
+      "Successful social/grounded results and citation-rejected results include deliveryStatus; Playground Inspector diagnostics distinguish safe delivery, factual verification rejection, provider unavailability, and internal failure."
+    ],
+    "traceAttribution": "Raw provider interpretation, generated draft, and exact evidence type for the supplied trace were not present in the repository or saved local evidence. The stale-legacy routing defect is source-confirmed and reproduces the described failure shape, but this specific trace cannot be attributed to it without its raw export.",
+    "recoveryPolicy": "Keep factual citation validation strict. Do not append a reference from candidate mappings alone because answer-plan mapping is not proof of entailment. Keep at most the existing single recovery request; propagate provider unavailability immediately.",
+    "testsAddedOrUpdated": [
+      "Validated Hinglish wellbeing act with stale legacy label bypasses retrieval/citation verification.",
+      "Citation-recovery 429 preserves provider code, Retry-After, and a single bounded recovery call.",
+      "Diagnostic final-answer status distinguishes verified rejection, provider outage, and internal failure.",
+      "Existing strict missing/unknown citation, unsupported fact, and mixed social/business routing tests remain."
+    ],
+    "tests": "NOT_EXECUTED",
+    "runtime": "UNVERIFIED",
+    "checkpoint": "/tmp/carteio-phase06-citation-checkpoint-20261026",
+    "changedFiles": [
+      "backend/src/modules/workspaces/social-conversation.ts",
+      "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+      "backend/src/modules/workspaces/conversation.contracts.ts",
+      "backend/src/modules/workspaces/playground-diagnostics.ts",
+      "backend/src/modules/workspaces/playground-diagnostics.spec.ts",
+      "backend/test/social-conversation.spec.ts",
+      "backend/test/assistant.playground.spec.ts",
+      "frontend/src/services/api/assistants.ts",
+      "docs/development/known-defects.md",
+      "docs/development/phase-register.md",
+      "docs/development/evidence/phase06-conversation-ledger.json"
+    ]
+  },
+  "businessScopeCitationCorrection": {
+    "defects": [
+      "Protected business-scope policy was only in the grounded-answer prompt, while social, out-of-scope, and no-evidence generation had different incomplete policies.",
+      "The scope guard required businessPurpose/description even when the authenticated workspace had a resolved display name, and treated STATIC_BUSINESS_INFORMATION as a contradiction to an explicit OUT_OF_SCOPE act.",
+      "HELP CONTACTS was intentionally included as validated assistant configuration evidence on every retrieval, and the no-evidence path used evidence.length; configuration-only evidence therefore sent zero-result requests through citation-required verification."
+    ],
+    "fixes": [
+      "Add a single protected policy in the existing shared callSelectedProvider assembly for all non-interpretation requests; keep saved Bot Behavior lower priority and supply structured workspace display name, configured scope, and actual enabled read-tool names.",
+      "Resolve organization.name through the organization-scoped assistant query for Playground and trusted widget/customer turns. Use it as display/scope identity while still requiring the model’s validated explicit OUT_OF_SCOPE semantic act; business intents and mixed requests are not redirected.",
+      "Use the no-evidence generation path when there is no Knowledge/catalog evidence and no relevant support-contact configuration. Relevant support configuration remains available when SUPPORT_REQUEST semantics or the existing answer plan maps it. Product tool requests retain their authorized path.",
+      "Keep validateGroundedResponse strict for business-answer claims. Social/out-of-scope/no-evidence generation exits before factual citation validation; no source reference is fabricated."
+    ],
+    "trace": "Trace 0e336e63-d85b-4562-9b8f-5528c73ff9c8 raw interpretation, generated draft, and evidence metadata were not locally available. The observed zero retrieval results with one selected evidence item matches the source-confirmed configuration-only evidence gate, but the identity of that one item and actual scope labels cannot be established from the supplied summary alone.",
+    "testsAddedOrUpdated": [
+      "Semantic out-of-scope guard allows an explicit unrelated act with STATIC_BUSINESS_INFORMATION but retains business-intent conflict protection.",
+      "Dynamic workspace identity appears in the authorized customer-facing context and the reusable policy contains no merchant-specific name.",
+      "Hindi/Hinglish unrelated question is redirected without Knowledge retrieval and emits SAFE_ANSWER_DELIVERED.",
+      "Zero Knowledge results plus unrelated HELP CONTACTS evidence takes the natural no-evidence path without citation repair.",
+      "Existing social, contextual, strict business citations, Shopify, saved contacts, tenant isolation, and widget tests remain coverage targets."
+    ],
+    "tests": "NOT_EXECUTED",
+    "runtime": "UNVERIFIED",
+    "checkpoint": "/tmp/carteio-phase06-scope-citation-checkpoint-20261026",
+    "changedFiles": [
+      "backend/src/modules/workspaces/assistant-behavior-context.ts",
+      "backend/src/modules/workspaces/conversation-orchestrator.service.ts",
+      "backend/src/modules/workspaces/conversation.contracts.ts",
+      "backend/src/modules/workspaces/business-scope-guard.ts",
+      "backend/src/modules/workspaces/business-scope-guard.spec.ts",
+      "backend/src/modules/workspaces/assistant-contact-evidence.spec.ts",
+      "backend/test/assistant.playground.spec.ts",
+      "frontend/src/services/api/assistants.ts",
+      "docs/development/known-defects.md",
+      "docs/development/phase-register.md",
+      "docs/development/evidence/phase06-conversation-ledger.json"
+    ]
+  },
+  "tenantIsolationAudit": {
+    "status": "SOURCE_AUDIT_ONLY",
+    "productionFinding": "No fixed merchant support email, support phone, merchant domain, or default Shopify store found in inspected production runtime paths. Carteio references are platform branding, technical identifiers, or product UI copy.",
+    "fixtures": "Contact values in the inspected specs were replaced with fictional North Shop/South Shop .example values.",
+    "guards": "Playground loads assistant by authenticated member organization; trusted customer turns resolve by server-supplied organizationId+assistantId. Widget configuration and session rows are organization/assistant/origin scoped. Contact evidence is built from the selected assistant record with no fallback.",
+    "tests": "Cross-assistant contact isolation and missing-contact behavior coverage added; NOT_EXECUTED.",
+    "runtime": "UNVERIFIED"
+  },
+  "fixedResponseAudit": {
+    "status": "SOURCE_IMPLEMENTED_RUNTIME_UNVERIFIED",
+    "normalPaths": "Fixed multilingual scope redirects, handoffs, partial-scope notes, and ambiguity/no-evidence limitation helpers removed. The existing provider path now generates unsupported live-record limitation replies with bounded context; generated no-evidence and partial-scope replies are no longer modified by fixed appended sentences.",
+    "safety": "A deterministic personal-status refusal remains only after a provider-generated draft asserts unsupported private-record status. Citation/evidence authorization rejection paths remain safe failures.",
+    "connectorReadiness": "noLiveBusinessConnector describes the absent customer-specific live-record lookup only. Shopify catalog search uses a separate authorized readiness/tool path.",
+    "tests": "Playground and response-safety regression fixtures updated; NOT_EXECUTED.",
+    "runtime": "UNVERIFIED"
+  }
+}

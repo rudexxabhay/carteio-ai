@@ -1,0 +1,456 @@
+ M .github/workflows/ci.yml
+ M .github/workflows/prisma-migrate-uat.yml
+ M .gitignore
+ M README.md
+ M backend/.env.example
+ M backend/jest.config.js
+ M backend/package.json
+ M backend/prisma.config.ts
+ M backend/prisma/schema.prisma
+ M backend/src/common/filters/all-exceptions.filter.ts
+ M backend/src/common/middleware/request-id.middleware.ts
+ M backend/src/common/middleware/structured-logging.middleware.ts
+ M backend/src/config/env.validation.ts
+ M backend/src/main.ts
+ M backend/src/modules/auth/auth-session.guard.ts
+ M backend/src/modules/workspaces/assistant.controller.ts
+ M backend/src/modules/workspaces/assistant.dto.ts
+ M backend/src/modules/workspaces/assistant.service.ts
+ M backend/src/modules/workspaces/knowledge.controller.ts
+ M backend/src/modules/workspaces/knowledge.dto.ts
+ M backend/src/modules/workspaces/knowledge.service.ts
+ M backend/src/modules/workspaces/workspace.controller.ts
+ M backend/src/modules/workspaces/workspace.dto.ts
+ M backend/src/modules/workspaces/workspace.module.ts
+ M backend/src/modules/workspaces/workspace.service.ts
+ M backend/test/all-exceptions.filter.spec.ts
+ M backend/test/assistant.service.spec.ts
+ M backend/test/auth.service.spec.ts
+ M backend/test/csrf-origin.middleware.spec.ts
+ M backend/test/database-foundation.spec.ts
+ M backend/test/env.validation.spec.ts
+ M backend/test/knowledge.service.spec.ts
+ M backend/test/workspace.module.spec.ts
+ M backend/test/workspace.service.spec.ts
+ M chatbot-widget/README.md
+ M docs/phase-07-source-security.md
+ M frontend/.env.example
+ M frontend/index.html
+ M frontend/package.json
+ M frontend/src/app/providers/AuthProvider.tsx
+ M frontend/src/app/providers/ThemeProvider.tsx
+ M frontend/src/app/providers/WorkspaceProvider.tsx
+ M frontend/src/components/common/AppErrorBoundary.tsx
+ M frontend/src/components/common/SiteFooter.tsx
+ M frontend/src/components/common/SiteHeader.tsx
+ M frontend/src/config/index.ts
+ M frontend/src/layouts/AuthLayout/AuthLayout.tsx
+ M frontend/src/layouts/DashboardLayout/DashboardLayout.tsx
+ M frontend/src/layouts/PublicLayout/PublicLayout.tsx
+ M frontend/src/main.tsx
+ M frontend/src/pages/assistants/AssistantPages.tsx
+ M frontend/src/pages/auth/AuthPages.tsx
+ D frontend/src/pages/dashboard/DashboardPage.tsx
+ M frontend/src/pages/errors/NotFoundPage.tsx
+ M frontend/src/pages/knowledge/KnowledgeBasePage.tsx
+ M frontend/src/pages/landing/LandingPage.tsx
+ D frontend/src/pages/landing/sections/CapabilitiesAndConnectionsSection.tsx
+ D frontend/src/pages/landing/sections/CustomizationAndHelpSection.tsx
+ D frontend/src/pages/landing/sections/HeroSection.tsx
+ D frontend/src/pages/landing/sections/InstallAndPermissionsSection.tsx
+ D frontend/src/pages/landing/sections/UseCasesAndTrustSection.tsx
+ D frontend/src/pages/landing/sections/WhatAndProblemsSection.tsx
+ D frontend/src/pages/landing/sections/WorkflowSection.tsx
+ M frontend/src/pages/workspaces/WorkspaceEntry.tsx
+ M frontend/src/pages/workspaces/WorkspaceSettingsPage.tsx
+ M frontend/src/pages/workspaces/WorkspaceTeamPage.tsx
+ M frontend/src/routes/AppRoutes.tsx
+ M frontend/src/routes/RequireAuth.tsx
+ M frontend/src/services/api/assistants.ts
+ M frontend/src/services/api/client.ts
+ M frontend/src/services/api/knowledge.ts
+ M frontend/src/services/api/workspaces.ts
+ M frontend/src/styles/global.css
+ D frontend/src/styles/landing-refinements.css
+ M frontend/src/styles/workspaces.css
+ M frontend/src/tests/api-client.test.ts
+ M frontend/src/tests/app.test.tsx
+ M frontend/src/tests/assistant-pages.test.tsx
+ M frontend/src/tests/knowledge-base.test.tsx
+ M frontend/src/tests/workspace-onboarding.test.tsx
+ M frontend/src/tests/workspace-switching.test.tsx
+ M frontend/tailwind.config.js
+ M frontend/tsconfig.json
+ M frontend/vercel.json
+ M frontend/vite.config.ts
+ M infrastructure/nginx/ai.carteio.in.conf.template
+ M package.json
+ M pnpm-lock.yaml
+?? .nvmrc
+?? "Carteio AI \342\200\224 Velora Dashboard UI Kit & Screens.fig"
+?? "Carteio AI \342\200\224 Velora Dashboard UI Kit & Screens.pdf"
+?? backend/prisma/migrations/20261011100000_phase_07_1_knowledge_bases/migration.sql
+?? backend/prisma/migrations/20261011120000_phase_08_index_foundation/migration.sql
+?? backend/prisma/migrations/20261011130000_phase_08a_embedding_profiles/migration.sql
+?? backend/prisma/migrations/20261011140000_phase_08_lexical_and_optional_semantic/migration.sql
+?? backend/prisma/migrations/20261011150000_phase_08_website_sync_lifecycle/migration.sql
+?? backend/prisma/migrations/20261011160000_phase_08_global_crawl_coordination/migration.sql
+?? backend/prisma/migrations/20261011170000_phase_08e_browser_extraction/migration.sql
+?? backend/prisma/migrations/20261011180000_ai_training_configuration/migration.sql
+?? backend/prisma/migrations/20261011190000_phase_08_1_playground_chat/migration.sql
+?? backend/prisma/migrations/20261012120000_phase_09_conversation_engine/migration.sql
+?? backend/prisma/migrations/20261012130000_phase_09_multi_provider/migration.sql
+?? backend/prisma/migrations/20261012140000_phase_09b2_conversation_turn_idempotency/migration.sql
+?? backend/prisma/migrations/20261012150000_phase_09b9_gemini_provider_constraint/migration.sql
+?? backend/prisma/migrations/20261013120000_phase_09_saas_foundation/migration.sql
+?? backend/prisma/migrations/20261013130000_phase_09_assistant_archive/migration.sql
+?? backend/prisma/migrations/20261014120000_phase_11_conversations_inbox/migration.sql
+?? backend/prisma/migrations/20261014130000_phase_12_ai_ticketing/migration.sql
+?? backend/prisma/migrations/20261014140000_phase_12_outbox_leases/migration.sql
+?? backend/prisma/migrations/20261014150000_phase_12_ticket_draft_confirmation_version/migration.sql
+?? backend/prisma/migrations/20261014170000_phase_13_widget/migration.sql
+?? backend/prisma/migrations/20261014190000_phase_13_widget_retention/migration.sql
+?? backend/prisma/migrations/20261014200000_phase_15_connector_framework/migration.sql
+?? backend/prisma/migrations/20261015120000_phase_16_shopify_woocommerce/migration.sql
+?? backend/prisma/migrations/20261015130000_phase_16d_connector_permissions/migration.sql
+?? backend/prisma/migrations/20261016120000_phase_16f_shopify_data_contract/migration.sql
+?? backend/prisma/migrations/20261017120000_phase_16f_s_shopify_granted_scopes/migration.sql
+?? backend/prisma/migrations/20261017130000_phase_16f_api_1_shopify_oauth_requested_scopes/migration.sql
+?? backend/prisma/migrations/20261017150000_phase_16g_shopify_website_discovery/migration.sql
+?? backend/prisma/migrations/20261017160000_phase_16i_webhook_trigger_time/migration.sql
+?? backend/prisma/migrations/20261017170000_phase_16i_website_validators/migration.sql
+?? backend/prisma/migrations/20261017180000_phase_16i_sync_schedules/migration.sql
+?? backend/prisma/migrations/20261018100000_flow_definitions/migration.sql
+?? backend/prisma/migrations/20261023010000_knowledge_base_auto_link/migration.sql
+?? backend/prisma/migrations/20261023020000_assistant_workspace_knowledge_access/migration.sql
+?? backend/scripts/diagnose-gemini-models.ts
+?? backend/src/config/shopify-scope-inventory.config.spec.ts
+?? backend/src/config/shopify-scope-inventory.config.ts
+?? backend/src/config/shopify-scope-upgrade.config.ts
+?? backend/src/knowledge-worker.main.ts
+?? backend/src/modules/workspaces/assistant-behavior-context.ts
+?? backend/src/modules/workspaces/assistant-contact-evidence.spec.ts
+?? backend/src/modules/workspaces/assistant-contact-evidence.ts
+?? backend/src/modules/workspaces/assistant.controller.playground.spec.ts
+?? backend/src/modules/workspaces/business-scope-guard.ts
+?? backend/src/modules/workspaces/business-source-router.ts
+?? backend/src/modules/workspaces/clarification-guard.ts
+?? backend/src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts
+?? backend/src/modules/workspaces/connectors/commerce-read-contracts.service.ts
+?? backend/src/modules/workspaces/connectors/connector-credential-vault.spec.ts
+?? backend/src/modules/workspaces/connectors/connector-credential-vault.ts
+?? backend/src/modules/workspaces/connectors/connector-sync-debug.spec.ts
+?? backend/src/modules/workspaces/connectors/connector-sync-debug.ts
+?? backend/src/modules/workspaces/connectors/connector-sync-worker.service.spec.ts
+?? backend/src/modules/workspaces/connectors/connector-sync-worker.service.ts
+?? backend/src/modules/workspaces/connectors/connector.contracts.ts
+?? backend/src/modules/workspaces/connectors/connector.registry.spec.ts
+?? backend/src/modules/workspaces/connectors/connector.registry.ts
+?? backend/src/modules/workspaces/connectors/connector.service.spec.ts
+?? backend/src/modules/workspaces/connectors/connector.service.ts
+?? backend/src/modules/workspaces/connectors/generic-rest-connector.adapter.spec.ts
+?? backend/src/modules/workspaces/connectors/generic-rest-connector.adapter.ts
+?? backend/src/modules/workspaces/connectors/platform-commerce.adapters.spec.ts
+?? backend/src/modules/workspaces/connectors/safe-outbound-http.service.spec.ts
+?? backend/src/modules/workspaces/connectors/safe-outbound-http.service.ts
+?? backend/src/modules/workspaces/connectors/shopify-granted-scope-discovery.service.spec.ts
+?? backend/src/modules/workspaces/connectors/shopify-granted-scope-discovery.service.ts
+?? backend/src/modules/workspaces/connectors/shopify-oauth.controller.ts
+?? backend/src/modules/workspaces/connectors/shopify-oauth.service.spec.ts
+?? backend/src/modules/workspaces/connectors/shopify-oauth.service.ts
+?? backend/src/modules/workspaces/connectors/shopify.adapter.ts
+?? backend/src/modules/workspaces/connectors/universal-business-api.adapter.ts
+?? backend/src/modules/workspaces/conversation-context.ts
+?? backend/src/modules/workspaces/conversation-diagnostics.spec.ts
+?? backend/src/modules/workspaces/conversation-diagnostics.ts
+?? backend/src/modules/workspaces/conversation-intent.ts
+?? backend/src/modules/workspaces/conversation-orchestrator.customer.spec.ts
+?? backend/src/modules/workspaces/conversation-orchestrator.service.ts
+?? backend/src/modules/workspaces/conversation-provider.service.ts
+?? backend/src/modules/workspaces/conversation.contracts.ts
+?? backend/src/modules/workspaces/faq-import.ts
+?? backend/src/modules/workspaces/flow.controller.ts
+?? backend/src/modules/workspaces/flow.dto.ts
+?? backend/src/modules/workspaces/flow.service.spec.ts
+?? backend/src/modules/workspaces/flow.service.ts
+?? backend/src/modules/workspaces/gemini-model-diagnostic.ts
+?? backend/src/modules/workspaces/grounded-answer-plan.ts
+?? backend/src/modules/workspaces/grounded-response-validation.ts
+?? backend/src/modules/workspaces/intelligence-evaluation-datasets.ts
+?? backend/src/modules/workspaces/intelligence-evaluation.ts
+?? backend/src/modules/workspaces/intelligence-foundation.ts
+?? backend/src/modules/workspaces/knowledge-base.controller.ts
+?? backend/src/modules/workspaces/knowledge-base.dto.ts
+?? backend/src/modules/workspaces/knowledge-base.service.ts
+?? backend/src/modules/workspaces/knowledge-context-builder.spec.ts
+?? backend/src/modules/workspaces/knowledge-context-builder.ts
+?? backend/src/modules/workspaces/knowledge-indexing.spec.ts
+?? backend/src/modules/workspaces/knowledge-indexing.ts
+?? backend/src/modules/workspaces/knowledge-processing.service.ts
+?? backend/src/modules/workspaces/knowledge-processing.shopify-scopes.spec.ts
+?? backend/src/modules/workspaces/knowledge-public-website.spec.ts
+?? backend/src/modules/workspaces/knowledge-retrieval-policy.ts
+?? backend/src/modules/workspaces/knowledge-worker.module.ts
+?? backend/src/modules/workspaces/multilingual-semantics.ts
+?? backend/src/modules/workspaces/platform-admin.spec.ts
+?? backend/src/modules/workspaces/platform-admin.ts
+?? backend/src/modules/workspaces/playground-diagnostics.spec.ts
+?? backend/src/modules/workspaces/playground-diagnostics.ts
+?? backend/src/modules/workspaces/playground.dto.ts
+?? backend/src/modules/workspaces/response-safety.ts
+?? backend/src/modules/workspaces/retrieval-query-plan.ts
+?? backend/src/modules/workspaces/saas.controller.ts
+?? backend/src/modules/workspaces/saas.dto.ts
+?? backend/src/modules/workspaces/saas.service.spec.ts
+?? backend/src/modules/workspaces/saas.service.ts
+?? backend/src/modules/workspaces/scope-splitting.ts
+?? backend/src/modules/workspaces/shopify-website-discovery.service.spec.ts
+?? backend/src/modules/workspaces/shopify-website-discovery.service.ts
+?? backend/src/modules/workspaces/social-conversation.ts
+?? backend/src/modules/workspaces/support-delivery.service.ts
+?? backend/src/modules/workspaces/ticket-outbox-worker.service.spec.ts
+?? backend/src/modules/workspaces/ticket-outbox-worker.service.ts
+?? backend/src/modules/workspaces/ticketing.service.spec.ts
+?? backend/src/modules/workspaces/ticketing.service.ts
+?? backend/src/modules/workspaces/training-history.dto.ts
+?? backend/src/modules/workspaces/website-crawler.spec.ts
+?? backend/src/modules/workspaces/website-crawler.ts
+?? backend/src/modules/workspaces/website-renderer.ts
+?? backend/src/modules/workspaces/website-sync.spec.ts
+?? backend/src/modules/workspaces/website-sync.ts
+?? backend/src/modules/workspaces/website-verification.service.ts
+?? backend/src/modules/workspaces/widget-origin.ts
+?? backend/src/modules/workspaces/widget-retention-worker.service.spec.ts
+?? backend/src/modules/workspaces/widget-retention-worker.service.ts
+?? backend/src/modules/workspaces/widget-source-indicator.spec.ts
+?? backend/src/modules/workspaces/widget-source-indicator.ts
+?? backend/src/modules/workspaces/widget.controller.ts
+?? backend/src/modules/workspaces/widget.dto.ts
+?? backend/src/modules/workspaces/widget.service.spec.ts
+?? backend/src/modules/workspaces/widget.service.ts
+?? backend/test/assistant.playground.spec.ts
+?? backend/test/business-scope-guard.spec.ts
+?? backend/test/business-source-router.spec.ts
+?? backend/test/clarification-guard.spec.ts
+?? backend/test/conversation-context.spec.ts
+?? backend/test/conversation-intent.recovery.spec.ts
+?? backend/test/conversation-provider.spec.ts
+?? backend/test/faq-import.spec.ts
+?? backend/test/fixtures/carteio-quality-benchmark.v1.ts
+?? backend/test/fixtures/core-chat-regression-matrix.md
+?? backend/test/fixtures/quality-metrics.ts
+?? backend/test/fixtures/semantic-interpretation.v1.ts
+?? backend/test/gemini-model-diagnostic.spec.ts
+?? backend/test/grounded-answer-plan.spec.ts
+?? backend/test/intelligence-evaluation.spec.ts
+?? backend/test/intelligence-foundation.spec.ts
+?? backend/test/knowledge-base.faq-import.spec.ts
+?? backend/test/knowledge-base.service.spec.ts
+?? backend/test/knowledge-controller.routes.spec.ts
+?? backend/test/knowledge-indexing.spec.ts
+?? backend/test/knowledge-processing.spec.ts
+?? backend/test/knowledge-website-publication.spec.ts
+?? backend/test/knowledge-worker.spec.ts
+?? backend/test/multilingual-semantics.spec.ts
+?? backend/test/playground.dto.spec.ts
+?? backend/test/quality-benchmark-fixtures.spec.ts
+?? backend/test/request-id.middleware.spec.ts
+?? backend/test/response-safety.spec.ts
+?? backend/test/retrieval-query-plan.spec.ts
+?? backend/test/scope-splitting.spec.ts
+?? backend/test/social-conversation.spec.ts
+?? backend/test/website-pages-visibility.spec.ts
+?? backend/test/website-rendering.node-test.cjs
+?? backend/test/workspace-dashboard.spec.ts
+?? docs/CHATTERMATE_COMPLETE_AI_SYSTEM_ARCHITECTURE.md
+?? docs/PHASE_00_COMPLETE_SOURCE_AUDIT.md
+?? docs/PHASE_01_AI_VALIDATION_READINESS.md
+?? docs/PHASE_02_SHOPIFY_SOURCE_DISCOVERY.md
+?? docs/ai-audit/CARTEIO_AI_INTELLIGENCE_ARCHITECTURE_BLUEPRINT.md
+?? docs/ai-audit/CARTEIO_AI_KNOWLEDGE_AND_LANGUAGE_FIX.md
+?? docs/ai-audit/CARTEIO_AI_PHASE_01_FOUNDATION.md
+?? docs/ai-audit/CARTEIO_AI_PHASE_02_ACCURACY_AND_CONTEXT.md
+?? docs/ai-audit/CARTEIO_AI_PHASE_03A_EVALUATION_FOUNDATION.md
+?? docs/ai-audit/CARTEIO_AI_PHASE_03B_VERIFICATION_PLAN.md
+?? docs/ai-audit/CARTEIO_CENTRAL_KNOWLEDGE_ARCHITECTURE.md
+?? docs/ai-audit/CARTEIO_COMMERCE_AGENT_BRAIN_REPAIR.md
+?? docs/ai-audit/CARTEIO_CRAWL_FAILURE_DIAGNOSTIC_CAPTURE.md
+?? docs/ai-audit/CARTEIO_CROSS_LANGUAGE_RETRIEVAL_FIX.md
+?? docs/ai-audit/CARTEIO_DIRECT_ASSISTANT_ASSIGNMENT_FIX.md
+?? docs/ai-audit/CARTEIO_FORENSIC_WEBSITE_TRAINING_AUDIT.md
+?? docs/ai-audit/CARTEIO_KNOWLEDGE_ASSISTANT_LINKING_FIX.md
+?? docs/ai-audit/CARTEIO_MODEL_DRIVEN_CONVERSATION_REFACTOR.md
+?? docs/ai-audit/CARTEIO_NATURAL_CONVERSATION_ENGINE.md
+?? docs/ai-audit/CARTEIO_NATURAL_CONVERSATION_INTELLIGENCE.md
+?? docs/ai-audit/CARTEIO_P2028_CRAWL_PERSISTENCE_FIX.md
+?? docs/ai-audit/CARTEIO_PENDING_AI_QUALITY_ROADMAP.md
+?? docs/ai-audit/CARTEIO_PERSISTENT_WORKER_DEPLOYMENT.md
+?? docs/ai-audit/CARTEIO_WEBSITE_CRAWLING_FAILURE_FIX.md
+?? docs/ai-audit/NOUPE_PUBLIC_REFERENCE_STUDY.md
+?? docs/development-verification.md
+?? docs/google-gemini-playground-troubleshooting.md
+?? docs/integrations/business-data-api-v1.md
+?? docs/integrations/shopify-granted-scopes.md
+?? docs/integrations/shopify-read-api-phase-16f-api-3.md
+?? docs/integrations/shopify-website-discovery-phase-16g.md
+?? docs/phase-08-1-playground.md
+?? docs/phase-08-architecture.md
+?? docs/phase-08-operations.md
+?? docs/phase-08-security.md
+?? docs/phase-08a-indexing-audit.md
+?? docs/phase-08e-rendering.md
+?? docs/phase-09-product-audit-and-migration-plan.md
+?? docs/phase-09d7-evaluation.md
+?? docs/phase-09e-knowledge-retrieval.md
+?? docs/phases/PHASE_09A_ARCHITECTURE.md
+?? docs/phases/PHASE_09A_REQUEST_LIFECYCLE.md
+?? docs/phases/PHASE_09A_VERIFICATION.md
+?? frontend/public/widget.js
+?? frontend/src/components/common/ErrorStates.tsx
+?? frontend/src/components/common/RouteLoading.tsx
+?? frontend/src/components/common/app-error-boundary.css
+?? frontend/src/components/common/error-states.css
+?? frontend/src/components/demo/activity-list.tsx
+?? frontend/src/components/demo/hero-mockup.tsx
+?? frontend/src/components/site-footer.tsx
+?? frontend/src/components/site-header.tsx
+?? frontend/src/components/template/stack-logos.tsx
+?? frontend/src/components/ui/accordion.tsx
+?? frontend/src/components/ui/button.tsx
+?? frontend/src/components/velora/animated-beam.tsx
+?? frontend/src/components/velora/animated-gradient-text.tsx
+?? frontend/src/components/velora/animated-list.tsx
+?? frontend/src/components/velora/aurora-background.tsx
+?? frontend/src/components/velora/avatar-circles.tsx
+?? frontend/src/components/velora/bento-grid.tsx
+?? frontend/src/components/velora/blur-fade.tsx
+?? frontend/src/components/velora/border-beam.tsx
+?? frontend/src/components/velora/browser-mockup.tsx
+?? frontend/src/components/velora/dock.tsx
+?? frontend/src/components/velora/grid-pattern.tsx
+?? frontend/src/components/velora/marquee.tsx
+?? frontend/src/components/velora/meteors.tsx
+?? frontend/src/components/velora/number-ticker.tsx
+?? frontend/src/components/velora/orbiting-circles.tsx
+?? frontend/src/components/velora/particles.tsx
+?? frontend/src/components/velora/retro-grid.tsx
+?? frontend/src/components/velora/scroll-progress.tsx
+?? frontend/src/components/velora/shimmer-button.tsx
+?? frontend/src/components/velora/spotlight-card.tsx
+?? frontend/src/components/velora/text-reveal.tsx
+?? frontend/src/components/velora/tilt-card.tsx
+?? frontend/src/components/velora/typewriter.tsx
+?? frontend/src/content/components/animated-beam/examples/default.tsx
+?? frontend/src/dashboard-source/ChatflowBuilder.tsx
+?? frontend/src/dashboard-source/SourceDashboard.tsx
+?? frontend/src/dashboard-source/chatflow-builder.css
+?? frontend/src/dashboard-source/data.ts
+?? frontend/src/dashboard-source/knowledge-access.ts
+?? frontend/src/dashboard-source/pages.tsx
+?? frontend/src/dashboard-source/playground-provenance.ts
+?? frontend/src/dashboard-source/source-dashboard.css
+?? frontend/src/dashboard-source/styles.css
+?? frontend/src/dashboard-source/ui.tsx
+?? frontend/src/dashboard-source/use-overview-data.ts
+?? frontend/src/layouts/AuthLayout/auth-layout-polish.css
+?? frontend/src/layouts/DashboardLayout/dashboard-v2-ui.tsx
+?? frontend/src/layouts/DashboardLayout/source-dashboard-layout.css
+?? frontend/src/lib/utils.ts
+?? frontend/src/pages/dashboard/dashboard-capabilities.ts
+?? frontend/src/pages/flows/FlowBuilderPage.tsx
+?? frontend/src/pages/flows/flow-builder.css
+?? frontend/src/pages/knowledge/BusinessDataVisibility.tsx
+?? frontend/src/pages/knowledge/CrawlerPages.tsx
+?? frontend/src/pages/knowledge/crawler-pages.css
+?? frontend/src/pages/knowledge/knowledge-bases.css
+?? frontend/src/pages/landing/VELORA_LICENSE.md
+?? frontend/src/pages/landing/velora-theme.css
+?? frontend/src/pages/saas/ConnectorsPage.tsx
+?? frontend/src/pages/saas/SaasPages.tsx
+?? frontend/src/pages/saas/ShopifyIntegrationDetailPage.tsx
+?? frontend/src/pages/saas/ShopifyPermissionsPanel.tsx
+?? frontend/src/pages/saas/WidgetInstallationPage.tsx
+?? frontend/src/pages/saas/connectors-page.css
+?? frontend/src/pages/saas/saas-pages.css
+?? frontend/src/pages/saas/widget-installation.css
+?? frontend/src/pages/source/SourceAssistantsPage.tsx
+?? frontend/src/pages/source/SourceBillingPages.tsx
+?? frontend/src/pages/source/SourceConversationsPage.tsx
+?? frontend/src/pages/source/SourceIntegrationsPage.tsx
+?? frontend/src/pages/source/SourceKnowledgePages.tsx
+?? frontend/src/pages/source/SourceOrderDetailPage.tsx
+?? frontend/src/pages/source/SourceOrdersPage.tsx
+?? frontend/src/pages/source/SourceProductDetailPage.tsx
+?? frontend/src/pages/source/SourceProductsPage.tsx
+?? frontend/src/pages/source/SourceSalesPage.tsx
+?? frontend/src/pages/source/SourceTicketsPage.tsx
+?? frontend/src/pages/source/SourceWidgetPages.tsx
+?? frontend/src/pages/source/SourceWorkspacePages.tsx
+?? frontend/src/pages/training/PlaygroundChat.tsx
+?? frontend/src/pages/training/PlaygroundDialog.tsx
+?? frontend/src/pages/training/TrainingCenterPage.tsx
+?? frontend/src/pages/training/playground-chat.css
+?? frontend/src/pages/training/playground-copy.ts
+?? frontend/src/pages/training/playground-dialog.css
+?? frontend/src/pages/training/training-center.css
+?? frontend/src/services/api/connectors.ts
+?? frontend/src/services/api/dashboard.ts
+?? frontend/src/services/api/flows.ts
+?? frontend/src/services/api/knowledge-bases.ts
+?? frontend/src/services/api/saas.ts
+?? frontend/src/services/api/widget.ts
+?? frontend/src/tests/auth-bootstrap.test.tsx
+?? frontend/src/tests/business-data-visibility.test.tsx
+?? frontend/src/tests/chatflow-builder.test.tsx
+?? frontend/src/tests/connectors-page.test.tsx
+?? frontend/src/tests/conversations-inbox.test.tsx
+?? frontend/src/tests/dashboard-capabilities.test.ts
+?? frontend/src/tests/error-states.test.tsx
+?? frontend/src/tests/faq-import-dashboard.test.tsx
+?? frontend/src/tests/knowledge-access.test.ts
+?? frontend/src/tests/knowledge-api-routes.test.ts
+?? frontend/src/tests/knowledge-bases.test.tsx
+?? frontend/src/tests/playground-chat.test.tsx
+?? frontend/src/tests/playground-copy.test.ts
+?? frontend/src/tests/playground-live-flow.test.tsx
+?? frontend/src/tests/playground-provenance.test.ts
+?? frontend/src/tests/shopify-dashboard-regression.test.tsx
+?? frontend/src/tests/shopify-permissions-panel.test.tsx
+?? frontend/src/tests/tickets-page.test.tsx
+?? frontend/src/tests/training-center.test.tsx
+?? frontend/src/tests/widget-installation.test.tsx
+?? frontend/src/tests/widget-runtime.test.ts
+?? infrastructure/renderer/Dockerfile
+?? infrastructure/renderer/package.json
+?? infrastructure/renderer/render-page.mjs
+?? infrastructure/renderer/worker.mjs
+?? integrations/wordpress/carteio-business-data.php
+?? lastwork.md
+?? rors/README.md
+?? rors/auth-ui-velora-consistency-2026-10-19.md
+?? rors/backend-compilation-api-fix.md
+?? rors/builder-ui-progress.md
+?? rors/carteio-agent-builder-connections-report.md
+?? rors/carteio-architecture.md
+?? rors/carteio-audit.md
+?? rors/carteio-chatflow-builder-frontend-report.md
+?? rors/carteio-complete-dark-mode-fix.md
+?? rors/carteio-dark-mode-css-regression-fix.md
+?? rors/carteio-faq-xlsx-csv-import-fix.md
+?? rors/dashboard-auth-progress.md
+?? rors/dashboard-critical-correction-2026-10-20.md
+?? rors/dashboard-figma-replacement-audit-2026-10-19.md
+?? rors/dashboard-pdf-page-inventory-2026-10-20.md
+?? rors/dashboard-pdf-replacement-progress-2026-10-20.md
+?? rors/dashboard-source-merge-audit-2026-10-20.md
+?? rors/flow-api.md
+?? rors/flow-engine-progress.md
+?? rors/flowise-reference.md
+?? rors/flowise-source-audit.md
+?? rors/implementation-status.md
+?? rors/landing-validation.md
+?? rors/live-flowise-audit.md
+?? rors/public-frontend-refresh-2026-10-19.md
+?? rors/reconstruction-report.md
+?? rors/runtime-validation-2026-10-18.md
+?? rors/velora-saas-port-2026-10-19.md

@@ -9,7 +9,8 @@ describe('auth CSRF origin validation', () => {
   };
   it('rejects a missing or foreign origin', () => {
     const guard = csrfOriginMiddleware(['http://localhost:3000']);
-    for (const headers of [{}, { origin: 'https://attacker.example' }]) {
+    const cases: Array<Record<string, string>> = [{}, { origin: 'https://attacker.example' }];
+    for (const headers of cases) {
       const ctx = make('POST', headers); guard(ctx.req, ctx.res, ctx.next); expect(ctx.res.status).toHaveBeenCalledWith(403); expect(ctx.next).not.toHaveBeenCalled();
     }
   });

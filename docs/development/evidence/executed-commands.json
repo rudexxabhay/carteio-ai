@@ -1,0 +1,164 @@
+[
+  {
+    "run": "B0",
+    "directory": "backend",
+    "command": "timeout 45s node node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/response-safety.spec.ts --json --outputFile=/tmp/carteio-phase00-backend-smoke.json",
+    "recordedResult": "Exit 124; no final assertion report"
+  },
+  {
+    "run": "F0",
+    "directory": "frontend",
+    "command": "timeout 45s node node_modules/vitest/vitest.mjs run src/tests/knowledge-api-routes.test.ts src/tests/knowledge-access.test.ts --maxWorkers=1 --minWorkers=1 --reporter=json --outputFile=/tmp/carteio-phase00-frontend-smoke.json",
+    "recordedResult": "Exit 124; no final assertion report"
+  },
+  {
+    "run": "B1",
+    "directory": "backend",
+    "command": "timeout 180s node node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/response-safety.spec.ts --json --outputFile=/tmp/carteio-phase00-backend-smoke-retry.json",
+    "recordedResult": "Exit 0; **8 passed, 0 failed**, 1 suite; 85.461 s reported"
+  },
+  {
+    "run": "F1",
+    "directory": "frontend",
+    "command": "timeout 180s node node_modules/vitest/vitest.mjs run src/tests/knowledge-api-routes.test.ts src/tests/knowledge-access.test.ts --maxWorkers=1 --minWorkers=1 --reporter=json --outputFile=/tmp/carteio-phase00-frontend-smoke-retry.json",
+    "recordedResult": "Exit 124; no final assertion report"
+  },
+  {
+    "run": "B2",
+    "directory": "backend",
+    "command": "timeout 900s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --json --outputFile=/tmp/carteio-phase00-backend-baseline.json > /tmp/carteio-phase00-backend-baseline.log 2>&1",
+    "recordedResult": "Exit 1; **508 passed, 65 failed** assertions; 74 suites: 42 pass, 32 fail, including **5 compile/runtime-error suites with no executed assertions**"
+  },
+  {
+    "run": "F2",
+    "directory": "frontend",
+    "command": "timeout 900s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run --maxWorkers=1 --minWorkers=1 --reporter=json --outputFile=/tmp/carteio-phase00-frontend-baseline.json > /tmp/carteio-phase00-frontend-baseline.log 2>&1",
+    "recordedResult": "Exit 124; no final assertion report. Vite duplicate-key warning observed. Do not infer that zero tests failed or that a dependency is missing."
+  },
+  {
+    "run": "N1",
+    "directory": "backend",
+    "command": "timeout 600s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/phase00-api-contracts.spec.ts test/phase00-flow-storage.spec.ts --json --outputFile=/tmp/carteio-phase00-added-regressions.json > /tmp/carteio-phase00-added-regressions.log 2>&1",
+    "recordedResult": "Exit 0; initial version **14 passed, 0 failed**, 2 suites"
+  },
+  {
+    "run": "H1",
+    "directory": "backend",
+    "command": "timeout 600s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/assistant.playground.spec.ts test/conversation-provider.spec.ts test/assistant.service.spec.ts test/workspace.service.spec.ts test/knowledge-controller.routes.spec.ts src/modules/workspaces/playground-diagnostics.spec.ts src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts --json --outputFile=/tmp/carteio-phase00-harness-recheck.json > /tmp/carteio-phase00-harness-recheck.log 2>&1",
+    "recordedResult": "Exit 1; **185 passed, 64 failed**, 7 suites: 5 pass, 2 fail; **no compilation-blocked suites** in this recheck"
+  },
+  {
+    "run": "N2",
+    "directory": "backend",
+    "command": "timeout 600s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/phase00-api-contracts.spec.ts test/phase00-flow-storage.spec.ts --json --outputFile=/tmp/carteio-phase00-contract-final.json > /tmp/carteio-phase00-contract-final.log 2>&1",
+    "recordedResult": "Exit 1; expanded version **21 passed, 1 failed**, 2 suites. The one failure is the confirmed missing conversation-note backend route."
+  },
+  {
+    "run": "P1",
+    "directory": "backend",
+    "command": "timeout 420s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/assistant.playground.spec.ts --testNamePattern='uses the authorized Shopify tool' --json --outputFile=/tmp/carteio-phase00-product-tool-recheck.json > /tmp/carteio-phase00-product-tool-recheck.log 2>&1",
+    "recordedResult": "Exit 0; **9 passed, 0 failed** product scenarios. **121 tests were not selected** by this focused command; they were not disabled and their earlier failures remain recorded."
+  },
+  {
+    "run": "H2",
+    "directory": "backend",
+    "command": "timeout 420s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath src/modules/workspaces/connectors/connector-sync-worker.service.spec.ts test/knowledge-base.faq-import.spec.ts --json --outputFile=/tmp/carteio-phase00-remaining-harness.json > /tmp/carteio-phase00-remaining-harness.log 2>&1",
+    "recordedResult": "Exit 0; **15 passed, 0 failed**, 2 suites; both previously compilation-blocked suites now execute"
+  },
+  {
+    "run": "H3",
+    "directory": "backend",
+    "command": "timeout 300s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/assistant.service.spec.ts --json --outputFile=/tmp/carteio-phase00-behavior-final.json > /tmp/carteio-phase00-behavior-final.log 2>&1",
+    "recordedResult": "Exit 0; **21 passed, 0 failed**, 1 suite; freezes archive fixture clock without changing production"
+  },
+  {
+    "run": "F3",
+    "directory": "frontend",
+    "command": "timeout 420s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/knowledge-api-routes.test.ts src/tests/knowledge-access.test.ts src/tests/api-client.test.ts --pool=threads --maxWorkers=1 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-frontend-focused.json > /tmp/carteio-phase00-frontend-focused.log 2>&1",
+    "recordedResult": "Exit 1; **16 passed, 1 failed**, 3 files. API cancellation/timeout failed at 5000 ms; later F5 rechecks its repaired timer fixture"
+  },
+  {
+    "run": "F4",
+    "directory": "frontend",
+    "command": "timeout 900s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run --pool=threads --maxWorkers=1 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-frontend-threads.json > /tmp/carteio-phase00-frontend-threads.log 2>&1",
+    "recordedResult": "Exit 124 after 900 s; no final JSON. **108 individual passes and 74 individual failures** are present in verbose output across 11 files. The remaining selected files/assertions are unreported, not passed. Partial evidence is retained separately"
+  },
+  {
+    "run": "F5",
+    "directory": "frontend",
+    "command": "timeout 300s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/api-client.test.ts --pool=threads --maxWorkers=1 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-frontend-api-final.json > /tmp/carteio-phase00-frontend-api-final.log 2>&1",
+    "recordedResult": "Exit 0; **13 passed, 0 failed**, 1 file; same cancellation/timeout assertions retained with independent shared-request timer state"
+  },
+  {
+    "run": "F6",
+    "directory": "frontend",
+    "command": "timeout 900s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/app.test.tsx src/tests/workspace-switching.test.tsx src/tests/auth-bootstrap.test.tsx src/tests/assistant-pages.test.tsx src/tests/training-center.test.tsx src/tests/knowledge-bases.test.tsx src/tests/faq-import-dashboard.test.tsx src/tests/widget-runtime.test.ts src/tests/widget-installation.test.tsx src/tests/phase00-active-behavior.test.tsx --pool=threads --maxWorkers=2 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-frontend-protection.json > /tmp/carteio-phase00-frontend-protection.log 2>&1",
+    "recordedResult": "Exit 1; **18 passed, 15 failed**, 10 selected files: 4 pass, 6 fail. One failing file (widget-runtime) collected zero assertions due to its fixture URL; F7 rechecks that harness repair. Active behavior: **2/2 passed**."
+  },
+  {
+    "run": "F7",
+    "directory": "frontend",
+    "command": "timeout 300s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/widget-runtime.test.ts --pool=threads --maxWorkers=1 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-widget-runtime-final.json > /tmp/carteio-phase00-widget-runtime-final.log 2>&1",
+    "recordedResult": "Exit 1; **5 passed, 2 failed**, 7 widget assertions; collection repaired, state/appearance waits remain red"
+  },
+  {
+    "run": "F8",
+    "directory": "frontend",
+    "command": "timeout 300s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/phase00-workspace-isolation.test.tsx --pool=threads --maxWorkers=1 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-workspace-ui-final.json > /tmp/carteio-phase00-workspace-ui-final.log 2>&1",
+    "recordedResult": "Exit 0; **2 passed, 0 failed** in the active workspace loader: owner role, pending-tenant clearing and denied switch"
+  },
+  {
+    "run": "E1",
+    "directory": "backend",
+    "command": "timeout 420s node node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand --json --outputFile=/tmp/carteio-phase00-health-integration.json > /tmp/carteio-phase00-health-integration.log 2>&1",
+    "recordedResult": "Exit 1; runner reports **1 passed, 6 failed**; the six HTTP assertions were BLOCKED by sandbox `listen EPERM 127.0.0.1`. The database-disabled test app had no business services. E2/E3 use approved local-socket execution."
+  },
+  {
+    "run": "F9",
+    "directory": "frontend",
+    "command": "timeout 300s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/phase00-active-behavior.test.tsx src/tests/phase00-workspace-isolation.test.tsx --pool=threads --maxWorkers=2 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-frontend-active-regressions-final.json > /tmp/carteio-phase00-frontend-active-regressions-final.log 2>&1",
+    "recordedResult": "Exit 0; **4 passed, 0 failed**, 2 active-route files; final typed fixtures"
+  },
+  {
+    "run": "E2",
+    "directory": "backend",
+    "command": "timeout 420s node node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand --json --outputFile=/tmp/carteio-phase00-health-integration-recheck.json > /tmp/carteio-phase00-health-integration-recheck.log 2>&1",
+    "recordedResult": "Approved local socket permission; exit 1; **5 passed, 2 failed**, 7 tests. Failing fixtures expected non-UUID caller request IDs to be reused, contrary to the current security policy."
+  },
+  {
+    "run": "E3",
+    "directory": "backend",
+    "command": "timeout 420s node node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand --json --outputFile=/tmp/carteio-phase00-health-integration-final.json > /tmp/carteio-phase00-health-integration-final.log 2>&1",
+    "recordedResult": "Exit 0; **7 passed, 0 failed**, 1 suite; same approved database-disabled local harness, corrected UUID fixtures and retained invalid-ID rejection"
+  },
+  {
+    "run": "H4",
+    "directory": "backend",
+    "command": "timeout 300s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/phase00-flow-storage.spec.ts src/modules/workspaces/flow.service.spec.ts --json --outputFile=/tmp/carteio-phase00-flow-final.json > /tmp/carteio-phase00-flow-final.log 2>&1",
+    "recordedResult": "Exit 124; no final report. H5 rechecks the changed spec; the unchanged existing flow runtime suite had already passed 15/15 in B2."
+  },
+  {
+    "run": "H5",
+    "directory": "backend",
+    "command": "timeout 600s node node_modules/jest/bin/jest.js --config jest.phase00.config.cjs --runInBand --runTestsByPath test/phase00-flow-storage.spec.ts --json --outputFile=/tmp/carteio-phase00-flow-storage-retry.json > /tmp/carteio-phase00-flow-storage-retry.log 2>&1",
+    "recordedResult": "Exit 0; **2 passed, 0 failed**: saved graph round trip/tenant check and configured transform -> Knowledge preview -> assigned assistant -> response/edge trace."
+  },
+  {
+    "run": "F10",
+    "directory": "frontend",
+    "command": "timeout 900s node --require ../scripts/phase00/offline.cjs node_modules/vitest/vitest.mjs run src/tests/auth-redirect.test.ts src/tests/business-data-visibility.test.tsx src/tests/chatflow-builder.test.tsx src/tests/config.test.ts src/tests/connectors-page.test.tsx src/tests/conversations-inbox.test.tsx src/tests/dashboard-capabilities.test.ts src/tests/error-states.test.tsx src/tests/knowledge-base.test.tsx src/tests/playground-chat.test.tsx src/tests/playground-copy.test.ts src/tests/playground-live-flow.test.tsx src/tests/playground-provenance.test.ts src/tests/shopify-dashboard-regression.test.tsx src/tests/shopify-permissions-panel.test.tsx src/tests/theme-switcher.test.tsx src/tests/tickets-page.test.tsx src/tests/workspace-onboarding.test.tsx --pool=threads --maxWorkers=3 --minWorkers=1 --reporter=verbose --reporter=json --outputFile.json=/tmp/carteio-phase00-frontend-remaining.json > /tmp/carteio-phase00-frontend-remaining.log 2>&1",
+    "recordedResult": "Exit 1; **116 passed, 68 failed**, 18 files: 6 pass, 12 fail, zero collection-blocked files. Combined with earlier completed reports, all **32** current frontend test files have executed assertions."
+  },
+  {
+    "run": "G2",
+    "directory": "repository root",
+    "command": "node --test --test-isolation=none scripts/phase00/offline.test.cjs > /tmp/carteio-phase00-offline-guard-final.tap 2>&1",
+    "recordedResult": "Exit 0; **3 passed, 0 failed**; final guard recheck"
+  },
+  {
+    "run": "G1",
+    "directory": "repository root",
+    "command": "node --test --test-isolation=none scripts/phase00/offline.test.cjs > /tmp/carteio-phase00-offline-guard.tap 2>&1",
+    "recordedResult": "Exit 0; **3 passed, 0 failed**; unmocked fetch, HTTPS and DB-style socket connections refused"
+  }
+]

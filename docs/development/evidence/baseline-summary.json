@@ -1,0 +1,85 @@
+{
+  "scope": "Phase 00 deterministic baseline; counts are unique latest observed assertions, not the sum of overlapping commands and not a single all-green run.",
+  "backend": {
+    "passed": 687,
+    "failed": 116,
+    "pending": 0,
+    "runtimeBlockedFiles": 0,
+    "files": 76
+  },
+  "frontend": {
+    "passed": 158,
+    "failed": 85,
+    "pending": 0,
+    "runtimeBlockedFiles": 0,
+    "files": 32
+  },
+  "healthHttpIntegration": {
+    "passed": 7,
+    "failed": 0,
+    "pending": 0,
+    "files": 1,
+    "businessDatabaseEnabled": false
+  },
+  "networkGuard": {
+    "passed": 3,
+    "failed": 0,
+    "pending": 0,
+    "files": 1
+  },
+  "externalMerchantDataVerified": false,
+  "paidProviderCalls": 0,
+  "phase01Started": false,
+  "phase00Gate": "BLOCKED",
+  "gateScope": "Architecture, inventory, recorded deterministic test results, protected paths and rollback evidence exist. Final closure is blocked because only 2 of 201 failed assertions have independently verified root causes, the remaining 199 lack cause/severity/phase assignments, and no complete pre-edit assertion baseline proves test-result non-regression.",
+  "remainingFailedAssertions": 201,
+  "newProductionRegressionsObserved": 0,
+  "failedAssertionClassification": {
+    "confirmedApplicationDefect": 2,
+    "unresolvedRootCause": 199
+  },
+  "testOutcomeNonRegressionProven": false,
+  "currentFrontendFilesWithCompletedReports": 32,
+  "continuationLatestSaved": {
+    "backend": {
+      "passed": 813,
+      "failed": 0,
+      "assertionExecutions": 813,
+      "files": 76,
+      "exitCode": 0,
+      "typescript": "PASS"
+    },
+    "frontend": {
+      "passed": 217,
+      "failed": 26,
+      "assertionExecutions": 243,
+      "exitCode": 1
+    },
+    "targetedFrontend": {
+      "passed": 97,
+      "failed": 3,
+      "assertionExecutions": 100,
+      "exitCode": 1
+    },
+    "healthHttpIntegration": {
+      "passed": 7,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "offlineSafety": {
+      "passed": 3,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "historicalDispositionLedger": "phase00-continuation-dispositions.json",
+    "verifiedAfterContinuationEdits": false,
+    "testsRunInContinuation": 0,
+    "gate": "BLOCKED",
+    "frontendLatestPerFileMerge": {
+      "passed": 221,
+      "failed": 22,
+      "uniqueAssertions": 243,
+      "isFullSuiteRun": false
+    }
+  }
+}

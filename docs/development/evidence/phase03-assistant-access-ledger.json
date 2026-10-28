@@ -1,0 +1,120 @@
+{
+  "phase": "03",
+  "objective": "Unified Assistant Data Access",
+  "sourceStatus": "CODE_IMPLEMENTED",
+  "runtimeStatus": "RUNTIME_UNVERIFIED",
+  "inspectionDate": "2026-10-26",
+  "carryForward": {
+    "phase00": {
+      "status": "BLOCKED",
+      "originalFailures": { "backend": 116, "frontend": 85, "total": 201 },
+      "latestSavedOutcomesBeforePhase03": { "backend": { "passed": 813, "failed": 0 }, "frontend": { "passed": 217, "failed": 26 }, "targetedFrontend": { "passed": 97, "failed": 3 } },
+      "causeClassificationUnresolved": 47,
+      "ledger": "phase00-continuation-dispositions.json"
+    },
+    "phase01": { "status": "CODE_IMPLEMENTED", "runtimeUnverified": true, "ledger": "phase01-connectivity-ledger.json" },
+    "phase02": { "status": "CODE_IMPLEMENTED", "runtimeUnverified": true, "ledger": "phase02-data-pipeline-ledger.json" }
+  },
+  "accessMatrix": [
+    {
+      "source": "Workspace customer knowledge policy / Knowledge Bases / direct source assignments",
+      "status": "FIXED",
+      "boundary": "KnowledgeBaseService.resolveEffectiveSources -> KnowledgeProcessingService.searchPreview/effectivePublicKnowledge -> ConversationOrchestrator",
+      "finding": "Existing active public FAQ, TEXT and WEBSITE sources are included without per-source attachment when useAllEligibleWorkspaceKnowledge is enabled. Explicit Base and direct links remain unioned and source IDs deduplicated. Retrieval checks REGISTERED status, current READY state, active generation, active chunks, visibility and connector/site authorization.",
+      "correction": "Resolver now emits accurate accessPaths (DIRECT, KNOWLEDGE_BASE, WORKSPACE_POLICY) and accessPath=MULTIPLE for sources reached through multiple paths; previous output incorrectly labeled all results WORKSPACE_POLICY whenever that policy was enabled."
+    },
+    {
+      "source": "FAQ, manual text and website pages",
+      "status": "WIRED",
+      "boundary": "Effective source resolver -> authorized public source filter -> current-generation chunk retrieval -> evidence/citations",
+      "finding": "Public visibility is required for public visitor access. Internal restricted content remains excluded. Current generation/version and active chunk filters are applied; website sources also pass website verification/eligibility checks. Relevant evidence is determined by actual retrieval results, separately from eligible/index-ready source counts."
+    },
+    {
+      "source": "Shopify products, variants, prices, inventory and collections",
+      "status": "WIRED",
+      "boundary": "CommerceReadContracts.productSearchReadiness/searchCatalog -> ConversationOrchestrator search_store_products tool or bounded prefetch -> structured C# evidence",
+      "finding": "Registration/execution requires connected tenant-linked integration, fresh verified scope snapshot, provider capability, workspace permission and assistant permission. Field-level permissions control prices, stock and categories/collections; tool evidence carries connection/source ID, sync freshness, source version timestamp, content hash, product locator and bounded variants."
+    },
+    {
+      "source": "Shopify orders and fulfillment",
+      "status": "BLOCKED",
+      "boundary": "SHOPIFY_REGISTERED_OPERATIONS and connector permission policy",
+      "finding": "Order scope is classified PROTECTED, requires customer identity and is not assistant-eligible. No public order tool is registered. Customer-specific order access remains unavailable until verified ownership and authorization exist; the Phase 03 change does not weaken this boundary."
+    },
+    {
+      "source": "Assistant Bot Behavior and business purpose",
+      "status": "WIRED",
+      "boundary": "Organization-scoped assistant load -> buildAssistantBehaviorInstruction -> selected provider request",
+      "finding": "Assistant-specific configuration is loaded for the selected assistant and tenant and assembled into outbound provider messages. Provider selection/configuration and prompt architecture were not changed."
+    },
+    {
+      "source": "Merchant-configured support contacts",
+      "status": "WIRED",
+      "boundary": "Explicit HELP CONTACTS section -> type-specific validation -> assistant configuration evidence S# -> grounding/citation validation",
+      "finding": "Free-form behavior text is not treated as verified fact. Only validated labeled contact values become merchant-configuration evidence."
+    },
+    {
+      "source": "Other supported integrations",
+      "status": "PARTIAL",
+      "boundary": "Existing connector adapters and connector knowledge permission filters",
+      "finding": "Existing integration-backed knowledge records pass connector category and assistant authorization filters. The public conversation tool registry currently exposes the existing Shopify catalog and public business knowledge search only; no speculative tools were added."
+    },
+    {
+      "source": "Playground and public widget access policy",
+      "status": "WIRED",
+      "boundary": "Shared ConversationOrchestrator -> shared KnowledgeProcessingService public search and CommerceReadContracts authorization",
+      "finding": "The existing Playground and widget conversation paths reuse the same orchestrator and public retrieval/tool authorization functions. Widget session/origin validation was not changed."
+    },
+    {
+      "source": "Agent Builder capability reuse",
+      "status": "PARTIAL",
+      "boundary": "Existing graph storage/execution remains separate; current authorized contracts are reusable services",
+      "finding": "No new Agent Builder nodes, execution APIs or second tool engine were implemented. Later reuse requires explicit integration work within its existing runtime scope."
+    }
+  ],
+  "confirmedDefects": [
+    {
+      "id": "P03-KB-01",
+      "cause": "When workspace-wide knowledge was enabled, resolver metadata reported WORKSPACE_POLICY for every source, hiding direct and Knowledge Base access paths.",
+      "fix": "Track each source's actual access paths, preserve deduplication, emit MULTIPLE when applicable, and expose accessPaths in the frontend API type.",
+      "regressionTestUpdated": "backend/test/knowledge-base.service.spec.ts: direct/Base deduplication and workspace policy path assertions",
+      "executed": false
+    }
+  ],
+  "securityDispositions": [
+    "Only the workspace owner may toggle useAllEligibleWorkspaceKnowledge; access checks use resolved membership role.",
+    "Public access remains visibility-gated and tenant-scoped; active generation and chunk checks remain required.",
+    "Shopify price/inventory/category fields remain separately permission-gated.",
+    "Shopify orders are not exposed to customer-facing assistants because current contracts require verified identity and mark the operation assistant-ineligible.",
+    "No customer order data, private source or internal instructions were exposed by the change."
+  ],
+  "changedFiles": [
+    "backend/src/modules/workspaces/knowledge-base.service.ts",
+    "backend/test/knowledge-base.service.spec.ts",
+    "frontend/src/services/api/knowledge-bases.ts",
+    "docs/development/phase-register.md",
+    "docs/development/known-defects.md",
+    "docs/development/evidence/phase03-assistant-access-ledger.json"
+  ],
+  "testExecution": {
+    "executed": false,
+    "reason": "Explicit Phase 03 instruction prohibits test execution, builds and type checks.",
+    "updated": ["backend/test/knowledge-base.service.spec.ts"],
+    "existingRelevantSuites": [
+      "backend/test/knowledge-base.service.spec.ts",
+      "backend/test/knowledge-processing.spec.ts",
+      "backend/src/modules/workspaces/connectors/commerce-read-contracts.service.spec.ts",
+      "backend/src/modules/workspaces/conversation-orchestrator.customer.spec.ts",
+      "backend/src/modules/workspaces/assistant-contact-evidence.spec.ts",
+      "backend/src/modules/workspaces/widget.service.spec.ts"
+    ]
+  },
+  "pendingDependencies": [
+    "Phase 00 original assertion dispositions remain incomplete and its gate remains BLOCKED.",
+    "Phases 01 and 02 source edits, including their regression tests, remain unexecuted and runtime-unverified.",
+    "Live Shopify permission/data behavior, deployed widget sessions, database persistence and real retrieval need approved runtime verification.",
+    "Protected order access needs a verified customer identity/ownership contract before any assistant operation can be exposed.",
+    "Assistant contact values remain merchant-configured explicit HELP CONTACTS; no separate contacts management API was added."
+  ],
+  "phase04Readiness": "NOT_STARTED. Phase 03 is source-implemented only. Phase 00 remains BLOCKED; Phases 01–03 require safe focused tests and runtime verification before retrieval-quality work is relied upon. No semantic-search algorithm changes were made."
+}

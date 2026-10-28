@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { PrismaService } from '../src/infrastructure/database/prisma.service';
 import { AuthSessionGuard } from '../src/modules/auth/auth-session.guard';
+import type { AuthenticatedRequest } from '../src/modules/auth/auth-session.guard';
+import { sessionCookieName } from '../src/modules/auth/auth.service';
+import type { AssistantService } from '../src/modules/workspaces/assistant.service';
+import { AssistantController } from '../src/modules/workspaces/assistant.controller';
 import { WorkspaceController } from '../src/modules/workspaces/workspace.controller';
 import { WorkspaceService, normalizeWorkspaceSlug } from '../src/modules/workspaces/workspace.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
@@ -22,7 +26,54 @@ describe('workspace authorization and creation', () => {
     const request = { headers: {} };
     const context = { switchToHttp: () => ({ getRequest: () => request }) } as any;
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(request).not.toHaveProperty('authSession');
     expect(Reflect.getMetadata('__guards__', WorkspaceController)).toContain(AuthSessionGuard);
+  });
+
+  it.each([
+    ['an invalid credential', 'invalid-session-token'],
+    ['a malformed encoded credential', '%E0%A4%A'],
+  ])('fails closed for %s before attaching a trusted identity', async (_description, token) => {
+    const current = jest.fn().mockRejectedValue(new UnauthorizedException());
+    const guard = new AuthSessionGuard({ current } as any);
+    const cookie = token === '%E0%A4%A' ? `${sessionCookieName()}=${token}` : `${sessionCookieName()}=${encodeURIComponent(token)}`;
+    const request = { headers: { cookie }, body: { userId: otherUserId, workspaceId: 'workspace-b' } };
+    const context = { switchToHttp: () => ({ getRequest: () => request }) } as any;
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(current).toHaveBeenCalledWith(token === '%E0%A4%A' ? undefined : token);
+    expect(request).not.toHaveProperty('authSession');
+  });
+
+  it('derives request identity from the verified session, not client fields', async () => {
+    const current = jest.fn().mockResolvedValue({ sessionId: 'server-session', user: { id: userId, name: 'Verified' } });
+    const guard = new AuthSessionGuard({ current } as any);
+    const request: { headers: { cookie: string }; body: { userId: string; workspaceId: string }; authSession?: { userId: string; sessionId: string; user: { id: string; name: string } } } = {
+      headers: { cookie: `${sessionCookieName()}=valid-session-token` },
+      body: { userId: otherUserId, workspaceId: 'workspace-b' },
+    };
+    const context = { switchToHttp: () => ({ getRequest: () => request }) } as any;
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.authSession).toMatchObject({ userId, sessionId: 'server-session', user: { id: userId } });
+    expect(request.authSession).not.toMatchObject({ userId: otherUserId });
+  });
+
+  it('passes only the guard-established identity to Playground session access', async () => {
+    const request = {
+      headers: { cookie: `${sessionCookieName()}=verified-session-token` },
+      body: { userId: otherUserId, workspaceId: 'workspace-b', assistantId: 'assistant-b' },
+    } as unknown as AuthenticatedRequest;
+    const guard = new AuthSessionGuard({ current: jest.fn().mockResolvedValue({ sessionId: 'server-session', user: { id: userId, name: 'Verified' } }) } as any);
+    const context = { switchToHttp: () => ({ getRequest: () => request }) } as any;
+    await guard.canActivate(context);
+
+    const playgroundConversation = jest.fn().mockResolvedValue({ sessionId: 'session-1', messages: [] });
+    const controller = new AssistantController({ playgroundConversation } as unknown as AssistantService);
+    await controller.playgroundConversation(request, 'carteio', 'assistant-a', 'session-1');
+
+    expect(playgroundConversation).toHaveBeenCalledWith(userId, 'carteio', 'assistant-a', 'session-1', 0, 40);
+    expect(Reflect.getMetadata('__guards__', AssistantController)).toContain(AuthSessionGuard);
   });
 
   it('normalizes workspace slugs consistently and rejects reserved or invalid values', () => {
@@ -33,11 +84,11 @@ describe('workspace authorization and creation', () => {
   });
 
   it('creates an organization, owner membership, and audit event in one transaction', async () => {
-    const calls: Array<{ model: string; args: any }> = [];
+    const calls: Array<{ model: string; args: Record<string, unknown> }> = [];
     const transaction = {
-      organization: { create: jest.fn(async ({ data }: any) => { calls.push({ model: 'organization', args: data }); return org(data); }) },
-      organizationMembership: { create: jest.fn(async ({ data }: any) => { calls.push({ model: 'membership', args: data }); return data; }) },
-      auditEvent: { create: jest.fn(async ({ data }: any) => { calls.push({ model: 'audit', args: data }); return data; }) },
+      organization: { create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { calls.push({ model: 'organization', args: data }); return org(data); }) },
+      organizationMembership: { create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { calls.push({ model: 'membership', args: data }); return data; }) },
+      auditEvent: { create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { calls.push({ model: 'audit', args: data }); return data; }) },
     };
     const db = { $transaction: jest.fn(async (callback: (tx: any) => unknown) => callback(transaction)) };
     const result = await workspaceService(db).create(userId, { name: ' Carteio ', slug: 'CARTEIO', websiteUrl: 'https://carteio.in', businessType: 'SaaS' });
@@ -46,6 +97,8 @@ describe('workspace authorization and creation', () => {
     expect(calls[0]?.args).toMatchObject({ name: 'Carteio', slug: 'carteio', websiteUrl: 'https://carteio.in', businessType: 'SaaS' });
     expect(calls[1]?.args).toMatchObject({ userId, role: 'OWNER', status: 'ACTIVE' });
     expect(calls[2]?.args).toMatchObject({ actorUserId: userId, action: 'workspace.created', entityType: 'organization' });
+    expect(calls[2]?.args).toMatchObject({ metadata: { role: 'OWNER' } });
+    expect(JSON.stringify(calls[2]?.args)).not.toContain('carteio');
     expect(result).toMatchObject({ slug: 'carteio', role: 'owner', status: 'active' });
   });
 
@@ -58,15 +111,15 @@ describe('workspace authorization and creation', () => {
     const operations: string[] = [];
     const committed: string[] = [];
     const transaction = {
-      organization: { create: jest.fn(async () => { operations.push('organization'); return org(); }) },
-      organizationMembership: { create: jest.fn(async () => { operations.push('membership'); return {}; }) },
+      organization: { create: jest.fn(async (_input: { data: Record<string, unknown> }) => { operations.push('organization'); return org(); }) },
+      organizationMembership: { create: jest.fn(async (_input: { data: Record<string, unknown> }) => { operations.push('membership'); return {}; }) },
       auditEvent: { create: jest.fn(async () => { throw new Error('audit unavailable'); }) },
     };
     const db = { $transaction: jest.fn(async (callback: (tx: any) => unknown) => {
       const staged: string[] = [];
       const wrapped = {
-        organization: { create: async (...args: any[]) => { const value = await transaction.organization.create(...args); staged.push('organization'); return value; } },
-        organizationMembership: { create: async (...args: any[]) => { const value = await transaction.organizationMembership.create(...args); staged.push('membership'); return value; } },
+        organization: { create: async (input: { data: Record<string, unknown> }) => { const value = await transaction.organization.create(input); staged.push('organization'); return value; } },
+        organizationMembership: { create: async (input: { data: Record<string, unknown> }) => { const value = await transaction.organizationMembership.create(input); staged.push('membership'); return value; } },
         auditEvent: transaction.auditEvent,
       };
       const result = await callback(wrapped);
@@ -81,16 +134,17 @@ describe('workspace authorization and creation', () => {
 
   it('allows the database unique constraint to resolve concurrent slug creation races', async () => {
     const slugs = new Set<string>();
+    const transaction = {
+      organization: { create: jest.fn(async ({ data }: { data: { slug: string } }) => {
+        if (slugs.has(data.slug)) throw { code: 'P2002' };
+        slugs.add(data.slug);
+        return org(data);
+      }) },
+      organizationMembership: { create: jest.fn(async () => ({})) },
+      auditEvent: { create: jest.fn(async () => ({})) },
+    };
     const db = {
-      $transaction: jest.fn(async (callback) => callback({
-        organization: { create: jest.fn(async ({ data }: any) => {
-          if (slugs.has(data.slug)) throw { code: 'P2002' };
-          slugs.add(data.slug);
-          return org(data);
-        }) },
-        organizationMembership: { create: jest.fn(async () => ({})) },
-        auditEvent: { create: jest.fn(async () => ({})) },
-      })),
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => unknown) => callback(transaction)),
     };
     const results = await Promise.allSettled([
       workspaceService(db).create(userId, { name: 'Example', slug: 'example' }),
@@ -123,7 +177,7 @@ describe('workspace authorization and creation', () => {
     const host = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as any;
     filter.catch(new NotFoundException({ code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found.' }), host);
     expect(response.status).toHaveBeenCalledWith(404);
-    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found.', path: '/workspaces/:slug' }));
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'WORKSPACE_NOT_FOUND', message: 'Resource not found', path: '/workspaces/:slug' }));
     expect(JSON.stringify(response.json.mock.calls)).not.toContain('org-secret');
   });
 

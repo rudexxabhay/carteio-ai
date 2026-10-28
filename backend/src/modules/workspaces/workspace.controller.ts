@@ -26,6 +26,11 @@ export class WorkspaceController {
     return this.workspaces.members(request.authSession!.userId, slug, pagination);
   }
 
+  @Get(':slug/dashboard-summary')
+  dashboardSummary(@Req() request: AuthenticatedRequest, @Param('slug') slug: string) {
+    return this.workspaces.dashboardSummary(request.authSession!.userId, slug);
+  }
+
   @Get(':slug')
   get(@Req() request: AuthenticatedRequest, @Param('slug') slug: string) {
     return this.workspaces.getAuthorized(request.authSession!.userId, slug);
