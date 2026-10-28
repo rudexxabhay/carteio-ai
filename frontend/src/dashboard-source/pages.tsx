@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, FileSpreadsheet, Globe2, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
-import { Badge, Btn, Card, PageHeader, Stat, FilterInput, SectionHeader, TableWrap, Notice, Bars, Progress, QuickLink, ViewAll, CircleIcon, AddButton, Empty } from './ui';
+import { Badge, Btn, Card, PageHeader, Stat, FilterInput, SectionHeader, TableWrap, Notice, Bars, Progress, ViewAll, CircleIcon, AddButton, Empty } from './ui';
 import { sections, type PageId } from './data';
 import { useOverviewData } from './use-overview-data';
 import { ApiError } from '../services/api/client';
@@ -808,12 +808,12 @@ function Knowledge({ go, notify, workspaceSlug = '', workspaceRole = '', openKno
         {activeSection === 'home' && <nav className="knowledge-section-nav" aria-label="Knowledge sections">
             {KNOWLEDGE_SECTION_CARDS.map(section => {
                 const total = countSources(section.id);
-                return <button type="button" key={section.id} className={activeSection === section.id ? 'is-selected' : ''} aria-pressed={activeSection === section.id} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(section.id)}>
+                return <button type="button" key={section.id} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(section.id)}>
                     <strong>{section.title}</strong><span>{section.description}</span>
                     <small>{loading ? 'Loading…' : sourceLoadError ? 'Count unavailable' : `${total} sources · ${countSources(section.id, 'ready')} ready →`}</small>
                 </button>;
             })}
-            <button type="button" className={activeSection === SHOPIFY_CATALOG_TAB ? 'is-selected' : ''} aria-pressed={activeSection === SHOPIFY_CATALOG_TAB} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(SHOPIFY_CATALOG_TAB)}><strong>Products &amp; Collections</strong><span>Products, variants, prices and stock from the authorized Shopify connector.</span><small>Open catalog connection and sync status</small></button>
+            <button type="button" disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(SHOPIFY_CATALOG_TAB)}><strong>Products &amp; Collections</strong><span>Products, variants, prices and stock from the authorized Shopify connector.</span><small>Open catalog connection and sync status</small></button>
         </nav>}
         <div className="knowledge-source-toolbar">
             <div className="action-line">
