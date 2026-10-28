@@ -59,10 +59,10 @@ describe('assistant behavior and support contact evidence', () => {
     }));
     const unconfigured = buildAssistantContactEvidence(assistant({ systemInstructions: 'Use a friendly tone.' }));
 
-    expect(north?.content).toContain('support@north-shop.example');
-    expect(north?.content).not.toContain('support@south-shop.example');
-    expect(south?.content).toContain('support@south-shop.example');
-    expect(south?.content).not.toContain('support@north-shop.example');
+    expect(north?.excerpt).toContain('support@north-shop.example');
+    expect(north?.excerpt).not.toContain('support@south-shop.example');
+    expect(south?.excerpt).toContain('support@south-shop.example');
+    expect(south?.excerpt).not.toContain('support@north-shop.example');
     expect(unconfigured).toBeNull();
   });
 });
