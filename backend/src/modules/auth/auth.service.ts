@@ -37,11 +37,47 @@ const safePrismaErrorDetails = (error: unknown): Record<string, unknown> => {
   return details;
 };
 
+const uatAuthDiagnosticsEnabled = () => process.env.VERCEL === '1' && process.env.NODE_ENV === 'production'
+  && (process.env.PUBLIC_APP_URL === 'https://uat.ai.carteio.in'
+    || process.env.VERCEL_PROJECT_PRODUCTION_URL === 'carteio-ai-uat-backend.vercel.app');
+const authFailureDetails = (error: unknown) => {
+  const record = typeof error === 'object' && error !== null ? error as { name?: unknown; code?: unknown; meta?: unknown; cause?: unknown } : null;
+  const meta = record?.meta && typeof record.meta === 'object' ? record.meta as { code?: unknown } : null;
+  const cause = record?.cause && typeof record.cause === 'object' ? record.cause as { code?: unknown } : null;
+  const prismaCode = typeof record?.code === 'string' && /^P\d{4}$/u.test(record.code) ? record.code : undefined;
+  const pgCode = [meta?.code, cause?.code, record?.code].find((value): value is string => typeof value === 'string' && /^[A-Z0-9]{5}$/u.test(value) && !/^P\d{4}$/u.test(value));
+  const exceptionClass = typeof record?.name === 'string' && [
+    'PrismaClientKnownRequestError', 'PrismaClientUnknownRequestError', 'PrismaClientInitializationError',
+    'PrismaClientValidationError', 'TypeError', 'Error', 'ServiceUnavailableException',
+  ].includes(record.name) ? record.name : 'OTHER';
+  const causeCategory = pgCode === '42501' || prismaCode === 'P1010' ? 'DB_PERMISSION'
+    : pgCode === '28P01' || prismaCode === 'P1000' ? 'DB_AUTHENTICATION'
+    : pgCode === '3D000' ? 'DB_NAME'
+    : pgCode === '42P01' || pgCode === '42703' || prismaCode === 'P2021' || prismaCode === 'P2022' ? 'DB_SCHEMA'
+    : prismaCode === 'P1001' || prismaCode === 'P1002' || prismaCode === 'P1008' ? 'DB_CONNECTION'
+    : prismaCode === 'P2024' ? 'DB_TIMEOUT'
+    : prismaCode === 'P2002' || prismaCode === 'P2003' ? 'DB_CONSTRAINT'
+    : exceptionClass.startsWith('Prisma') ? 'DB_OTHER' : 'UNCLASSIFIED';
+  return { exceptionClass, causeCategory, ...(prismaCode ? { prismaCode } : {}), ...(pgCode ? { pgCode } : {}) };
+};
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly db: any;
   constructor(prisma: PrismaService, private readonly email: EmailService, private readonly google: GoogleTokenVerifier = new GoogleTokenVerifier()) { this.db = prisma as any; }
+
+  private observe<R>(operation: string, stage: string, requestId: string | undefined, action: () => R): Promise<Awaited<R>> {
+    const logFailure = (error: unknown) => {
+      if (uatAuthDiagnosticsEnabled() && (!(error instanceof HttpException) || error.getStatus() >= 500)) this.logger.error(JSON.stringify({ event: 'uat_auth_failure', requestId: requestId ?? 'unknown', operation, stage, ...authFailureDetails(error) }));
+    };
+    try {
+      return Promise.resolve(action()).catch((error: unknown) => { logFailure(error); throw error; });
+    } catch (error) {
+      logFailure(error);
+      return Promise.reject(error);
+    }
+  }
 
   private async audit(action: string, userId: string) {
     try { await this.db.auditEvent.create({ data: { actorUserId: userId, action, entityType: 'User', entityId: userId, metadata: { source: 'authentication' } } }); }
@@ -104,51 +140,51 @@ export class AuthService {
     return { status: 'request_accepted', deliveryAvailable: this.email.available };
   }
 
-  async login(emailInput: string, password: string, existingSessionToken?: string) {
+  async login(emailInput: string, password: string, existingSessionToken?: string, requestId?: string) {
     // Opportunistic cleanup keeps the database tidy without a separate worker or server.
     const now = new Date();
-    await this.db.userSession.deleteMany({ where: { expiresAt: { lt: now } } });
-    await this.db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: now } } });
-    await this.db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: now } } });
-    const user = await this.db.user.findUnique({ where: { email: normalizeEmail(emailInput) }, include: { credential: true } });
+    await this.observe('password_login', 'expired_session_cleanup', requestId, () => this.db.userSession.deleteMany({ where: { expiresAt: { lt: now } } }));
+    await this.observe('password_login', 'email_token_cleanup', requestId, () => this.db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: now } } }));
+    await this.observe('password_login', 'password_token_cleanup', requestId, () => this.db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: now } } }));
+    const user = await this.observe('password_login', 'user_lookup', requestId, () => this.db.user.findUnique({ where: { email: normalizeEmail(emailInput) }, include: { credential: true } }));
     const valid = user?.credential ? await argon2.verify(user.credential.passwordHash, password).catch(() => false) : false;
     if (!valid || user.status !== 'ACTIVE') { this.logger.warn('login_rejected'); throw new UnauthorizedException('Email or password is incorrect.'); }
     if (!user.emailVerifiedAt) throw new UnauthorizedException('Verify your email before signing in.');
     await this.audit('auth.login.succeeded', user.id);
-    return this.createSession(user, existingSessionToken);
+    return this.createSession(user, existingSessionToken, this.db, 'password_login', requestId);
   }
 
-  private async createSession(user: any, existingSessionToken?: string, db = this.db) {
-    if (existingSessionToken) await db.userSession.updateMany({ where: { tokenHash: hash(existingSessionToken), revokedAt: null }, data: { revokedAt: new Date() } });
+  private async createSession(user: any, existingSessionToken?: string, db = this.db, operation = 'session_creation', requestId?: string) {
+    if (existingSessionToken) await this.observe(operation, 'prior_session_revocation', requestId, () => db.userSession.updateMany({ where: { tokenHash: hash(existingSessionToken), revokedAt: null }, data: { revokedAt: new Date() } }));
     const raw = randomBytes(32).toString('base64url'); const expiresAt = new Date(Date.now() + sessionLifetimeDays() * 86400000);
-    await db.userSession.create({ data: { userId: user.id, tokenHash: hash(raw), expiresAt } });
+    await this.observe(operation, 'session_creation', requestId, () => db.userSession.create({ data: { userId: user.id, tokenHash: hash(raw), expiresAt } }));
     return { token: raw, expiresAt, user: this.publicUser(user) };
   }
 
-  async googleLogin(idToken: string, existingSessionToken?: string) {
-    const claims = await this.google.verify(idToken);
-    let identity = await this.db.authIdentity.findUnique({ where: { provider_providerSubject: { provider: 'GOOGLE', providerSubject: claims.sub } }, include: { user: true } });
+  async googleLogin(idToken: string, existingSessionToken?: string, requestId?: string) {
+    const claims = await this.observe('google_login', 'google_verification', requestId, () => this.google.verify(idToken));
+    let identity = await this.observe('google_login', 'identity_lookup', requestId, () => this.db.authIdentity.findUnique({ where: { provider_providerSubject: { provider: 'GOOGLE', providerSubject: claims.sub } }, include: { user: true } }));
     if (identity) {
       if (identity.user.status !== 'ACTIVE') throw new UnauthorizedException('This account is unavailable.');
-      const session = await this.createSession(identity.user, existingSessionToken);
+      const session = await this.createSession(identity.user, existingSessionToken, this.db, 'google_login', requestId);
       void this.audit('auth.google.login.succeeded', identity.userId);
       return session;
     }
-    const existing = await this.db.user.findUnique({ where: { email: claims.email }, select: { id: true } });
+    const existing = await this.observe('google_login', 'user_lookup', requestId, () => this.db.user.findUnique({ where: { email: claims.email }, select: { id: true } }));
     if (existing) throw new ConflictException('Could not complete Google sign-in. If you already have an account, sign in and link Google from your account settings.');
     let user: any;
     try {
-      user = await this.db.$transaction(async (tx: any) => {
+      user = await this.observe('google_login', 'identity_transaction', requestId, () => this.db.$transaction(async (tx: any) => {
         const created = await tx.user.create({ data: { email: claims.email, name: claims.name, emailVerifiedAt: new Date(), identities: { create: { provider: 'GOOGLE', providerSubject: claims.sub } } } });
         return created;
-      });
+      }));
     } catch (error) {
       if ((error as { code?: string }).code !== 'P2002') throw error;
-      identity = await this.db.authIdentity.findUnique({ where: { provider_providerSubject: { provider: 'GOOGLE', providerSubject: claims.sub } }, include: { user: true } });
+      identity = await this.observe('google_login', 'identity_race_lookup', requestId, () => this.db.authIdentity.findUnique({ where: { provider_providerSubject: { provider: 'GOOGLE', providerSubject: claims.sub } }, include: { user: true } }));
       if (!identity || identity.user.status !== 'ACTIVE') throw new ConflictException('This Google identity could not be linked to an account.');
       user = identity.user;
     }
-    const session = await this.createSession(user, existingSessionToken);
+    const session = await this.createSession(user, existingSessionToken, this.db, 'google_login', requestId);
     void this.audit('auth.google.login.succeeded', user.id);
     return session;
   }
@@ -237,11 +273,11 @@ export class AuthService {
     this.logger.warn(JSON.stringify({ event, requestId: requestId ?? 'unknown', stage, ...(operation ? { operation } : {}), ...(errorName ? { errorName } : {}), ...details }));
   }
 
-  async verifyOtp(emailInput: string, challengeId: string, code: string, existingSessionToken?: string, flow: 'login' | 'signup' = 'login', nameInput?: string) {
+  async verifyOtp(emailInput: string, challengeId: string, code: string, existingSessionToken?: string, flow: 'login' | 'signup' = 'login', nameInput?: string, requestId?: string) {
     const name = nameInput?.trim().normalize('NFKC');
     if (flow === 'signup' && (!name || /[\u0000-\u001f\u007f]/.test(name))) throw new BadRequestException('Enter a valid name to create your account.');
     const email = normalizeEmail(emailInput); const now = new Date(); const digest = otpDigest(email, code);
-    const result = await this.db.$transaction(async (tx: any) => {
+    const result = await this.observe('otp_verify', 'challenge_transaction', requestId, () => this.db.$transaction(async (tx: any) => {
       const consumed = await tx.emailOtpChallenge.updateMany({ where: { id: challengeId, email, codeHash: digest, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5) } }, data: { consumedAt: now } });
       if (consumed.count !== 1) return null;
       let user = await tx.user.findUnique({ where: { email } });
@@ -251,15 +287,15 @@ export class AuthService {
       } else if (!user) return { blocked: false, accountExists: false, user: null, session: null };
       if (!user.emailVerifiedAt) user = await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: now } });
       if (user.status !== 'ACTIVE') return { blocked: true, user: null, session: null };
-      const session = await this.createSession(user, existingSessionToken, tx);
+      const session = await this.createSession(user, existingSessionToken, tx, 'otp_verify', requestId);
       return { blocked: false, accountExists: false, user, session };
-    });
+    }));
     if (!result) {
-      const attempt = await this.db.emailOtpChallenge.updateMany({ where: { id: challengeId, email, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5) } }, data: { attempts: { increment: 1 } } });
+      const attempt = await this.observe('otp_verify', 'failed_attempt_update', requestId, () => this.db.emailOtpChallenge.updateMany({ where: { id: challengeId, email, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5) } }, data: { attempts: { increment: 1 } } }));
       const maxAttempts = Number(process.env.AUTH_OTP_MAX_ATTEMPTS ?? 5);
-      const locked = attempt.count === 1 ? await this.db.emailOtpChallenge.updateMany({ where: { id: challengeId, email, consumedAt: null, attempts: { gte: maxAttempts } }, data: { consumedAt: now } }) : { count: 0 };
+      const locked = attempt.count === 1 ? await this.observe('otp_verify', 'challenge_lockout', requestId, () => this.db.emailOtpChallenge.updateMany({ where: { id: challengeId, email, consumedAt: null, attempts: { gte: maxAttempts } }, data: { consumedAt: now } })) : { count: 0 };
       if (locked.count === 1) throw new BadRequestException({ code: 'OTP_ATTEMPTS_EXCEEDED', message: 'Too many incorrect codes. Request a new code.' });
-      const challenge = attempt.count === 0 ? await this.db.emailOtpChallenge.findUnique({ where: { id: challengeId }, select: { email: true, expiresAt: true, attempts: true } }) : null;
+      const challenge = attempt.count === 0 ? await this.observe('otp_verify', 'challenge_lookup', requestId, () => this.db.emailOtpChallenge.findUnique({ where: { id: challengeId }, select: { email: true, expiresAt: true, attempts: true } })) : null;
       if (challenge?.email === email && challenge.expiresAt <= now) throw new BadRequestException({ code: 'OTP_EXPIRED', message: 'This code has expired. Request a new code.' });
       if (challenge?.email === email && challenge.attempts >= maxAttempts) throw new BadRequestException({ code: 'OTP_ATTEMPTS_EXCEEDED', message: 'Too many incorrect codes. Request a new code.' });
       throw new BadRequestException({ code: 'OTP_INVALID', message: 'This code is invalid or expired. Request a new code and try again.' });
@@ -271,11 +307,11 @@ export class AuthService {
     return { status: 'authenticated' as const, session: result.session };
   }
 
-  async current(raw?: string) {
+  async current(raw?: string, requestId?: string) {
     if (!raw) throw new UnauthorizedException();
-    const digest = hash(raw); const row = await this.db.userSession.findUnique({ where: { tokenHash: digest }, include: { user: true } });
+    const digest = hash(raw); const row = await this.observe('session_current', 'session_lookup', requestId, () => this.db.userSession.findUnique({ where: { tokenHash: digest }, include: { user: true } }));
     if (!row || !equal(row.tokenHash, digest) || row.revokedAt || row.expiresAt <= new Date() || row.user.status !== 'ACTIVE') throw new UnauthorizedException();
-    if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 5 * 60_000) await this.db.userSession.updateMany({ where: { id: row.id, revokedAt: null }, data: { lastUsedAt: new Date() } });
+    if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 5 * 60_000) await this.observe('session_current', 'session_touch', requestId, () => this.db.userSession.updateMany({ where: { id: row.id, revokedAt: null }, data: { lastUsedAt: new Date() } }));
     return { sessionId: row.id, user: this.publicUser(row.user) };
   }
   async logout(sessionId: string, userId: string) { await this.db.userSession.updateMany({ where: { id: sessionId, revokedAt: null }, data: { revokedAt: new Date() } }); await this.audit('auth.logout', userId); }

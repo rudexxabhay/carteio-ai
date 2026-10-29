@@ -67,15 +67,22 @@ export class PlaygroundTraceRecorder {
   captureDevelopmentMetadata(stage: 'INTERPRETATION' | 'INITIAL_DRAFT' | 'RECOVERY_DRAFT' | 'NUMERIC_CHECK', input: Readonly<Record<string, unknown>>): void {
     if (!this.developmentCapture || Date.now() >= this.captureExpiresAt || this.developmentChecks.length >= 16) return;
     if (stage === 'NUMERIC_CHECK' && this.developmentChecks.filter((check) => check.stage === stage).length >= 12) return;
-    const counts = ['answerAspectsCount', 'semanticIntentCount', 'characterCount', 'citedReferenceCount', 'sourceCandidateCount', 'unsupportedClaimCount', 'verifiedFactCount', 'retrievalQueriesCount', 'historyMessageCount'];
-    const flags = ['jsonObjectPresent', 'rootObject', 'jsonParsed', 'legacyIntentAccepted', 'accepted', 'recovered', 'matched', 'semanticValid', 'repairAttempted', 'structuredOutputRequested'];
+    const counts = ['answerAspectsCount', 'semanticIntentCount', 'characterCount', 'citedReferenceCount', 'sourceCandidateCount', 'unsupportedClaimCount', 'verifiedFactCount', 'retrievalQueriesCount', 'historyMessageCount', 'usableRetrievalQueriesCount'];
+    const flags = ['jsonObjectPresent', 'rootObject', 'jsonParsed', 'legacyIntentAccepted', 'accepted', 'recovered', 'matched', 'semanticValid', 'repairAttempted', 'structuredOutputRequested', 'historyHasAssistant', 'historyEndsWithAssistant', 'semanticsPresent', 'retrievalQueriesPresent', 'answerAspectsPresent'];
     const enums: Record<string, readonly string[]> = {
       interpretationVersion: ['semantic-recovery-v2'],
+      validatorFunction: ['validateInterpretation'],
       repairDecision: ['NOT_NEEDED', 'VALIDATED_SEMANTICS', 'MODEL_REPAIR', 'EXHAUSTED'],
       routing: ['SAFETY_HANDLING', 'CONVERSATIONAL_FEEDBACK', 'CONVERSATIONAL_CONTINUATION', 'SOCIAL_RESPONSE', 'NORMAL_BUSINESS_ROUTING'],
       informationNeed: ['UNKNOWN', 'AMBIGUOUS', 'STATIC_BUSINESS_INFORMATION', 'PERSONAL_LIVE_RECORD', 'MIXED_STATIC_AND_PERSONAL'],
       socialClassification: ['GREETING', 'WELLBEING_EXCHANGE', 'ACKNOWLEDGMENT', 'GRATITUDE', 'FAREWELL', 'BUSINESS_REQUEST_WITH_GREETING', 'OTHER', 'AMBIGUOUS', 'UNKNOWN'],
       semanticUncertainty: ['NONE', 'AMBIGUOUS', 'UNKNOWN'],
+      socialGuardStatus: ['EVALUATED', 'SEMANTIC_VALIDATION_REJECTED', 'UNKNOWN'],
+      socialDecision: ['SAFE_SOCIAL_RESPONSE', 'CONTINUE_BUSINESS_PIPELINE', 'CLARIFICATION_REQUIRED', 'EXISTING_SAFETY_HANDLING'],
+      socialDecisionReason: ['BUSINESS_REQUEST_PRESENT', 'SOCIAL_CLASSIFICATION_UNCERTAIN', 'NOT_A_PURE_SOCIAL_MESSAGE', 'SEMANTIC_INTERPRETATION_UNCERTAIN', 'UNSAFE_SOCIAL_SHORTCUT_INPUT', 'SUBSTANTIVE_OR_NEGATED_INTENT_PRESENT', 'ENTITY_REQUIRES_NORMAL_ROUTING', 'SOCIAL_CLASSIFICATION_CONTRADICTS_INTENT', 'VALIDATED_PURE_SOCIAL_MESSAGE'],
+      rejectedField: ['retrievalQueries', 'answerAspects', 'none'],
+      finalValidatorRule: ['invalid_retrieval_queries', 'invalid_answer_aspects', 'none'],
+      semanticIntents: ['none'],
       citationRequirement: ['FACTUAL_ROUTE_RELEVANT_EVIDENCE'],
       businessClaimAssessment: ['NOT_ESTABLISHED', 'UNSUPPORTED_STRUCTURED_CLAIM'],
     };
@@ -83,8 +90,9 @@ export class PlaygroundTraceRecorder {
     for (const [key, value] of Object.entries(input)) {
       if (counts.includes(key) && typeof value === 'number' && Number.isFinite(value)) metadata[key] = Math.max(0, Math.min(100_000, Math.floor(value)));
       else if (flags.includes(key) && typeof value === 'boolean') metadata[key] = value;
-      else if (key === 'reason' && typeof value === 'string' && (SAFE_REASONS.has(value) || SAFE_REASONS.has(`citation_${value}`) || value === 'valid')) metadata[key] = value;
+      else if (['reason', 'semanticValidationReason'].includes(key) && typeof value === 'string' && (SAFE_REASONS.has(value) || SAFE_REASONS.has(`citation_${value}`) || value === 'valid')) metadata[key] = value;
       else if (['legacyIntentType', 'answerAspectsType', 'retrievalQueriesType'].includes(key) && typeof value === 'string' && ['array', 'object', 'string', 'number', 'boolean', 'undefined', 'omitted'].includes(value)) metadata[key] = value;
+      else if (key === 'semanticIntents' && typeof value === 'string' && value.length <= 400 && /^(?:[A-Z_]+:(?:AFFIRMATIVE|NEGATED|UNCERTAIN|NOT_APPLICABLE))(?:\|[A-Z_]+:(?:AFFIRMATIVE|NEGATED|UNCERTAIN|NOT_APPLICABLE))*$/u.test(value)) metadata[key] = value;
       else if (typeof value === 'string' && enums[key]?.includes(value)) metadata[key] = value;
       else if (key === 'claimKind' && (value === 'number' || value === 'date')) metadata[key] = value;
     }
@@ -331,7 +339,7 @@ export class PlaygroundTraceRecorder {
     }
     return {
       traceId: this.traceId, ...(result.messageId ? { messageId: result.messageId.slice(0, 64) } : {}), startedAt: this.startedAt, finishedAt,
-      ...(this.developmentCapture && Date.now() < this.captureExpiresAt ? { developmentCapture: { mode: 'METADATA_ONLY' as const, buildRevision, interpretationVersion: 'semantic-recovery-v2', expiresAt: new Date(this.captureExpiresAt).toISOString(), checks: this.developmentChecks.map((check) => ({ stage: check.stage, metadata: { ...check.metadata } })) } } : {}),
+      ...(this.developmentCapture && Date.now() < this.captureExpiresAt ? { developmentCapture: { mode: 'METADATA_ONLY' as const, diagnosticVersion: 'interpretation-boundaries-v3', buildRevision, interpretationVersion: 'semantic-recovery-v2', expiresAt: new Date(this.captureExpiresAt).toISOString(), checks: this.developmentChecks.map((check) => ({ stage: check.stage, metadata: { ...check.metadata } })) } } : {}),
       totalLatencyMs: Math.max(0, Date.parse(finishedAt) - Date.parse(this.startedAt)),
       events: events.map((event) => ({ ...event, traceId: this.traceId, operation: event.tool ? 'TOOL_EXECUTION' : event.stage, status: event.outcome.toLowerCase() })),
       retrieval: { ...this.retrieval, ...(result.retrievalMode ? { responseRetrievalMode: result.retrievalMode } : {}) },

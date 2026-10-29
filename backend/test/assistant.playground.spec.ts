@@ -1936,7 +1936,7 @@ describe('AssistantService Playground chat', () => {
       expect(searchPreview).not.toHaveBeenCalled();
     });
 
-    it.each([['English', 'Please continue'], ['Hindi', 'और बताइए'], ['Hinglish', 'Aur batao']])('uses model-classified %s continuation with actual conversation context', async (language, message) => {
+    it.each([['English', 'Please continue'], ['Hindi', 'और बताइए'], ['Hinglish', 'Aur batao'], ['English', 'I appreciate this conversation and would like to keep talking. '.repeat(6)], ['Hindi', 'आपसे बात करके अच्छा लगा। '.repeat(15)]])('uses model-classified %s continuation with actual conversation context', async (language, message) => {
       const orchestrator = (service as any).conversationOrchestrator;
       const history = [{ id: 'u1', role: 'user', content: 'Let us talk', responseCategory: null, sourceReferences: null }, { id: 'a1', role: 'assistant', content: 'What would be useful to discuss?', responseCategory: 'social', sourceReferences: null }];
       orchestrator.db.playgroundConversation.findFirst.mockResolvedValue({ id: 'continuation-session', organizationId, assistantId, userId, channel: 'PLAYGROUND', expiresAt: new Date(Date.now() + 60_000), nextSequence: 2 });
@@ -1958,6 +1958,32 @@ describe('AssistantService Playground chat', () => {
       expect(searchPreview).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalledTimes(4);
       // Fixture replies do not establish real model variety; the regression is distinct, correct input context.
+    });
+
+    it('routes validated ACKNOWLEDGMENT plus NOT_APPLICABLE continuation to contextual generation without retrieval', async () => {
+      const orchestrator = (service as any).conversationOrchestrator;
+      const history = [
+        { id: 'u1', role: 'user', content: 'Earlier message', responseCategory: null, sourceReferences: null },
+        { id: 'a1', role: 'assistant', content: 'Earlier contextual response', responseCategory: 'social', sourceReferences: null },
+      ];
+      orchestrator.db.playgroundConversation.findFirst.mockResolvedValue({ id: 'neutral-continuation-session', organizationId, assistantId, userId, channel: 'PLAYGROUND', expiresAt: new Date(Date.now() + 60_000), nextSequence: 2 });
+      orchestrator.db.playgroundMessage.findMany.mockImplementation(async () => [...history].reverse());
+      const message = 'Contextual continuation fixture';
+      const parsed = JSON.parse(continuationInterpretation(message, 'English'));
+      parsed.retrievalQueries = [];
+      parsed.semantics.socialClassification = 'ACKNOWLEDGMENT';
+      parsed.semantics.intents = [{ category: 'CONVERSATION_CONTINUATION', polarity: 'NOT_APPLICABLE' }];
+      fetchMock.mockResolvedValueOnce(providerResponse(JSON.stringify(parsed)));
+      fetchMock.mockResolvedValueOnce(providerResponse('A natural response using the earlier conversation.'));
+
+      const result = await service.playgroundChat(userId, 'workspace', assistantId, { message, sessionId: 'neutral-continuation-session' }, 'neutral-continuation-turn');
+      expect(result).toMatchObject({ responseType: 'social', answerOrigin: 'MODEL_GENERATED', sources: [], reply: 'A natural response using the earlier conversation.' });
+      expect(searchPreview).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const generation = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+      expect(generation.messages[0].content).toContain('contextual conversational continuation');
+      const envelope = generation.messages.find((item: any) => item.role === 'user' && item.content.includes('untrusted_conversation_context'));
+      expect(JSON.parse(envelope.content).priorTurns.map((turn: any) => turn.content)).toEqual(history.map((turn) => turn.content));
     });
 
     it('keeps a valid conversational act despite malformed optional reference metadata without an extra provider call', async () => {

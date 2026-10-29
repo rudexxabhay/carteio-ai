@@ -1,4 +1,4 @@
-import { unknownSemanticInterpretation, validateMultilingualSemanticInterpretationDetailed } from './multilingual-semantics';
+import { isValidatedConversationalContinuation, unknownSemanticInterpretation, validateMultilingualSemanticInterpretationDetailed } from './multilingual-semantics';
 import type { MultilingualSemanticInterpretation, SemanticValidationDetail, SemanticValidationReason } from './multilingual-semantics';
 import type { ConversationMemoryDiagnostic } from './conversation-diagnostics';
 import { validateScopeSplit } from './scope-splitting';
@@ -126,7 +126,7 @@ function extractJsonObject(text: string): string | null {
 }
 
 /** Bounded schema metadata for diagnostics. Never returns model or customer text. */
-export function describeInterpretationShape(raw: string, originalMessage = ''): Readonly<Record<string, string | number | boolean>> {
+export function describeInterpretationShape(raw: string, originalMessage = '', captureBoundaryDetails = false): Readonly<Record<string, string | number | boolean>> {
   const json = extractJsonObject(raw);
   if (!json) return { jsonObjectPresent: false };
   try {
@@ -134,12 +134,19 @@ export function describeInterpretationShape(raw: string, originalMessage = ''): 
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { jsonObjectPresent: true, rootObject: false };
     const record = parsed as Record<string, unknown>;
     const aspects = record.answerAspects;
-    const validatedSemantic = validateMultilingualSemanticInterpretationDetailed(record.semantics, originalMessage).value;
+    const semanticValidation = validateMultilingualSemanticInterpretationDetailed(record.semantics, originalMessage);
+    const validatedSemantic = semanticValidation.value;
     const semantic = record.semantics && typeof record.semantics === 'object' && !Array.isArray(record.semantics)
       ? (record.semantics as Record<string, unknown>).intents : undefined;
     return {
       jsonObjectPresent: true,
       rootObject: true,
+      ...(captureBoundaryDetails ? { validatorFunction: 'validateInterpretation',
+      semanticValidationReason: semanticValidation.detail ?? semanticValidation.reason,
+      usableRetrievalQueriesCount: Array.isArray(record.retrievalQueries) ? record.retrievalQueries.filter((value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 300).slice(0, 2).length : 0,
+      semanticsPresent: record.semantics !== undefined,
+      retrievalQueriesPresent: record.retrievalQueries !== undefined,
+      answerAspectsPresent: aspects !== undefined } : {}),
       retrievalQueriesType: Array.isArray(record.retrievalQueries) ? 'array' : record.retrievalQueries === undefined ? 'omitted' : typeof record.retrievalQueries,
       retrievalQueriesCount: Array.isArray(record.retrievalQueries) ? Math.min(record.retrievalQueries.length, 100) : 0,
       semanticValid: Boolean(validatedSemantic),
@@ -153,6 +160,47 @@ export function describeInterpretationShape(raw: string, originalMessage = ''): 
   } catch {
     return { jsonObjectPresent: true, rootObject: true, jsonParsed: false };
   }
+}
+
+/** Re-evaluates the validator's existing guards for metadata only; it never changes their decisions. */
+export function describeInterpretationSocialGuard(raw: string, originalMessage: string): Readonly<Record<string, string | number | boolean>> {
+  const json = extractJsonObject(raw);
+  if (!json) return { socialGuardStatus: 'UNKNOWN' };
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { socialGuardStatus: 'UNKNOWN' };
+    const record = parsed as Record<string, unknown>;
+    const validation = validateMultilingualSemanticInterpretationDetailed(record.semantics, originalMessage);
+    const semantic = validation.value;
+    if (!semantic) return { socialGuardStatus: 'SEMANTIC_VALIDATION_REJECTED', socialGuardReason: validation.detail ?? validation.reason };
+    const social = decideSocialResponse({ classification: semantic.socialClassification, semantic, legacyIntent: isInterpretationIntent(record.intent) ? record.intent : semanticLegacyIntent(semantic), message: originalMessage });
+    const standaloneDialogue = semantic.intents.length === 1
+      && (semantic.intents[0]!.category === 'CONVERSATION_FEEDBACK' && semantic.socialClassification === 'OTHER'
+        || isValidatedConversationalContinuation(semantic))
+      && semantic.informationNeed === 'UNKNOWN'
+      && semantic.uncertainty === 'NONE' && !semantic.clarificationRequired && semantic.entities.length === 0
+      && (!record.ticketIntent || typeof record.ticketIntent === 'object' && record.ticketIntent !== null && !Array.isArray(record.ticketIntent)
+        && (record.ticketIntent as Record<string, unknown>).ticketRequest === 'NONE' && (record.ticketIntent as Record<string, unknown>).draftAction === 'NONE');
+    const standaloneConversationalAct = (social.decision === 'SAFE_SOCIAL_RESPONSE' && semantic.informationNeed === 'UNKNOWN') || standaloneDialogue || isNonFactualSemanticTurn(semantic, record.continuityAct);
+    const retrievalQueries = Array.isArray(record.retrievalQueries) ? record.retrievalQueries.filter((value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 300).slice(0, 2) : [];
+    const answerAspects = record.answerAspects;
+    const retrievalRejected = retrievalQueries.length === 0 && !(validation.value && standaloneConversationalAct);
+    const factualNeed = ['STATIC_BUSINESS_INFORMATION', 'PERSONAL_LIVE_RECORD', 'MIXED_STATIC_AND_PERSONAL'].includes(semantic.informationNeed);
+    const liveNeed = ['PERSONAL_LIVE_RECORD', 'MIXED_STATIC_AND_PERSONAL'].includes(semantic.informationNeed)
+      || semantic.intents.some(({ category }) => ['STATUS_INQUIRY', 'BOOKING_INQUIRY', 'APPOINTMENT_INFORMATION'].includes(category));
+    const conflict = (semantic.socialClassification === 'ACKNOWLEDGMENT' || ['GREETING', 'GRATITUDE', 'FAREWELL', 'WELLBEING_EXCHANGE'].includes(semantic.socialClassification)) && (factualNeed || liveNeed);
+    const rejectedField = retrievalRejected ? 'retrievalQueries' : Array.isArray(answerAspects) && answerAspects.length === 0 && !standaloneConversationalAct ? 'answerAspects' : 'none';
+    return {
+      socialGuardStatus: 'EVALUATED', socialDecision: social.decision, socialDecisionReason: social.reason,
+      socialClassification: semantic.socialClassification, informationNeed: semantic.informationNeed, semanticUncertainty: semantic.uncertainty,
+      semanticValidationResult: 'VALID', semanticIntents: semantic.intents.map(({ category, polarity }) => `${category}:${polarity}`).join('|') || 'none',
+      standaloneSocialAct: social.decision === 'SAFE_SOCIAL_RESPONSE' && semantic.informationNeed === 'UNKNOWN', standaloneDialogue,
+      standaloneConversationalAct, retrievalRequirementConflict: conflict,
+      expectedEmptyRetrievalAccepted: standaloneConversationalAct && !factualNeed && !liveNeed,
+      actualRetrievalRejected: retrievalRejected, finalValidatorRule: retrievalRejected ? 'invalid_retrieval_queries' : rejectedField === 'answerAspects' ? 'invalid_answer_aspects' : 'none',
+      rejectedField,
+    };
+  } catch { return { socialGuardStatus: 'UNKNOWN' }; }
 }
 
 export function validateInterpretation(raw: string, originalMessage = '', priorTurns: readonly PlaygroundTurn[] = []): { value: QueryInterpretation | null; reason: string; semanticValidationReason?: SemanticValidationReason; semanticValidationDetail?: SemanticValidationDetail; metadataWarnings?: readonly string[] } {
@@ -189,13 +237,14 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
     message: originalMessage,
   }).decision === 'SAFE_SOCIAL_RESPONSE';
   const standaloneDialogue = semantics.intents.length === 1
-    && ['CONVERSATION_FEEDBACK', 'CONVERSATION_CONTINUATION'].includes(semantics.intents[0]!.category)
-    && semantics.intents[0]!.polarity === 'AFFIRMATIVE'
+    && (semantics.intents[0]!.category === 'CONVERSATION_FEEDBACK' && semantics.socialClassification === 'OTHER'
+      || isValidatedConversationalContinuation(semantics))
     && semantics.informationNeed === 'UNKNOWN'
     && semantics.uncertainty === 'NONE'
     && !semantics.clarificationRequired
     && semantics.entities.length === 0
-    && semantics.socialClassification === 'OTHER';
+    && (!record.ticketIntent || typeof record.ticketIntent === 'object' && record.ticketIntent !== null && !Array.isArray(record.ticketIntent)
+      && (record.ticketIntent as Record<string, unknown>).ticketRequest === 'NONE' && (record.ticketIntent as Record<string, unknown>).draftAction === 'NONE');
   const standaloneConversationalAct = (standaloneSocialAct && semantics.informationNeed === 'UNKNOWN') || standaloneDialogue
     || isNonFactualSemanticTurn(semantics, record.continuityAct);
   // Search fields are irrelevant only after the semantic contract establishes
@@ -275,6 +324,7 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
 /** A closed semantic contract, not message keywords, determines this shortcut. */
 export function isNonFactualSemanticTurn(semantics: MultilingualSemanticInterpretation, continuityAct: unknown): boolean {
   if (!semantics.intents.length || semantics.uncertainty !== 'NONE' || semantics.clarificationRequired || semantics.informationNeed !== 'UNKNOWN') return false;
+  if (isValidatedConversationalContinuation(semantics)) return true;
   const pureScopeRedirect = semantics.businessScopeAssessment === 'OUT_OF_SCOPE'
     && semantics.intents.every(({ category, polarity }) => category === 'OUT_OF_SCOPE_CANDIDATE' && polarity === 'AFFIRMATIVE');
   const pureLanguageChange = continuityAct === 'LANGUAGE_SWITCH' && Boolean(semantics.responseLanguagePreference)
@@ -299,6 +349,12 @@ export function recoverValidatedSemanticInterpretation(raw: string, originalMess
   const record = parsed as Record<string, unknown>;
   const semantics = validateMultilingualSemanticInterpretationDetailed(record.semantics, originalMessage).value;
   if (!semantics) return null;
+  // Preserve a valid repair's factual decomposition and context metadata.
+  // UNKNOWN must still never acquire manufactured factual requirements.
+  const complete = validateInterpretation(raw, originalMessage, priorTurns).value;
+  if (complete && (complete.answerAspects.length === 0 || semantics.informationNeed !== 'UNKNOWN')) {
+    return { ...complete, ticketIntent: { ticketRequest: 'NONE', draftAction: 'NONE' } };
+  }
   const language = safeLanguageDescriptor(record.language) ? record.language.trim() : semantics.language.primary ?? 'Unknown';
   const script = safeLanguageDescriptor(record.script) ? record.script.trim() : semantics.language.scripts.join(' and ') || 'Unknown';
   const style = safeLanguageDescriptor(record.style) ? record.style.trim() : 'plain';

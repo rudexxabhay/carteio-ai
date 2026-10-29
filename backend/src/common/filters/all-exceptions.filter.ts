@@ -56,6 +56,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
       : 'Request could not be completed';
 
     if (statusCode >= 500) {
+      const authRoute = /^\/api\/v1\/auth\/(google|login|otp\/request|otp\/verify|me)(?:\/|$)/u.exec(typeof request.path === 'string' ? request.path : '');
+      if (process.env.VERCEL === '1' && process.env.NODE_ENV === 'production'
+        && (process.env.PUBLIC_APP_URL === 'https://uat.ai.carteio.in' || process.env.VERCEL_PROJECT_PRODUCTION_URL === 'carteio-ai-uat-backend.vercel.app')
+        && authRoute) {
+        const candidate = typeof exception === 'object' && exception !== null ? exception as { name?: unknown; code?: unknown; meta?: unknown } : null;
+        const prismaCode = typeof candidate?.code === 'string' && /^P\d{4}$/u.test(candidate.code) ? candidate.code : undefined;
+        const meta = candidate?.meta && typeof candidate.meta === 'object' ? candidate.meta as { code?: unknown } : null;
+        const pgCode = typeof meta?.code === 'string' && /^[A-Z0-9]{5}$/u.test(meta.code) ? meta.code : undefined;
+        const exceptionClass = typeof candidate?.name === 'string' && ['PrismaClientKnownRequestError', 'PrismaClientUnknownRequestError', 'PrismaClientInitializationError', 'PrismaClientValidationError', 'ServiceUnavailableException', 'TypeError', 'Error'].includes(candidate.name) ? candidate.name : 'OTHER';
+        const causeCategory = pgCode === '42501' || prismaCode === 'P1010' ? 'DB_PERMISSION'
+          : pgCode === '28P01' || prismaCode === 'P1000' ? 'DB_AUTHENTICATION'
+          : pgCode === '3D000' ? 'DB_NAME'
+          : pgCode === '42P01' || pgCode === '42703' || prismaCode === 'P2021' || prismaCode === 'P2022' ? 'DB_SCHEMA'
+          : prismaCode === 'P1001' || prismaCode === 'P1002' || prismaCode === 'P1008' ? 'DB_CONNECTION'
+          : exceptionClass.startsWith('Prisma') ? 'DB_OTHER' : 'UNCLASSIFIED';
+        process.stderr.write(`${JSON.stringify({ event: 'uat_auth_request_failure', requestId: request.requestId ?? 'unknown', operation: authRoute[1]?.replace('/', '_') ?? 'auth', stage: 'request_or_guard', exceptionClass, causeCategory, ...(prismaCode ? { prismaCode } : {}), ...(pgCode ? { pgCode } : {}) })}\n`);
+      }
       process.stderr.write(`${JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'error',

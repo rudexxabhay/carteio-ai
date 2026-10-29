@@ -11,13 +11,13 @@ export const sessionCookieOptions = (maxAge?: number) => ({ httpOnly: true, secu
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Post('signup') @UseGuards(AuthRateLimitGuard) signup(@Body() body: SignupDto) { return this.auth.signup(body); }
-  @Post('login') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async login(@Body() body: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.login(body.email, body.password, getCookie(req, sessionCookieName()));
+  @Post('login') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async login(@Body() body: LoginDto, @Req() req: RequestWithId, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.login(body.email, body.password, getCookie(req, sessionCookieName()), req.requestId);
     res.cookie(sessionCookieName(), result.token, sessionCookieOptions(result.expiresAt.getTime() - Date.now()));
     return { user: result.user };
   }
-  @Post('google') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async google(@Body() body: GoogleTokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.googleLogin(body.credential, getCookie(req, sessionCookieName()));
+  @Post('google') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async google(@Body() body: GoogleTokenDto, @Req() req: RequestWithId, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.googleLogin(body.credential, getCookie(req, sessionCookieName()), req.requestId);
     res.cookie(sessionCookieName(), result.token, sessionCookieOptions(result.expiresAt.getTime() - Date.now()));
     return { user: result.user };
   }
@@ -25,8 +25,8 @@ export class AuthController {
     return this.auth.linkGoogle(req.authSession!.userId, body.credential);
   }
   @Post('otp/request') @HttpCode(200) @UseGuards(AuthRateLimitGuard) requestOtp(@Body() body: OtpRequestDto, @Req() req: RequestWithId) { return this.auth.requestOtp(body.email, req.requestId); }
-  @Post('otp/verify') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async verifyOtp(@Body() body: OtpVerifyDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.verifyOtp(body.email, body.challengeId, body.code, getCookie(req, sessionCookieName()), body.flow ?? 'login', body.name);
+  @Post('otp/verify') @HttpCode(200) @UseGuards(AuthRateLimitGuard) async verifyOtp(@Body() body: OtpVerifyDto, @Req() req: RequestWithId, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.verifyOtp(body.email, body.challengeId, body.code, getCookie(req, sessionCookieName()), body.flow ?? 'login', body.name, req.requestId);
     if (result.session) res.cookie(sessionCookieName(), result.session.token, sessionCookieOptions(result.session.expiresAt.getTime() - Date.now()));
     return result.status === 'account_exists' ? { status: result.status } : { user: result.session.user };
   }

@@ -24,6 +24,10 @@ async function bootstrap() {
   try {
     config=validateEnvironment(process.env as Record<string,unknown>);
   } catch (error: unknown) {
+    if (process.env.VERCEL === '1' && process.env.NODE_ENV === 'production'
+      && (process.env.PUBLIC_APP_URL === 'https://uat.ai.carteio.in' || process.env.VERCEL_PROJECT_PRODUCTION_URL === 'carteio-ai-uat-backend.vercel.app')) {
+      new Logger('Configuration').error(JSON.stringify({event:'uat_backend_startup_failure',requestId:'unavailable_before_request',operation:'bootstrap',stage:'environment_validation',exceptionClass:'Error',causeCategory:'ENV_CONFIG'}));
+    }
     new Logger('Configuration').error(error instanceof Error ? error.message : 'Environment configuration is invalid');
     process.exitCode=1;
     return;
@@ -128,4 +132,13 @@ async function bootstrap() {
   await app.listen(config.PORT,config.HOST);
   new Logger('Bootstrap').log(`Carteio AI API listening on port ${config.PORT}`);
 }
-bootstrap().catch(()=>{new Logger('Bootstrap').error('API startup failed: configuration or server initialization error');process.exitCode=1;});
+bootstrap().catch((error: unknown)=>{
+  if (process.env.VERCEL === '1' && process.env.NODE_ENV === 'production'
+    && (process.env.PUBLIC_APP_URL === 'https://uat.ai.carteio.in' || process.env.VERCEL_PROJECT_PRODUCTION_URL === 'carteio-ai-uat-backend.vercel.app')) {
+    const candidate = typeof error === 'object' && error !== null ? error as {name?: unknown;code?: unknown} : null;
+    const exceptionClass = typeof candidate?.name === 'string' && ['PrismaClientInitializationError','PrismaClientKnownRequestError','TypeError','Error'].includes(candidate.name) ? candidate.name : 'OTHER';
+    const prismaCode = typeof candidate?.code === 'string' && /^P\d{4}$/u.test(candidate.code) ? candidate.code : undefined;
+    new Logger('Bootstrap').error(JSON.stringify({event:'uat_backend_startup_failure',requestId:'unavailable_before_request',operation:'bootstrap',stage:'app_initialization',exceptionClass,causeCategory:exceptionClass.startsWith('Prisma')?'DB_INITIALIZATION':'INITIALIZATION',...(prismaCode?{prismaCode}:{})}));
+  }
+  new Logger('Bootstrap').error('API startup failed: configuration or server initialization error');process.exitCode=1;
+});

@@ -75,6 +75,25 @@ const shortText = (value: unknown, max = 80): value is string =>
 const polarities: readonly IntentPolarity[] = ['AFFIRMATIVE', 'NEGATED', 'UNCERTAIN', 'NOT_APPLICABLE'];
 
 /**
+ * A continuation is nonfactual only when the full validated semantic shape is
+ * internally consistent. Polarity describes stance, not whether the turn asks
+ * for facts; UNCERTAIN, mixed intents, entities, and explicit information needs
+ * therefore remain on the normal validation and routing path.
+ */
+export function isValidatedConversationalContinuation(
+  semantic: MultilingualSemanticInterpretation | null | undefined,
+): boolean {
+  if (!semantic || (semantic.socialClassification !== 'ACKNOWLEDGMENT' && semantic.socialClassification !== 'OTHER')
+    || semantic.informationNeed !== 'UNKNOWN' || semantic.uncertainty !== 'NONE'
+    || semantic.clarificationRequired || semantic.entities.length !== 0
+    || semantic.intents.length !== 1) return false;
+  const intent = semantic.intents[0];
+  return intent?.category === 'CONVERSATION_CONTINUATION'
+    && intent.polarity !== 'UNCERTAIN'
+    && (intent.polarity !== 'NEGATED' || semantic.socialClassification === 'ACKNOWLEDGMENT');
+}
+
+/**
  * Rejects malformed or contradictory shapes. Entity values are accepted only
  * as exact, case-sensitive spans of this user message; no fuzzy matching,
  * canonicalization, date inference, or model-generated IDs are trusted.

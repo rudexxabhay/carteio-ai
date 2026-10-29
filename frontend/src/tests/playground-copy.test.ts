@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, PLAYGROUND_EXPORT_MAX_BYTES } from '../pages/training/playground-copy';
+import { buildPlaygroundDebugReport, formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, PLAYGROUND_EXPORT_MAX_BYTES } from '../pages/training/playground-copy';
 
 describe('Playground copy formatting', () => {
   const messages = [
@@ -40,5 +40,16 @@ describe('Playground copy formatting', () => {
     expect(text).toContain('openrouter · google/gemini-2.5-flash');
     expect(text).toContain('PRODUCT_INTENT_NOT_DETECTED');
     expect(text).not.toContain('PRIVATE COMPLETE KNOWLEDGE DOCUMENT');
+  });
+
+  it('builds chronological conversation debug JSON and marks historical trace gaps explicitly', () => {
+    const result = buildPlaygroundDebugReport({ assistantName: 'Carteio AI', conversationId: 'session-1', messages: [messages[0]!, messages[1]!] });
+    expect(result.report).toMatchObject({ reportVersion: 'playground-execution-debug-v1', executionIdentity: { conversationId: 'session-1' }, conversationSummary: { totalTurns: 1, successfulResponses: 1 }, turns: [{ role: 'user' }, { role: 'assistant', diagnostics: { status: 'NOT_CAPTURED' } }] });
+    expect(result.json).not.toContain('दूसरी पंक्ति');
+  });
+
+  it('reports omitted turns when the safe byte limit is exceeded', () => {
+    const result = buildPlaygroundDebugReport({ assistantName: 'Carteio AI', conversationId: null, messages, maxBytes: 100 });
+    expect(result.report.diagnosticCompleteness).toMatchObject({ status: 'TRUNCATED', reason: 'BYTE_LIMIT', omittedTurnCount: messages.length });
   });
 });

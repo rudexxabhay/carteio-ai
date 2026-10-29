@@ -2,7 +2,7 @@ import { isRepeatedUserRequest, resolveConversationReference } from '../src/modu
 import { unknownSemanticInterpretation } from '../src/modules/workspaces/multilingual-semantics';
 import type { MultilingualSemanticInterpretation } from '../src/modules/workspaces/multilingual-semantics';
 import type { PlaygroundTurn } from '../src/modules/workspaces/conversation-intent';
-import { describeInterpretationShape, recoverRetrievalQueriesAfterSemanticFailure, validateInterpretation } from '../src/modules/workspaces/conversation-intent';
+import { describeInterpretationShape, describeInterpretationSocialGuard, recoverRetrievalQueriesAfterSemanticFailure, recoverValidatedSemanticInterpretation, validateInterpretation } from '../src/modules/workspaces/conversation-intent';
 
 const semantic = (category: 'FOLLOW_UP' | 'CORRECTION' = 'FOLLOW_UP', entities: Array<{ type: 'ORDER_ID' | 'DATE_REFERENCE'; raw: string }> = []): MultilingualSemanticInterpretation => ({
   ...unknownSemanticInterpretation(),
@@ -11,6 +11,39 @@ const semantic = (category: 'FOLLOW_UP' | 'CORRECTION' = 'FOLLOW_UP', entities: 
 });
 
 describe('bounded conversation context resolution', () => {
+  it('reports the exact social guard and final empty-query validator predicate without message text', () => {
+    const semantics = { ...unknownSemanticInterpretation(), socialClassification: 'ACKNOWLEDGMENT' as const, informationNeed: 'UNKNOWN' as const, uncertainty: 'NONE' as const, clarificationRequired: false, intents: [{ category: 'ACKNOWLEDGMENT' as const, polarity: 'NEGATED' as const }] };
+    const raw = JSON.stringify({ retrievalQueries: [], answerAspects: [], language: 'English', intent: 'unknown', semantics });
+    const metadata = describeInterpretationSocialGuard(raw, 'contextual refusal fixture');
+    expect(metadata).toMatchObject({ socialGuardStatus: 'EVALUATED', socialDecision: 'SAFE_SOCIAL_RESPONSE', standaloneConversationalAct: true, actualRetrievalRejected: false, finalValidatorRule: 'none', semanticIntents: 'ACKNOWLEDGMENT:NEGATED' });
+    expect(JSON.stringify(metadata)).not.toContain('contextual refusal fixture');
+  });
+  it('accepts the confirmed acknowledgment plus continuation semantic contract but rejects ticket-pending and factual conflicts', () => {
+    const semantics = { ...unknownSemanticInterpretation(), socialClassification: 'ACKNOWLEDGMENT' as const, informationNeed: 'UNKNOWN' as const, uncertainty: 'NONE' as const, clarificationRequired: false, intents: [{ category: 'CONVERSATION_CONTINUATION' as const, polarity: 'AFFIRMATIVE' as const }] };
+    const base = { retrievalQueries: ['contextual query'], answerAspects: [], language: 'English', intent: 'conversation_continuation', semantics };
+    expect(validateInterpretation(JSON.stringify(base), 'contextual fixture').value?.answerAspects).toEqual([]);
+    expect(validateInterpretation(JSON.stringify({ ...base, retrievalQueries: [] }), 'contextual fixture').value?.answerAspects).toEqual([]);
+    expect(validateInterpretation(JSON.stringify({ ...base, ticketIntent: { ticketRequest: 'EXPLICIT', draftAction: 'CONFIRM' } }), 'contextual fixture').value?.answerAspects).not.toEqual([]);
+    expect(validateInterpretation(JSON.stringify({ ...base, semantics: { ...semantics, informationNeed: 'MIXED_STATIC_AND_PERSONAL' } }), 'contextual fixture').value?.answerAspects).not.toEqual([]);
+  });
+  it('distinguishes present unusable query fields from missing fields without exposing text', () => {
+    const raw = JSON.stringify({ retrievalQueries: ['', 42, 'private '.repeat(50)], answerAspects: [], semantics: null });
+    const shape = describeInterpretationShape(raw, '', true);
+    expect(shape).toMatchObject({ retrievalQueriesPresent: true, retrievalQueriesCount: 3, usableRetrievalQueriesCount: 0, answerAspectsPresent: true, answerAspectsCount: 0, semanticValid: false, validatorFunction: 'validateInterpretation' });
+    expect(JSON.stringify(shape)).not.toContain('private');
+  });
+  it('preserves validated factual aspects during recovery and strips action authorization', () => {
+    const message = 'Shipping policy and return policy?';
+    const answerAspects = [
+      { questionSpan: 'Shipping policy', retrievalQuery: 'shipping policy' },
+      { questionSpan: 'return policy', retrievalQuery: 'return policy' },
+    ];
+    const raw = JSON.stringify({ language: 'English', intent: 'business', retrievalQueries: ['shipping policy', 'return policy'], answerAspects,
+      semantics: { ...unknownSemanticInterpretation(), informationNeed: 'STATIC_BUSINESS_INFORMATION', uncertainty: 'NONE', clarificationRequired: false, intents: [{ category: 'KNOWLEDGE_QUESTION', polarity: 'AFFIRMATIVE' }] },
+      ticketIntent: { ticketRequest: 'EXPLICIT', draftAction: 'CONFIRM' },
+    });
+    expect(recoverValidatedSemanticInterpretation(raw, message)).toMatchObject({ answerAspects, retrievalQueries: ['shipping policy', 'return policy'], ticketIntent: { ticketRequest: 'NONE', draftAction: 'NONE' } });
+  });
   it.each([
     ['What is the shipping policy?', 'KNOWLEDGE_QUESTION'],
     ['Is this product available?', 'AVAILABILITY_INQUIRY'],

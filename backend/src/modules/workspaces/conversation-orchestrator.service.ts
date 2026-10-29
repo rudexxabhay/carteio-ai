@@ -7,10 +7,11 @@ import { KnowledgeProcessingService } from './knowledge-processing.service';
 import { ConversationProviderService, getEffectiveProviderConfiguration, isCredentialLikeProviderValue, isTransientProviderFailure, isValidProviderModel, isValidProviderRoute } from './conversation-provider.service';
 import type { ConversationProvider, ConversationProviderMessage, ConversationProviderResult, ConversationStage, ConversationToolDefinition, ProviderRoute } from './conversation-provider.service';
 import type { AuthorizedConversationContext, ConversationAssistantRecord, ConversationEvidence, ConversationKnowledgeResult, ConversationStageEvent, ConversationStageContracts, ConversationErrorCode, ConversationVerification, PlaygroundTurnReplay, PlaygroundTurnRequest, PersistedConversationSource, ResponseProvenance } from './conversation.contracts';
-import { describeInterpretationShape, describeLanguagePreference, isNonFactualSemanticTurn, recoverValidatedSemanticInterpretation, recoverContinuityFromInvalidInterpretation, recoverCustomerLanguageFromInvalidInterpretation, recoverRetrievalQueriesFromInvalidInterpretation, validateInterpretation } from './conversation-intent';
+import { describeInterpretationShape, describeInterpretationSocialGuard, describeLanguagePreference, isNonFactualSemanticTurn, recoverValidatedSemanticInterpretation, recoverContinuityFromInvalidInterpretation, recoverCustomerLanguageFromInvalidInterpretation, recoverRetrievalQueriesFromInvalidInterpretation, validateInterpretation } from './conversation-intent';
 import type { ConversationContinuityAct, ConversationUsage, InterpretedAnswerAspect, PlaygroundConversationHandle, PlaygroundLanguage, PlaygroundTurn } from './conversation-intent';
 import { buildCapabilityRegistry, buildIntelligenceContext } from './intelligence-foundation';
 import { decideSocialResponse, resolveSocialReplyLanguage } from './social-conversation';
+import { isValidatedConversationalContinuation } from './multilingual-semantics';
 import { decideBusinessSourceRoute, noLiveBusinessConnector, planBusinessRequest, personalStatusSafetyRefusal } from './business-source-router';
 import type { BusinessRequestPlan } from './business-source-router';
 import { decideBusinessScope } from './business-scope-guard';
@@ -232,7 +233,7 @@ export class ConversationOrchestrator {
     if (code.includes('PROVIDER') && /EMPTY_RESPONSE/.test(code)) return 'PROVIDER_EMPTY_RESPONSE';
     if (code.includes('PROVIDER') && /TRUNCATED/.test(code)) return 'PROVIDER_OUTPUT_TRUNCATED';
     if (['PLAYGROUND_SOCIAL_RESPONSE_UNSAFE', 'PLAYGROUND_CAPABILITY_RESPONSE_INVALID', 'PLAYGROUND_SCOPE_RESPONSE_INVALID', 'PLAYGROUND_CLARIFICATION_RESPONSE_INVALID', 'PLAYGROUND_NO_EVIDENCE_RESPONSE_INVALID', 'PLAYGROUND_LIVE_RECORD_LIMITATION_INVALID'].includes(code)) return 'PROVIDER_INVALID_RESPONSE';
-    if (code.includes('PROVIDER') && /INVALID/.test(code)) return 'PROVIDER_INVALID_RESPONSE';
+    if (code === 'PLAYGROUND_INTERPRETATION_RECOVERY_FAILED' || (code.includes('PROVIDER') && /INVALID/.test(code))) return 'PROVIDER_INVALID_RESPONSE';
     if (code.includes('PROVIDER')) return 'PROVIDER_UNAVAILABLE';
     if (code.includes('SESSION')) return 'SESSION_EXPIRED';
     if (code.includes('KNOWLEDGE')) return 'KNOWLEDGE_NOT_CONFIGURED';
@@ -681,7 +682,7 @@ export class ConversationOrchestrator {
   { role: 'system', content: 'Search-query contract: for every substantive factual business request, preserve the customer wording as the first retrievalQueries value and provide a concise canonical search expression when it can improve retrieval, including normalization of typos, slang, transliteration, or contextual references supported by bounded history. Use English for the canonical expression when authorized source-language hints include English or do not identify another indexed content language. Keep entities, negation, amounts, dates, and constraints; do not add assumptions. Search expressions are advisory only and do not authorize sources or tools.' },
   { role: 'system', content: 'Capability discovery means asking what kinds of assistance this AI can provide. A question about what the merchant sells, which products or services the business offers, or a specific product/policy fact is a substantive business request and must retain its corresponding business intent, even if phrased as a broad question. Interpret this distinction in any language without relying on exact wording. The server computes actual capabilities separately and the model must not infer them from this classification.' },
   { role: 'system', content: 'Determine business scope by meaning and the authorized workspace business purpose, not by whether retrieval later finds a source. A general-knowledge question is not business-related merely because it is phrased as a factual question. When clearly unrelated, emit businessScopeAssessment OUT_OF_SCOPE and the OUT_OF_SCOPE_CANDIDATE intent with informationNeed UNKNOWN; when its relationship to configured scope is genuinely unclear, use UNCERTAIN. Do not turn missing or unavailable retrieval into a scope classification.' },
-  { role: 'system', content: 'Distinguish a non-factual invitation to continue the conversation from an acknowledgment or a request for additional business facts. Use the current message and prior dialogue to decide its meaning in any language. For a clear non-factual continuation, use legacy intent conversation_continuation, semantic intent CONVERSATION_CONTINUATION, socialClassification OTHER, informationNeed UNKNOWN and answerAspects []. A request for more factual detail about the prior business subject remains normal business/follow-up routing with factual answer aspects. A label never grants tool, source or customer-record access.' },
+  { role: 'system', content: 'Distinguish a non-factual invitation to continue the conversation from an acknowledgment or a request for additional business facts. Use the current message and prior dialogue to decide its meaning in any language. For a clear non-factual continuation, use legacy intent conversation_continuation and semantic intent CONVERSATION_CONTINUATION with informationNeed UNKNOWN and answerAspects []. Use socialClassification OTHER when the message invites further conversation, and ACKNOWLEDGMENT when it acknowledges or declines the preceding assistant turn; either classification may pair with the continuation intent. Polarity describes stance and may be AFFIRMATIVE, NEGATED, or NOT_APPLICABLE when no polarity is applicable; UNCERTAIN remains unresolved. A request for more factual detail about the prior business subject remains normal business/follow-up routing with factual answer aspects. A label never grants tool, source or customer-record access.' },
   { role: 'system', content: 'Identify one to four distinct factual answer aspects when the current turn asks multiple business questions. Return answerAspects as objects with questionSpan and retrievalQuery. Each questionSpan must be an exact contiguous substring of the latest customer message, preserving spelling, negation and identifiers. Each retrievalQuery must be a concise semantic search expression with no new facts, entities or permissions. For a clear non-English or mixed-language business aspect, use authorized source-language hints to choose the search language; if those hints do not identify the content language, provide a concise English semantic search expression. If the message has one factual aspect, return one aspect. For a validated standalone greeting, wellbeing exchange, acknowledgment, gratitude, farewell, conversation feedback, or non-factual conversation continuation with no factual request, return answerAspects as []. For a business question or action, return one or more factual aspects; never use [] to suppress business routing.' },
   { role: 'system', content: 'Also classify continuity as one of NEW_REQUEST, FOLLOW_UP, SEMANTIC_REPEAT, DETAIL_REQUEST, SIMPLIFICATION_REQUEST, LANGUAGE_SWITCH, CORRECTION, CONTRADICTION, UNKNOWN and return it in the top-level continuityAct field. Use bounded history to distinguish a genuinely repeated semantic request from a request for more detail, simpler wording, a language change, or a correction. A recent explicit correction controls the current interpretation. Mark CONTRADICTION only when the latest customer intent remains incompatible or uncertain; never treat customer assertions as verified facts. This label is advisory.' },
   ...(input.handleTicketIntent ? [{ role: 'system' as const, content: 'Return a top-level ticketIntent object with ticketRequest EXPLICIT only when the customer clearly asks the business to create a support ticket; otherwise NONE. Set draftAction to COLLECT when the customer provides or corrects ticket details for an active or newly requested ticket, CANCEL only for a clear cancellation request, CONFIRM only as an advisory semantic label, otherwise NONE. Extract title, description, category, and priority only when supported by the customer message and bounded conversation. A CONFIRM label is never authorization and must never cause ticket creation. Missing Knowledge, uncertainty, complaints, or inability to answer alone are not a ticket request. The server decides whether a ticket workflow is active and only a separate trusted typed customer action can confirm a specific draft.' }] : []),
@@ -694,7 +695,7 @@ export class ConversationOrchestrator {
       const interpreted = await callSelectedProvider(interpretationMessages, isGroqGptOss(activeRoute.provider, activeRoute.model) ? 1024 : 768, { requestId, organizationId: member.organizationId, assistantId, stage: 'query_interpretation' }, 'json_object', undefined, 'intent_interpretation');
       const interpretation = validateInterpretation(interpreted.content, context.message, intentStageInput.turns);
       let recoveredInterpretation = interpretation.value ? null : recoverValidatedSemanticInterpretation(interpreted.content, context.message, intentStageInput.turns);
-      context.diagnostics?.captureDevelopmentMetadata('INTERPRETATION', { ...describeInterpretationShape(interpreted.content, context.message), interpretationVersion: 'semantic-recovery-v2', historyMessageCount: intentStageInput.turns.slice(-8).length, reason: interpretation.reason, accepted: Boolean(interpretation.value), repairAttempted: false, repairDecision: interpretation.value ? 'NOT_NEEDED' : recoveredInterpretation ? 'VALIDATED_SEMANTICS' : 'MODEL_REPAIR' });
+      context.diagnostics?.captureDevelopmentMetadata('INTERPRETATION', { ...describeInterpretationShape(interpreted.content, context.message, true), ...describeInterpretationSocialGuard(interpreted.content, context.message), interpretationVersion: 'semantic-recovery-v2', historyMessageCount: intentStageInput.turns.slice(-8).length, historyHasAssistant: intentStageInput.turns.slice(-8).some((turn) => turn.role === 'assistant'), historyEndsWithAssistant: intentStageInput.turns.at(-1)?.role === 'assistant', reason: interpretation.reason, accepted: Boolean(interpretation.value), repairAttempted: false, repairDecision: interpretation.value ? 'NOT_NEEDED' : recoveredInterpretation ? 'VALIDATED_SEMANTICS' : 'MODEL_REPAIR' });
       if (!interpretation.value && !recoveredInterpretation) {
         // One repair using the same authorized history, schema and provider.
         // Failed output is quoted data; it cannot authorize actions or retrieval.
@@ -706,7 +707,7 @@ export class ConversationOrchestrator {
         // Recovery always discards ticket actions, even if the repair returns them.
         recoveredInterpretation = recoverValidatedSemanticInterpretation(repaired.content, context.message, intentStageInput.turns);
         const repairValidation = validateInterpretation(repaired.content, context.message, intentStageInput.turns);
-        context.diagnostics?.captureDevelopmentMetadata('INTERPRETATION', { ...describeInterpretationShape(repaired.content, context.message), reason: repairValidation.reason, repairAttempted: true, recovered: Boolean(recoveredInterpretation), repairDecision: recoveredInterpretation ? 'VALIDATED_SEMANTICS' : 'EXHAUSTED' });
+        context.diagnostics?.captureDevelopmentMetadata('INTERPRETATION', { ...describeInterpretationShape(repaired.content, context.message, true), ...describeInterpretationSocialGuard(repaired.content, context.message), reason: repairValidation.reason, repairAttempted: true, recovered: Boolean(recoveredInterpretation), repairDecision: recoveredInterpretation ? 'VALIDATED_SEMANTICS' : 'EXHAUSTED' });
         if (!recoveredInterpretation) {
           closeIntentStage('FAILED', { errorCategory: 'PROVIDER_INVALID_RESPONSE', reason: 'invalid_interpretation_output' });
           throw new ServiceUnavailableException({ code: 'PLAYGROUND_INTERPRETATION_RECOVERY_FAILED', message: 'The request could not be understood reliably. Please rephrase or retry.' });
@@ -791,14 +792,16 @@ export class ConversationOrchestrator {
       const pureLanguageChange = isNonFactualSemanticTurn(parsed.semantics, parsed.continuityAct)
         && parsed.continuityAct === 'LANGUAGE_SWITCH'
         && parsed.semantics.businessScopeAssessment !== 'OUT_OF_SCOPE';
-      const conversationalDialogue = pureLanguageChange || (parsed.semantics.uncertainty === 'NONE'
-        && !parsed.semantics.clarificationRequired
-        && parsed.semantics.informationNeed === 'UNKNOWN'
-        && parsed.semantics.socialClassification === 'OTHER'
-        && parsed.semantics.entities.length === 0
-        && parsed.semantics.intents.length === 1
-        && ['CONVERSATION_FEEDBACK', 'CONVERSATION_CONTINUATION'].includes(parsed.semantics.intents[0]!.category)
-        && parsed.semantics.intents[0]?.polarity === 'AFFIRMATIVE');
+      const conversationalDialogue = pureLanguageChange
+        || isValidatedConversationalContinuation(parsed.semantics)
+        || (parsed.semantics.uncertainty === 'NONE'
+          && !parsed.semantics.clarificationRequired
+          && parsed.semantics.informationNeed === 'UNKNOWN'
+          && parsed.semantics.socialClassification === 'OTHER'
+          && parsed.semantics.entities.length === 0
+          && parsed.semantics.intents.length === 1
+          && parsed.semantics.intents[0]!.category === 'CONVERSATION_FEEDBACK'
+          && parsed.semantics.intents[0]?.polarity === 'AFFIRMATIVE');
       const conversationalFeedback = conversationalDialogue && parsed.semantics.intents[0]?.category === 'CONVERSATION_FEEDBACK';
       const conversationalContinuation = conversationalDialogue && parsed.semantics.intents[0]?.category === 'CONVERSATION_CONTINUATION';
       const turnRouting = socialDecision.decision === 'EXISTING_SAFETY_HANDLING'
@@ -829,7 +832,7 @@ export class ConversationOrchestrator {
       // Explicit feedback about the assistant is also conversational: it uses
       // bounded history and model wording without entering missing-evidence RAG.
       if ((socialDecision.decision === 'SAFE_SOCIAL_RESPONSE' || conversationalDialogue)
-        && parsed.semantics.informationNeed === 'UNKNOWN' && parsed.answerAspects.length === 0 && context.message.length <= 240) {
+        && parsed.semantics.informationNeed === 'UNKNOWN' && parsed.answerAspects.length === 0) {
         context.diagnostics?.milestone('KNOWLEDGE_RETRIEVAL_SKIPPED', { organizationId: context.organizationId, assistantId: context.assistantId, reason: 'standalone_social_recovery' });
         context.diagnostics?.recordTool('shopify_product_search', 'skipped', undefined, 'PRODUCT_INTENT_NOT_DETECTED');
         const isGreeting = parsed.semantics.socialClassification === 'GREETING';

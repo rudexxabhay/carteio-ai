@@ -1,6 +1,23 @@
 import { PlaygroundTraceRecorder, playgroundDiagnosticsEnabled } from './playground-diagnostics';
 
 describe('Playground diagnostics', () => {
+  it('keeps boundary predicates and history presence while discarding arbitrary semantic errors', () => {
+    const trace = new PlaygroundTraceRecorder('boundary-trace', undefined, true);
+    trace.captureDevelopmentMetadata('INTERPRETATION', { validatorFunction: 'validateInterpretation', semanticValidationReason: 'semantic_uncertainty_conflict', historyHasAssistant: true, historyEndsWithAssistant: true, usableRetrievalQueriesCount: 0, retrievalQueriesPresent: true, answerAspectsPresent: false });
+    trace.captureDevelopmentMetadata('INTERPRETATION', { semanticValidationReason: 'private customer content', validatorFunction: 'private prompt' });
+    const result = trace.snapshot({});
+    expect(result.developmentCapture?.diagnosticVersion).toBe('interpretation-boundaries-v3');
+    expect(result.developmentCapture?.checks[0]?.metadata).toMatchObject({ validatorFunction: 'validateInterpretation', semanticValidationReason: 'semantic_uncertainty_conflict', historyHasAssistant: true, usableRetrievalQueriesCount: 0, answerAspectsPresent: false });
+    expect(result.developmentCapture?.checks[1]?.metadata).toEqual({});
+  });
+  it('captures bounded semantic intent category and polarity pairs only from allowlisted values', () => {
+    const trace = new PlaygroundTraceRecorder('social-guard-trace', undefined, true);
+    trace.captureDevelopmentMetadata('INTERPRETATION', { semanticIntents: 'ACKNOWLEDGMENT:NEGATED|FOLLOW_UP:AFFIRMATIVE', socialDecision: 'CONTINUE_BUSINESS_PIPELINE', socialDecisionReason: 'SUBSTANTIVE_OR_NEGATED_INTENT_PRESENT', standaloneConversationalAct: false, retrievalRequirementConflict: false, finalValidatorRule: 'invalid_retrieval_queries' });
+    trace.captureDevelopmentMetadata('INTERPRETATION', { semanticIntents: 'customer words here', socialDecisionReason: 'customer words here' });
+    const checks = trace.snapshot({}).developmentCapture?.checks;
+    expect(checks?.[0]?.metadata).toMatchObject({ semanticIntents: 'ACKNOWLEDGMENT:NEGATED|FOLLOW_UP:AFFIRMATIVE', socialDecisionReason: 'SUBSTANTIVE_OR_NEGATED_INTENT_PRESENT', finalValidatorRule: 'invalid_retrieval_queries' });
+    expect(checks?.[1]?.metadata).toEqual({});
+  });
   it('captures only allowlisted recovery metadata in opted-in development traces', () => {
     const trace = new PlaygroundTraceRecorder('trace-repair', undefined, true);
     trace.captureDevelopmentMetadata('INTERPRETATION', { interpretationVersion: 'semantic-recovery-v2', historyMessageCount: 4, repairAttempted: true, repairDecision: 'EXHAUSTED', informationNeed: 'UNKNOWN', reason: 'invalid_retrieval_queries', rawOutput: 'customer private text', prompt: 'protected instructions' });

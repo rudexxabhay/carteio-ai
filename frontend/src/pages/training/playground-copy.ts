@@ -117,3 +117,47 @@ export function formatPlaygroundDiagnostics(messages: readonly CopyableChatMessa
   const prefix = new TextDecoder().decode(encoded.slice(0, Math.max(0, maxBytes - new TextEncoder().encode(suffix).byteLength)));
   return `${prefix}${suffix}`;
 }
+
+/** Structured, bounded export. Historical turns without captured traces stay explicitly untraced. */
+export function buildPlaygroundDebugReport(input: { assistantName: string; conversationId: string | null; messages: readonly CopyableChatMessage[]; incomplete?: boolean; maxBytes?: number }): { report: Record<string, unknown>; json: string } {
+  const maxBytes = input.maxBytes ?? PLAYGROUND_EXPORT_MAX_BYTES;
+  const turns = input.messages.filter((message) => message.role === 'user' || message.role === 'visitor' || message.role === 'assistant' || message.role === 'error');
+  const items = turns.map((message) => ({
+    messageId: message.id,
+    role: message.role === 'visitor' ? 'user' : message.role,
+    timestamp: typeof message.createdAt === 'number' ? new Date(message.createdAt).toISOString() : null,
+    requestId: message.requestId ?? null,
+    traceId: message.diagnostics?.traceId ?? message.liveEvents?.find((event) => event.traceId)?.traceId ?? null,
+    safeMessagePreview: 'REDACTED',
+    answer: message.role === 'assistant' ? { provenance: message.provenance ?? 'NOT_CAPTURED', sourceCount: message.sources?.length ?? 0 } : 'NOT_APPLICABLE',
+    diagnostics: message.diagnostics ? {
+      developmentCapture: message.diagnostics.developmentCapture ?? 'NOT_CAPTURED',
+      events: message.diagnostics.events,
+      retrieval: message.diagnostics.retrieval,
+      tools: message.diagnostics.tools,
+      providerCalls: message.diagnostics.providerCalls ?? 'NOT_CAPTURED',
+      evidence: message.diagnostics.evidence.map(({ excerpt: _excerpt, ...safe }) => safe),
+      citationValidation: message.diagnostics.citationValidation ?? 'NOT_CAPTURED',
+      persistence: message.diagnostics.events.find((event) => event.operation === 'TURN_PERSISTENCE') ?? 'NOT_CAPTURED',
+      finalAnswer: message.diagnostics.finalAnswer,
+    } : { status: 'NOT_CAPTURED', liveEvents: message.liveEvents?.length ? message.liveEvents : 'NOT_CAPTURED' },
+  }));
+  const failed = items.filter((item) => item.role === 'error');
+  const categories = new Map<string, number>();
+  for (const item of items) for (const event of item.diagnostics !== 'NOT_CAPTURED' && typeof item.diagnostics === 'object' && 'events' in item.diagnostics ? item.diagnostics.events as Array<{ errorCategory?: string }> : []) if (event.errorCategory) categories.set(event.errorCategory, (categories.get(event.errorCategory) ?? 0) + 1);
+  const omittedCount = input.incomplete ? 1 : 0;
+  const report: Record<string, unknown> = {
+    reportVersion: 'playground-execution-debug-v1',
+    executionIdentity: { conversationId: input.conversationId, assistantName: input.assistantName, exportedAt: new Date().toISOString() },
+    conversationSummary: { totalTurns: turns.filter((message) => message.role === 'visitor' || message.role === 'user').length, successfulResponses: turns.filter((message) => message.role === 'assistant').length, failedRequests: failed.length, errorCategories: Object.fromEntries(categories), recurringFailurePatterns: [...categories.keys()], completeness: input.incomplete ? 'TRUNCATED' : 'COMPLETE' },
+    turns: items,
+    diagnosticCompleteness: { unavailableHistoricalDiagnostics: items.filter((item) => item.diagnostics === 'NOT_CAPTURED').length, omittedTurnCount: omittedCount },
+  };
+  let json = JSON.stringify(report, null, 2);
+  if (new TextEncoder().encode(json).byteLength > maxBytes) {
+    report.turns = [];
+    report.diagnosticCompleteness = { status: 'TRUNCATED', reason: 'BYTE_LIMIT', omittedTurnCount: items.length };
+    json = JSON.stringify(report, null, 2);
+  }
+  return { report, json };
+}

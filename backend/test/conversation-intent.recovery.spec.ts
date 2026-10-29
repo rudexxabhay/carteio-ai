@@ -168,4 +168,34 @@ describe('semantic interpretation recovery metadata', () => {
     expect(validateInterpretation(JSON.stringify({ ...payload, ticketIntent: { ticketRequest: 'EXPLICIT', draftAction: 'CONFIRM', authorized: true } }), message)).toMatchObject({ value: null, reason: 'invalid_ticket_intent' });
   });
 
+  it.each(['AFFIRMATIVE', 'NEGATED', 'NOT_APPLICABLE'] as const)('accepts an independently validated ACKNOWLEDGMENT continuation with %s polarity and no retrieval metadata', (polarity) => {
+    const message = 'Contextual conversation fixture';
+    const semantics = {
+      language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] },
+      responseLanguagePreference: null, socialClassification: 'ACKNOWLEDGMENT', informationNeed: 'UNKNOWN', businessScopeAssessment: 'UNKNOWN',
+      intents: [{ category: 'CONVERSATION_CONTINUATION', polarity }], entities: [], uncertainty: 'NONE', clarificationRequired: false,
+    };
+    const raw = JSON.stringify({ retrievalQueries: [], answerAspects: [], language: 'English', intent: 'conversation_continuation', semantics });
+    expect(validateInterpretation(raw, message).value).toMatchObject({ retrievalQueries: [], answerAspects: [], semantics: { intents: [{ category: 'CONVERSATION_CONTINUATION', polarity }] } });
+  });
+
+  it('keeps unknown, ambiguous, factual, mixed, and entity-bearing turns out of the empty-retrieval exception while preserving pending action metadata', () => {
+    const message = 'Contextual conversation fixture';
+    const base = {
+      language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] },
+      responseLanguagePreference: null, socialClassification: 'ACKNOWLEDGMENT', informationNeed: 'UNKNOWN', businessScopeAssessment: 'UNKNOWN',
+      intents: [{ category: 'CONVERSATION_CONTINUATION', polarity: 'NOT_APPLICABLE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false,
+    };
+    const output = (semantics: object, extra: object = {}) => JSON.stringify({ retrievalQueries: [], answerAspects: [], language: 'English', intent: 'conversation_continuation', semantics, ...extra });
+    expect(validateInterpretation(output({ ...base, intents: [{ category: 'UNKNOWN', polarity: 'UNCERTAIN' }], uncertainty: 'UNKNOWN', clarificationRequired: true }), message).reason).toBe('invalid_retrieval_queries');
+    expect(validateInterpretation(output({ ...base, uncertainty: 'AMBIGUOUS', clarificationRequired: true }), message).reason).toBe('invalid_retrieval_queries');
+    expect(validateInterpretation(output({ ...base, intents: [{ category: 'CONVERSATION_CONTINUATION', polarity: 'UNCERTAIN' }] }), message).reason).toBe('invalid_retrieval_queries');
+    expect(validateInterpretation(output({ ...base, socialClassification: 'OTHER', intents: [{ category: 'CONVERSATION_CONTINUATION', polarity: 'NEGATED' }] }), message).reason).toBe('invalid_retrieval_queries');
+    expect(validateInterpretation(output({ ...base, informationNeed: 'STATIC_BUSINESS_INFORMATION' }), message).reason).toBe('invalid_retrieval_queries');
+    expect(validateInterpretation(output({ ...base, intents: [...base.intents, { category: 'KNOWLEDGE_QUESTION', polarity: 'AFFIRMATIVE' }] }), message).reason).toBe('invalid_retrieval_queries');
+    expect(validateInterpretation(output({ ...base, entities: [{ type: 'PRODUCT_NAME', raw: 'fixture' }] }), message).reason).toBe('invalid_retrieval_queries');
+    const pendingAction = validateInterpretation(output(base, { ticketIntent: { ticketRequest: 'NONE', draftAction: 'CONFIRM' } }), message);
+    expect(pendingAction.value?.ticketIntent).toEqual({ ticketRequest: 'NONE', draftAction: 'CONFIRM' });
+  });
+
 });

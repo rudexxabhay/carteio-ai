@@ -1,3 +1,4 @@
+import { isValidatedConversationalContinuation } from './multilingual-semantics';
 import type { MultilingualSemanticInterpretation, SocialClassification } from './multilingual-semantics';
 
 export { SOCIAL_CLASSIFICATIONS } from './multilingual-semantics';
@@ -30,15 +31,19 @@ export function decideSocialResponse(input: {
   const { classification, semantic, message } = input;
   if (classification === 'BUSINESS_REQUEST_WITH_GREETING') return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'BUSINESS_REQUEST_PRESENT' };
   if (classification === 'AMBIGUOUS' || classification === 'UNKNOWN') return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'SOCIAL_CLASSIFICATION_UNCERTAIN' };
-  if (!safeCategories.has(classification)) return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'NOT_A_PURE_SOCIAL_MESSAGE' };
+  const validatedContinuation = Boolean(semantic && classification === semantic.socialClassification && isValidatedConversationalContinuation(semantic));
+  if (!safeCategories.has(classification) && !validatedContinuation) return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'NOT_A_PURE_SOCIAL_MESSAGE' };
   if (!semantic || semantic.uncertainty !== 'NONE' || semantic.clarificationRequired) return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'SEMANTIC_INTERPRETATION_UNCERTAIN' };
-  if (message.length > 240 || unsafeSocialInstruction.test(message)) return { decision: 'EXISTING_SAFETY_HANDLING', reason: 'UNSAFE_SOCIAL_SHORTCUT_INPUT' };
+  if (unsafeSocialInstruction.test(message)) return { decision: 'EXISTING_SAFETY_HANDLING', reason: 'UNSAFE_SOCIAL_SHORTCUT_INPUT' };
+  if (validatedContinuation) {
+    return { decision: 'SAFE_SOCIAL_RESPONSE', reason: 'VALIDATED_PURE_SOCIAL_MESSAGE' };
+  }
   const negativeAcknowledgment = classification === 'ACKNOWLEDGMENT'
     && semantic.intents.length === 1
     && semantic.intents[0]?.category === 'ACKNOWLEDGMENT'
     && semantic.intents[0]?.polarity === 'NEGATED';
-  if (!semantic.intents.length || semantic.intents.some((intent) => !safeCategories.has(intent.category as SocialClassification)
-    || (intent.polarity !== 'AFFIRMATIVE' && intent.polarity !== 'NOT_APPLICABLE' && !(negativeAcknowledgment && intent.category === 'ACKNOWLEDGMENT')))) {
+  if (!semantic.intents.length || semantic.intents.some((intent) => (!safeCategories.has(intent.category as SocialClassification)
+    || (intent.polarity !== 'AFFIRMATIVE' && intent.polarity !== 'NOT_APPLICABLE' && !(negativeAcknowledgment && intent.category === 'ACKNOWLEDGMENT'))))) {
     return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'SUBSTANTIVE_OR_NEGATED_INTENT_PRESENT' };
   }
   if (semantic.entities.length) return { decision: 'CONTINUE_BUSINESS_PIPELINE', reason: 'ENTITY_REQUIRES_NORMAL_ROUTING' };
