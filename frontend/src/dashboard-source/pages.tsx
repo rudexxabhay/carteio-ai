@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, FileSpreadsheet, Globe2, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, Globe2, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
 import { Badge, Btn, Card, PageHeader, Stat, FilterInput, SectionHeader, TableWrap, Notice, Bars, Progress, ViewAll, CircleIcon, AddButton, Empty } from './ui';
 import { sections, type PageId } from './data';
 import { useOverviewData } from './use-overview-data';
@@ -7,27 +7,19 @@ import { ApiError } from '../services/api/client';
 import { getOrders, getProducts, getProduct, getSales, getBillingUsage, getConversations, getConversation, markConversationRead, addConversationNote, getTickets, getTicket, assignTicket, updateTicket, addTicketNote, replyToTicket, type Order, type Product, type SalesSummary, type BillingUsage, type InboxConversation, type InboxDetail, type TicketDetail, type TicketMessage, type TicketPage } from '../services/api/saas';
 import { getConnectors, getConnectorPermissions, getConnectorSyncHistory, queueConnectorSync, beginShopifyInstall, beginShopifyScopeUpgrade, disconnectConnector, refreshShopifyPermissions, retryConnectorSync, updateConnectorPermission, verifyConnector, type ConnectorInstance, type ConnectorPermissions, type SyncJob } from '../services/api/connectors';
 import { ShopifyPermissionsPanel } from '../pages/saas/ShopifyPermissionsPanel';
-import { KNOWLEDGE_SECTION_CARDS, SHOPIFY_CATALOG_TAB } from '../pages/knowledge/knowledge-sections';
-import type { SourcePage, KnowledgeSection } from '../services/api/knowledge';
-import './knowledge-sections.css';
-import { KnowledgePdfPanel } from './KnowledgePdfPanel';
+import { KnowledgeLibrary } from './KnowledgeLibrary';
 
 import '../pages/saas/connectors-page.css';
 import { archiveAssistant, createAssistant as createAssistantApi, getAssistant, getAssistantTrainingOverview, listAssistants, restoreAssistant, sendPlaygroundMessage, sendPlaygroundMessageStream, setAssistantActive, updateAssistant, type Assistant, type AssistantInput, type AssistantTrainingOverview, type PlaygroundChatReply, type PlaygroundTrace, type PlaygroundLiveEvent, type ResponseTone, type ResponseStyle } from '../services/api/assistants';
-import { activateCustomerKnowledge, archiveKnowledge, attachKnowledge, createFaqSource, createTextSource, getKnowledgeProcessing, getKnowledgeSource, listKnowledge, reindexKnowledge, restoreKnowledge, listWebsitePages, createWebsiteSource, crawlWebsiteSource, getWebsiteSourceDetails, updateWebsiteSyncSettings, type KnowledgeSource, type ProcessingDetails, type WebsitePagesResponse, type WebsiteSourceDetails } from '../services/api/knowledge';
+import { archiveKnowledge, attachKnowledge, getKnowledgeProcessing, getKnowledgeSource, reindexKnowledge, restoreKnowledge, type KnowledgeSource, type ProcessingDetails } from '../services/api/knowledge';
 import { getWidgetConfig, saveWidgetConfig, type WidgetConfig } from '../services/api/widget';
-import { getWorkspace, listWorkspaceMembers, updateWorkspace, type WorkspaceMember } from '../services/api/workspaces';
-import { createKnowledgeBase, getEffectiveKnowledge, importKnowledgeBaseFaqs, listKnowledgeBases, previewKnowledgeBaseFaqImport, type FaqImportPreview, type FaqImportResult, type KnowledgeBase, type EffectiveKnowledge } from '../services/api/knowledge-bases';
+import { listWorkspaceMembers, updateWorkspace, type WorkspaceMember } from '../services/api/workspaces';
+import { getEffectiveKnowledge, type EffectiveKnowledge } from '../services/api/knowledge-bases';
 import { getWidgetApiOrigin, getWidgetHostingOrigin, isWidgetApiOriginConfigurationValid } from '../config';
 import { sourceAssistantAccessStatus, type SourceAssistantAccessStatus } from './knowledge-access';
 import { ChatflowBuilder } from './ChatflowBuilder';
 import { playgroundSourceLabel } from './playground-provenance';
 import { buildPlaygroundDebugReport, formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundHistory, PLAYGROUND_EXPORT_MAX_BYTES, PLAYGROUND_EXPORT_MAX_MESSAGES, type CopyableChatMessage } from '../pages/training/playground-copy';
-const KnowledgeCatalog = React.lazy(async () => {
-    await import('../pages/knowledge/knowledge-bases.css');
-    const module = await import('../pages/knowledge/BusinessDataVisibility');
-    return { default: module.BusinessDataVisibility };
-});
 type Props = { go: (p: PageId) => void; notify: (s: string) => void; workspaceSlug?: string; workspaceRole?: string; recordId?: string; recordConnectionId?: string; preferredAssistantId?: string; workspaceData?: { name: string; websiteUrl: string | null; businessType: string | null; timezone?: string; locale?: string }; onWorkspaceSaved?: (value: any) => void; openProduct?: (externalId: string, integrationId?: string) => void; openOrder?: (externalId: string) => void; openAssistant?: (id: string) => void; createAssistant?: () => void; openKnowledge?: (id: string) => void; openTicket?: (id: string) => void; openCrawl?: (id: string) => void; openShopify?: (id: string) => void };
 function TinyBadge({ status }: { status: string }) { const tone: 'green' | 'amber' | 'neutral' = /Active|Indexed|Paid|Delivered|Healthy|Connected|Visible|Synced|Enabled|Approved|Ready|Resolved/i.test(status) ? 'green' : /Pending|Draft|Unassigned|Processing|High|Review|Needs/i.test(status) ? 'amber' : 'neutral'; const darkStatus = /Failed|Error|Disconnected|Rejected|Blocked|Disabled|Inactive|Overdue/i.test(status) ? 'status-failed' : /Processing|Queued|Crawling/i.test(status) ? 'status-processing' : ''; return <Badge tone={tone} className={darkStatus}>{status}</Badge> }
 function connectorIsActive(connector: ConnectorInstance | null | undefined) { return Boolean(connector && typeof connector.state === 'string' && connector.state.toUpperCase() === 'CONNECTED'); }
@@ -283,6 +275,7 @@ function Assistants({ go, notify, workspaceSlug = '', workspaceRole = '', record
     const [newName, setNewName] = useState('');
     const [newDescription, setNewDescription] = useState('');
     const [newPurpose, setNewPurpose] = useState('');
+    const creatingLock = useRef(false);
     const [busyId, setBusyId] = useState('');
     const manager = workspaceRole === 'owner' || workspaceRole === 'admin';
     useEffect(() => {
@@ -299,12 +292,13 @@ function Assistants({ go, notify, workspaceSlug = '', workspaceRole = '', record
     const filtered = assistants.filter(a => `${a.name} ${a.description ?? ''} ${a.businessPurpose ?? ''}`.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
     const statusTabs: Array<[typeof status, string]> = [['ALL', 'All assistants'], ['ACTIVE', 'Active'], ['DRAFT', 'Draft'], ['INACTIVE', 'Inactive'], ['ARCHIVED', 'Archived']];
     async function create() {
-        if (!newName.trim() || creating) return;
+        if (!newName.trim() || creatingLock.current) return;
+        creatingLock.current = true;
         setCreating(true); setError('');
-        const input: AssistantInput = { name: newName.trim(), description: newDescription.trim(), businessPurpose: newPurpose.trim(), systemInstructions: '', defaultLanguage: 'English', responseTone: 'professional', responseStyle: 'balanced', fallbackMessage: 'I do not have enough authorized information to answer that.', greetingMessage: null, escalationMessage: null };
+        const input: AssistantInput = { name: newName.trim(), description: newDescription.trim(), businessPurpose: newPurpose.trim(), systemInstructions: '', defaultLanguage: 'auto', responseTone: 'professional', responseStyle: 'balanced', fallbackMessage: 'I do not have enough authorized information to answer that.', greetingMessage: null, escalationMessage: null };
         try { const assistant = await createAssistantApi(workspaceSlug, input); notify('Assistant created.'); openAssistant?.(assistant.id); }
         catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Assistant could not be created.'); }
-        finally { setCreating(false); }
+        finally { creatingLock.current = false; setCreating(false); }
     }
     async function toggleActive(assistant: Assistant) {
         if (busyId) return;
@@ -628,256 +622,6 @@ function PlaygroundSourcesPanel({ message, trace }: { message?: PlaygroundPageMe
     return <div className="playground-source-list"><p>Knowledge retrieval {retrieval.attempted ? 'attempted' : 'not attempted'} · audience {retrieval.audience ?? 'not evaluated'} · {retrieval.mode} · {retrieval.resultCount} result(s) from {retrieval.eligibleSourceCount} eligible source(s) · {retrieval.eligibilityStatus}</p>{retrieval.queryHash && <small>Original query fingerprint: {retrieval.queryHash}</small>}{retrieval.queryVariantHashes?.length ? <small>Bounded query variant fingerprints: {retrieval.queryVariantHashes.map(hash => hash.slice(0, 8)).join(', ')}</small> : null}{retrieval.attempted && <section className="playground-diagnostics-list" aria-label="Backend retrieval diagnostics"><p>Query plan: {retrieval.queryPlanningMode ?? 'unknown'} · customer language {retrieval.customerLanguage ?? 'unknown'} · response language {trace.languageHandling?.responseLanguage ?? 'unknown'} · script {trace.languageHandling?.script ?? 'unknown'} · source language hints {retrieval.sourceLanguageHintCount ?? 'unknown'} · query variants {retrieval.queryVariantCount ?? 'unknown'}.</p><p>Effective source candidates: {retrieval.assignedSourceCount ?? 'unknown'} · eligible after public/connector checks: {retrieval.eligibleSourceCount} · excluded by those checks: {retrieval.rejectedSourceCount ?? 'unknown'} · index ready: {retrieval.indexReadySourceCount ?? 'unknown'}.</p>{retrieval.rejectionReasons?.map(item => <p key={item.reason}>Excluded: {item.reason} · {item.count}</p>)}{retrieval.sourceIndexStates?.map(item => <p key={item.sourceId}>Source {shortDiagnosticId(item.sourceId)} · version {item.sourceVersion} · active generation {item.activeGeneration ?? 'none'} · {item.processingStatus} · {item.ready ? 'ready' : 'not ready'}</p>)}<p>Index: {retrieval.activeIndexChunkCount ?? 'unknown'} chunks in active generations · methods {(retrieval.methodsAttempted ?? []).join(', ') || 'none reported'}.</p><p>Candidates: lexical {retrieval.lexicalCandidateCount ?? 'unknown'} · semantic {retrieval.semanticCandidateCount ?? 'unknown'} · ranked {retrieval.rankedCandidateCount ?? 'unknown'} · filtered {retrieval.filteredCandidateCount ?? 'unknown'} · selected {retrieval.selectedEvidenceCount ?? retrieval.resultCount}.</p>{retrieval.retrievalReason && <p>Retrieval reason: <strong>{retrieval.retrievalReason}</strong></p>}{retrieval.semanticUnavailableCode && <p>Semantic retrieval status: <strong>{retrieval.semanticUnavailableCode}</strong></p>}</section>}{trace.evidence.length ? trace.evidence.map(item => <details key={item.reference}><summary><strong>[{item.reference}] {item.title}</strong><span>{item.cited ? 'Cited / validated' : item.suppliedToProvider ? 'Sent to provider' : item.selectedForContext ? 'Selected, not confirmed sent' : item.retrieved ? 'Retrieved only' : 'Unavailable'}</span></summary><small>{item.sourceType} · source {shortDiagnosticId(item.sourceId)} · page {item.pageId ? shortDiagnosticId(item.pageId) : 'n/a'} · chunk {shortDiagnosticId(item.chunkId)}{item.indexGeneration ? ` · generation ${item.indexGeneration}` : ''}{item.rankingPosition ? ` · rank ${item.rankingPosition}` : ''}{item.score !== undefined ? ` · ${item.scoreMethod || 'retrieval'} score ${item.score}` : ''}{item.sourceVersion ? ` · version ${item.sourceVersion}` : ''}</small><small>Retrieved {item.retrieved ? 'yes' : 'no'} · selected {item.selectedForContext ? 'yes' : 'no'} · revalidated {item.revalidated ? 'yes' : 'no'} · supplied {item.suppliedToProvider ? 'yes' : 'no'} · cited {item.cited ? 'yes' : 'no'}{item.contentHash ? ` · hash ${item.contentHash.slice(0, 16)}` : ''}</small>{item.locator && <a href={item.locator} target="_blank" rel="noreferrer">{item.locator}</a>}<p>{item.excerpt || 'No excerpt returned.'}</p></details>) : <p>No authorized evidence was returned. {retrieval.retrievalReason ? `Reason: ${retrieval.retrievalReason}.` : ''}</p>}</div>;
 }
 function shortDiagnosticId(value: string) { return value.length > 12 ? `${value.slice(0,8)}…${value.slice(-4)}` : value; }
-function Knowledge({ go, notify, workspaceSlug = '', workspaceRole = '', openKnowledge }: Props) {
-    const [q, setQ] = useState('');
-    const [createType, setCreateType] = useState<'faq' | 'text' | 'website' | 'import' | null>(null);
-    const [activeSection, setActiveSection] = useState<KnowledgeSection | 'home' | 'all' | 'unclassified' | typeof SHOPIFY_CATALOG_TAB>('home');
-    const [newSourceSection, setNewSourceSection] = useState<KnowledgeSection>('BUSINESS_INTRODUCTION');
-    const [sourceStatusFilter, setSourceStatusFilter] = useState('');
-    const [sourcePage, setSourcePage] = useState(1);
-    const [websiteUrl, setWebsiteUrl] = useState('');
-    const [websiteVisibility, setWebsiteVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('PUBLIC_REFERENCE');
-    const [accessOpen, setAccessOpen] = useState(false);
-    const [activationAccess, setActivationAccess] = useState<EffectiveKnowledge | null>(null);
-    const [activationAccessError, setActivationAccessError] = useState('');
-    const [sourceLoadError, setSourceLoadError] = useState('');
-    const [question, setQuestion] = useState('');
-    const [answer, setAnswer] = useState('');
-    const [faqVisibility, setFaqVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('INTERNAL_RESTRICTED');
-    const [textVisibility, setTextVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('INTERNAL_RESTRICTED');
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [creating, setCreating] = useState(false);
-    const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
-    const [knowledgeBaseId, setKnowledgeBaseId] = useState('');
-    const [knowledgeBasesLoading, setKnowledgeBasesLoading] = useState(true);
-    const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState('');
-    const [creatingKnowledgeBase, setCreatingKnowledgeBase] = useState(false);
-    const [excelFile, setExcelFile] = useState<File | null>(null);
-    const [excelPreview, setExcelPreview] = useState<FaqImportPreview | null>(null);
-    const [excelResult, setExcelResult] = useState<FaqImportResult | null>(null);
-    const [excelLoading, setExcelLoading] = useState(false);
-    const [excelImporting, setExcelImporting] = useState(false);
-    const [excelError, setExcelError] = useState('');
-    const [duplicatePolicy, setDuplicatePolicy] = useState<'SKIP_EXISTING' | 'REJECT_DUPLICATES'>('SKIP_EXISTING');
-    const [importVisibility, setImportVisibility] = useState<'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE'>('INTERNAL_RESTRICTED');
-    const [selectedVisibilityIds, setSelectedVisibilityIds] = useState<string[]>([]);
-    const [activationAssistants, setActivationAssistants] = useState<Assistant[]>([]);
-    const [activationAssistantId, setActivationAssistantId] = useState('');
-    const [visibilitySaving, setVisibilitySaving] = useState(false);
-    const [visibilityResult, setVisibilityResult] = useState<{ changedToPublic: number; alreadyPublic: number; blocked: number; blockedReasons?: Record<string, number> } | null>(null);
-    const [authoritativeWorkspaceRole, setAuthoritativeWorkspaceRole] = useState<string | null>(null);
-    const [roleCheckError, setRoleCheckError] = useState('');
-    const previewSequence = React.useRef(0);
-    const excelFileInput = React.useRef<HTMLInputElement | null>(null);
-    const [sourceResult, setSourceResult] = useState<SourcePage | null>(null);
-    const [pdfSourceId, setPdfSourceId] = useState<string | null>(null);
-    const [addKnowledgeOpen, setAddKnowledgeOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    useEffect(() => { const timer = setTimeout(() => { setSourcePage(1); setSearchQuery(q); }, 250); return () => clearTimeout(timer); }, [q]);
-    const [sourcesList, setSourcesList] = useState<KnowledgeSource[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [retry, setRetry] = useState(0);
-    useEffect(() => {
-        previewSequence.current += 1; setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelLoading(false); setExcelImporting(false); setExcelError('');
-        setSelectedVisibilityIds([]); setVisibilityResult(null); setActivationAssistants([]); setActivationAssistantId('');
-        setKnowledgeBases([]); setKnowledgeBaseId(''); setActiveSection('home'); setNewSourceSection('BUSINESS_INTRODUCTION'); setCreateType(null);
-        setQ(''); setSourceResult(null); setPdfSourceId(null); setSourceStatusFilter(''); setSourcePage(1); setAccessOpen(false); setWebsiteUrl('');
-        if (excelFileInput.current) excelFileInput.current.value = '';
-    }, [workspaceSlug]);
-    useEffect(() => {
-        if (!workspaceSlug) { setAuthoritativeWorkspaceRole(null); setRoleCheckError('Workspace context is unavailable.'); return; }
-        const controller = new AbortController(); setAuthoritativeWorkspaceRole(null); setRoleCheckError('');
-        getWorkspace(workspaceSlug, controller.signal).then(workspace => {
-            if (!controller.signal.aborted) setAuthoritativeWorkspaceRole((workspace.currentUserRole ?? workspace.role).trim().toLowerCase());
-        }).catch(reason => {
-            if (!controller.signal.aborted) setRoleCheckError(reason instanceof ApiError ? reason.message : 'Workspace role could not be verified.');
-        });
-        return () => controller.abort();
-    }, [workspaceSlug, retry]);
-    useEffect(() => {
-        if (!workspaceSlug) { setSourcesList([]); setLoading(false); setError('Workspace context is unavailable.'); return; }
-        const controller = new AbortController(); setLoading(true); setSourceLoadError(''); setSourcesList([]);
-        listKnowledge(workspaceSlug, controller.signal, { page: sourcePage, pageSize: 20, search: searchQuery, section: activeSection === 'unclassified' ? 'UNCLASSIFIED' : KNOWLEDGE_SECTION_CARDS.find(item => item.id === activeSection)?.id, processingStatus: sourceStatusFilter.toUpperCase() }).then(result => { if (!controller.signal.aborted) { setSourcesList(result.sources); setSourceResult(result); } }).catch(reason => { if (!controller.signal.aborted) setSourceLoadError(reason instanceof ApiError ? reason.message : 'Knowledge sources could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
-        return () => controller.abort();
-    }, [workspaceSlug, retry, activeSection, sourcePage, searchQuery, sourceStatusFilter]);
-    useEffect(() => {
-        if (!workspaceSlug) { setKnowledgeBases([]); setKnowledgeBaseId(''); setKnowledgeBasesLoading(false); return; }
-        const controller = new AbortController(); setKnowledgeBasesLoading(true);
-        listKnowledgeBases(workspaceSlug, { page: 1, pageSize: 100, status: 'ACTIVE', sort: 'name', direction: 'asc' }, controller.signal).then(result => {
-            if (controller.signal.aborted) return;
-            setKnowledgeBases(result.knowledgeBases);
-            setKnowledgeBaseId(current => result.knowledgeBases.some(base => base.id === current) ? current : result.knowledgeBases[0]?.id ?? '');
-        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Knowledge bases could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setKnowledgeBasesLoading(false); });
-        return () => controller.abort();
-    }, [workspaceSlug, retry]);
-    useEffect(() => {
-        if (!workspaceSlug) { setActivationAssistants([]); setActivationAssistantId(''); return; }
-        const controller = new AbortController();
-        listAssistants(workspaceSlug, 1, controller.signal, 'ALL').then(result => {
-            if (controller.signal.aborted) return;
-            const available = result.assistants.filter(item => item.status.toLowerCase() === 'active');
-            setActivationAssistants(available);
-            setActivationAssistantId(current => available.some(item => item.id === current) ? current : available[0]?.id ?? '');
-        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistant list could not be loaded for customer knowledge activation.'); });
-        return () => controller.abort();
-    }, [workspaceSlug, retry]);
-    useEffect(() => {
-        setActivationAccess(null); setActivationAccessError('');
-        if (!accessOpen || !workspaceSlug || !activationAssistantId) return;
-        const controller = new AbortController();
-        getEffectiveKnowledge(workspaceSlug, activationAssistantId, controller.signal)
-            .then(result => { if (!controller.signal.aborted) setActivationAccess(result); })
-            .catch(reason => { if (!controller.signal.aborted) setActivationAccessError(reason instanceof ApiError ? reason.message : 'Assistant access could not be loaded.'); });
-        return () => controller.abort();
-    }, [accessOpen, workspaceSlug, activationAssistantId, retry]);
-    const searchedSources = sourcesList;
-    const visibleSources = sourcesList;
-    const sourcePageCount = sourceResult?.pageCount ?? 1;
-    const currentSourcePage = sourcePage;
-    const pagedSources = sourcesList;
-    const countSources = (section?: string | null, status?: string) => (sourceResult?.counts ?? []).filter(group =>
-      (section === undefined || group.section === section) && (!status || group.status === status)).reduce((sum, group) => sum + group.count, 0);
-    const selectedSection = KNOWLEDGE_SECTION_CARDS.find(section => section.id === activeSection);
-    const reviewableFaqs = searchedSources.filter(source => source.type === 'faq' && source.status === 'registered' && source.visibility === 'INTERNAL_RESTRICTED');
-    const publicFaqCount = sourcesList.filter(source => source.type === 'faq' && source.visibility === 'PUBLIC_REFERENCE').length;
-    const restrictedFaqCount = sourcesList.filter(source => source.type === 'faq' && source.visibility === 'INTERNAL_RESTRICTED').length;
-    const ready = countSources(undefined, 'ready');
-    const pending = countSources(undefined, 'queued') + countSources(undefined, 'processing');
-    const failed = countSources(undefined, 'failed');
-    const isWorkspaceOwner = authoritativeWorkspaceRole === 'owner';
-    const isWorkspaceManager = ['owner', 'admin'].includes(workspaceRole.trim().toLowerCase());
-    function selectSection(section: typeof activeSection) {
-        if (creating || excelImporting || excelLoading) return;
-        if (createType && !window.confirm('Close the source editor and switch sections? Unsaved form values are kept; the selected import file will be cleared.')) return;
-        clearExcelSelection(); setCreateType(null); setPdfSourceId(null); setAddKnowledgeOpen(false); setQ(''); setSearchQuery(''); setSourceStatusFilter(''); setActiveSection(section); setSourcePage(1);
-        const selected = KNOWLEDGE_SECTION_CARDS.find(item => item.id === section);
-        if (selected) setNewSourceSection(selected.id);
-    }
-    async function createSource(event: React.FormEvent) {
-        event.preventDefault();
-        if (!workspaceSlug || creating || !isWorkspaceManager) return;
-        setCreating(true);
-        setError('');
-        try {
-            const created = createType === 'faq'
-                ? await createFaqSource(workspaceSlug, { question: question.trim(), answer: answer.trim(), visibility: faqVisibility, knowledgeSection: newSourceSection })
-                : createType === 'text'
-                    ? await createTextSource(workspaceSlug, { title: title.trim(), content: content.trim(), visibility: textVisibility, knowledgeSection: newSourceSection })
-                    : createType === 'website'
-                        ? await createWebsiteSource(workspaceSlug, { sourceUrl: websiteUrl.trim(), visibility: websiteVisibility, knowledgeSection: newSourceSection })
-                        : null;
-            if (!created) return;
-            notify(`Knowledge source created · ${created.processingStatus.replaceAll('_', ' ')}`);
-            setCreateType(null); setQuestion(''); setAnswer(''); setTitle(''); setContent(''); setWebsiteUrl(''); setActiveSection(newSourceSection); setRetry(value => value + 1);
-        } catch (reason) {
-            setError(reason instanceof ApiError ? reason.message : 'Knowledge source could not be created.');
-        } finally { setCreating(false); }
-    }
-    async function previewExcel(file: File) {
-        const sequence = ++previewSequence.current;
-        setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelError(''); setExcelLoading(false);
-        if (!/\.(xlsx|csv)$/i.test(file.name)) { setExcelError('Unsupported file type. Choose an .xlsx workbook or a .csv exported from Excel.'); if (excelFileInput.current) excelFileInput.current.value = ''; return; }
-        if (!knowledgeBaseId) { setExcelError('This workspace has no active Knowledge Base to receive the Excel import.'); return; }
-        setExcelFile(file); setExcelLoading(true);
-        try {
-            const result = await previewKnowledgeBaseFaqImport(workspaceSlug, knowledgeBaseId, file);
-            if (sequence === previewSequence.current) setExcelPreview(result);
-        } catch (reason) {
-            if (sequence === previewSequence.current) setExcelError(reason instanceof ApiError ? reason.message : 'Excel file could not be validated.');
-        } finally { if (sequence === previewSequence.current) setExcelLoading(false); }
-    }
-    function clearExcelSelection() {
-        previewSequence.current += 1; setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelLoading(false); setExcelError('');
-        if (excelFileInput.current) excelFileInput.current.value = '';
-    }
-    async function importExcel() {
-        if (!excelFile || !excelPreview || !knowledgeBaseId || excelImporting || !excelPreview.valid || (duplicatePolicy === 'REJECT_DUPLICATES' && excelPreview.duplicates > 0)) return;
-        const sequence = previewSequence.current;
-        setExcelImporting(true); setExcelError('');
-        try {
-            const result = await importKnowledgeBaseFaqs(workspaceSlug, knowledgeBaseId, excelFile, duplicatePolicy, importVisibility, newSourceSection);
-            if (sequence !== previewSequence.current) return;
-            setExcelResult(result); setActiveSection(newSourceSection); setExcelFile(null); setExcelPreview(null); if (excelFileInput.current) excelFileInput.current.value = ''; setRetry(value => value + 1);
-            notify(`Excel import complete · ${result.created} added, ${result.skipped} skipped, ${result.failed} failed.`);
-        } catch (reason) { if (sequence === previewSequence.current) setExcelError(reason instanceof ApiError ? reason.message : 'Excel FAQ import failed.'); }
-        finally { if (sequence === previewSequence.current) setExcelImporting(false); }
-    }
-    async function createDestinationBase() {
-        if (!workspaceSlug || !newKnowledgeBaseName.trim() || creatingKnowledgeBase || !isWorkspaceManager) return;
-        setCreatingKnowledgeBase(true); setError('');
-        try {
-            const created = await createKnowledgeBase(workspaceSlug, { name: newKnowledgeBaseName.trim() });
-            setKnowledgeBases(current => [...current, created]); setKnowledgeBaseId(created.id); setNewKnowledgeBaseName('');
-            notify(`Knowledge Base created · ${created.name}`);
-        } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Knowledge Base could not be created.'); }
-        finally { setCreatingKnowledgeBase(false); }
-    }
-    async function activateCustomerKnowledgeForAssistant() {
-        if (!workspaceSlug || !isWorkspaceOwner || visibilitySaving || !activationAssistantId) return;
-        const count = selectedVisibilityIds.length;
-        const assistantName = activationAssistants.find(item => item.id === activationAssistantId)?.name ?? 'selected assistant';
-        if (!window.confirm(`Enable workspace customer knowledge for ${assistantName}${count ? ` and make ${count} selected restricted FAQ(s) public` : ''}? Confirm that selected FAQs are customer-safe. Other restricted sources will remain private.`)) return;
-        setVisibilitySaving(true); setVisibilityResult(null); setError('');
-        try {
-            const result = await activateCustomerKnowledge(workspaceSlug, activationAssistantId, selectedVisibilityIds);
-            setVisibilityResult(result); setSelectedVisibilityIds([]); setRetry(value => value + 1);
-            notify(`Customer knowledge enabled for ${assistantName}; ${result.changedToPublic} FAQ(s) made public, ${result.alreadyPublic} already public, ${result.blocked} blocked.`);
-        } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Customer knowledge activation failed. No partial settings were saved.'); }
-        finally { setVisibilitySaving(false); }
-    }
-    return <div className="knowledge-screen">
-        <PageHeader eyebrow="Train AI / Knowledge" title="Knowledge Base" desc="Manage the information your AI uses to answer customers." action={<><Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={16}/> Refresh</Btn><button type="button" className="btn btn-secondary" aria-expanded={accessOpen} aria-controls="knowledge-assistant-access" onClick={() => setAccessOpen(value => !value)}><Users size={16}/> Assistant Access</button></>}/>
-        <div className="knowledge-compact-stats" aria-label="Knowledge source statistics">
-            <span><strong>{loading ? '…' : sourceLoadError ? 'Unavailable' : countSources()}</strong> total sources</span>
-            <span><strong>{loading ? '…' : sourceLoadError ? '—' : ready}</strong> ready</span>
-            <span><strong>{loading ? '…' : sourceLoadError ? '—' : pending}</strong> processing</span>
-            <span><strong>{loading ? '…' : sourceLoadError ? '—' : failed}</strong> failed</span>
-
-        </div>
-        {error && <Notice tone="amber">{error}</Notice>}
-        {sourceLoadError && <Notice tone="amber">{sourceLoadError}</Notice>}
-        {activeSection === 'home' && <nav className="knowledge-section-nav" aria-label="Knowledge sections">
-            {KNOWLEDGE_SECTION_CARDS.map(section => {
-                const total = countSources(section.id);
-                return <button type="button" key={section.id} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(section.id)}>
-                    <strong>{section.title}</strong><span>{section.description}</span>
-                    <small>{loading ? 'Loading…' : sourceLoadError ? 'Count unavailable' : `${total} sources · ${countSources(section.id, 'ready')} ready →`}</small>
-                </button>;
-            })}
-            <button type="button" disabled={creating || excelLoading || excelImporting} onClick={() => selectSection(SHOPIFY_CATALOG_TAB)}><strong>Products &amp; Collections</strong><span>Products, variants, prices and stock from the authorized Shopify connector.</span><small>Open catalog connection and sync status</small></button>
-        </nav>}
-        <div className="knowledge-source-toolbar">
-            <div className="action-line">
-                {activeSection !== 'home' && <Btn secondary onClick={() => selectSection('home')}>← Knowledge Base</Btn>}
-                <button type="button" className="btn btn-secondary" aria-pressed={activeSection === 'all'} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection('all')}>All sources</button>
-                <button type="button" className="btn btn-secondary" aria-pressed={activeSection === 'unclassified'} disabled={creating || excelLoading || excelImporting} onClick={() => selectSection('unclassified')}>Legacy / Unclassified {loading || sourceLoadError ? '' : `(${countSources(null)})`}</button>
-            </div>
-        </div>
-        {accessOpen && <section id="knowledge-assistant-access"><Card className="knowledge-access-panel"><SectionHeader title="Assistant Access" desc="Configure one assistant once, then review customer-facing sources together."/><label className="field"><span>Assistant</span><select aria-label="Assistant for customer knowledge activation" value={activationAssistantId} disabled={!activationAssistants.length || visibilitySaving} onChange={event => { setActivationAssistantId(event.target.value); setVisibilityResult(null); setSelectedVisibilityIds([]); }}><option value="">{activationAssistants.length ? 'Select assistant' : 'No active assistants available'}</option>{activationAssistants.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{!activationAssistants.length && <small>Activate an assistant before enabling customer knowledge retrieval.</small>}</label><div role="status">{activationAccessError ? <Notice tone="amber">{activationAccessError}</Notice> : !activationAssistantId ? <Notice>Select an assistant to inspect saved access.</Notice> : !activationAccess ? <Notice>Loading saved assistant access…</Notice> : <Notice tone={activationAccess.useAllEligibleWorkspaceKnowledge ? 'green' : 'blue'}>Automatic customer knowledge: {activationAccess.useAllEligibleWorkspaceKnowledge === true ? 'Enabled' : activationAccess.useAllEligibleWorkspaceKnowledge === false ? 'Disabled' : 'Unavailable'}. Retrieval {activationAccess.retrievalEnabled ? 'available' : 'not currently available'} · {activationAccess.searchableSourceCount ?? activationAccess.effectiveSourceCount ?? 'Unavailable'} eligible indexed source(s). Visibility and source authorization still apply.</Notice>}</div><p>{publicFaqCount} public FAQ(s) · {restrictedFaqCount} restricted FAQ(s) in the currently loaded workspace source list. Select only FAQs approved for customer use; other restricted content stays private.</p>{authoritativeWorkspaceRole === null ? <Notice tone="amber">{roleCheckError || 'Verifying current workspace owner role…'}</Notice> : isWorkspaceOwner ? <><div className="action-line"><button type="button" className="text-link" onClick={() => setSelectedVisibilityIds(current => { const all = reviewableFaqs.map(source => source.id); return all.length && all.every(id => current.includes(id)) ? current.filter(id => !all.includes(id)) : [...new Set([...current, ...all])]; })} disabled={loading || reviewableFaqs.length === 0}>{reviewableFaqs.length && reviewableFaqs.every(source => selectedVisibilityIds.includes(source.id)) ? 'Clear filtered FAQ selection' : `Select all filtered restricted FAQs (${reviewableFaqs.length})`}</button><span>{selectedVisibilityIds.length} selected</span><Btn disabled={visibilitySaving || !activationAssistantId || loading} onClick={() => void activateCustomerKnowledgeForAssistant()}>{visibilitySaving ? 'Activating…' : 'Enable customer knowledge for assistant'}</Btn></div><div className="playground-diagnostics-list">{reviewableFaqs.map(source => <label key={source.id} className="action-line"><input type="checkbox" checked={selectedVisibilityIds.includes(source.id)} onChange={event => setSelectedVisibilityIds(current => event.target.checked ? [...new Set([...current, source.id])] : current.filter(id => id !== source.id))}/><span>{source.name}</span><small>{source.processingStatus === 'ready' ? 'Indexed' : source.processingStatus.replaceAll('_', ' ')} · restricted</small></label>)}</div>{reviewableFaqs.length === 0 && <small>No restricted registered FAQs match the current source search. You can still enable access for future public indexed sources.</small>}</> : <Notice tone="amber">Workspace role from the current workspace membership is “{authoritativeWorkspaceRole}”. Only an owner can enable workspace-wide customer knowledge and approve FAQ visibility. If you own this business but are not the Carteio workspace owner, ask the listed owner to transfer the workspace owner role.</Notice>}{visibilityResult && <Notice tone={visibilityResult.blocked ? 'amber' : 'green'}>Assistant-wide knowledge access enabled. {visibilityResult.changedToPublic} changed to public, {visibilityResult.alreadyPublic} already public, {visibilityResult.blocked} blocked{visibilityResult.blockedReasons && Object.keys(visibilityResult.blockedReasons).length ? ` · ${Object.entries(visibilityResult.blockedReasons).map(([reason, count]) => `${reason}: ${count}`).join(', ')}` : ''}. The backend resolver still requires public visibility, successful indexing, active generation and chunks.</Notice>}<small>Activation and selected FAQ visibility updates are saved together by the owner-authorized backend operation. Future public FAQ, text and website sources are included automatically after indexing when the assistant-wide setting is enabled.</small></Card></section>}
-        {activeSection === SHOPIFY_CATALOG_TAB ? <div className="knowledge-catalog"><div className="action-line"><Btn secondary onClick={() => go('products')}>Browse products</Btn><Btn secondary onClick={() => go('integrations')}>Manage integrations</Btn></div><React.Suspense fallback={<p role="status">Loading Shopify catalog status…</p>}><KnowledgeCatalog key={workspaceSlug} slug={workspaceSlug} manager={isWorkspaceManager} initialTab="shopify" compact/></React.Suspense></div> : activeSection !== 'home' ? <>
-            <SectionHeader title={selectedSection?.title ?? (activeSection === 'unclassified' ? 'Legacy / Unclassified sources' : 'All loaded sources')} desc={selectedSection?.description ?? 'Existing records keep their section, visibility and assistant assignments.'}/>
-            {selectedSection && <KnowledgePdfPanel key={workspaceSlug + selectedSection.id} slug={workspaceSlug} section={selectedSection.id} bases={knowledgeBases} baseId={knowledgeBaseId} setBaseId={setKnowledgeBaseId} manager={isWorkspaceManager} sourceId={pdfSourceId} closeSource={() => setPdfSourceId(null)} onChange={() => setRetry(value => value + 1)} openSource={setPdfSourceId}/>}
-            {isWorkspaceManager && <Btn secondary onClick={() => setAddKnowledgeOpen(value => !value)}>+ Add Knowledge</Btn>}
-            <div className="knowledge-source-toolbar">
-                <FilterInput value={q} onChange={setQ} placeholder="Search knowledge sources..."/>
-                <label className="field"><span>Processing status</span><select value={sourceStatusFilter} onChange={event => { setSourcePage(1); setSourceStatusFilter(event.target.value); }}><option value="">All statuses</option><option value="not_processed">Not processed</option><option value="queued">Queued</option><option value="processing">Processing</option><option value="ready">Ready</option><option value="failed">Failed</option></select></label>
-                {isWorkspaceManager && addKnowledgeOpen && <div className="action-line"><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('faq'); }}>Add FAQ</Btn><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('text'); }}>Add Text</Btn><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('website'); }}>Add Website</Btn><Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType('import'); }}><FileSpreadsheet size={15}/> Import Excel / CSV</Btn></div>}
-            </div>
-            {createType && isWorkspaceManager && <Card className="knowledge-editor">
-                <SectionHeader title="Add knowledge" desc="Only newly created sources receive the selected section." action={<Btn secondary disabled={creating || excelLoading || excelImporting} onClick={() => { clearExcelSelection(); setCreateType(null); }}>Close editor</Btn>}/>
-                <fieldset disabled={creating || excelImporting || excelLoading}>
-                    <label className="field"><span>Knowledge section</span><select value={newSourceSection} onChange={event => setNewSourceSection(event.target.value as KnowledgeSection)}>{KNOWLEDGE_SECTION_CARDS.map(section => <option key={section.id} value={section.id}>{section.title}</option>)}</select></label>
-                    {(createType === 'faq' || createType === 'text') && <form className="knowledge-create-form" onSubmit={event => void createSource(event)}><SectionHeader title={createType === 'faq' ? 'New FAQ source' : 'New text source'} action={<button type="button" className="text-link" onClick={() => setCreateType(null)}>Cancel</button>}/>{createType === 'faq' ? <><label className="field"><span>Question</span><input required value={question} onChange={event => setQuestion(event.target.value)} maxLength={200}/></label><label className="field"><span>Answer</span><textarea required value={answer} onChange={event => setAnswer(event.target.value)} maxLength={20000}/></label><label className="field"><span>Customer visibility</span><select value={faqVisibility} onChange={event => setFaqVisibility(event.target.value as typeof faqVisibility)}><option value="INTERNAL_RESTRICTED">Internal only (not available to customer chatbot)</option><option value="PUBLIC_REFERENCE">Customer-facing public FAQ</option></select><small>Choose public only for information approved for customers.</small></label></> : <><label className="field"><span>Title</span><input required value={title} onChange={event => setTitle(event.target.value)} maxLength={200}/></label><label className="field"><span>Content</span><textarea required value={content} onChange={event => setContent(event.target.value)} maxLength={50000}/></label><label className="field"><span>Customer visibility</span><select value={textVisibility} onChange={event => setTextVisibility(event.target.value as typeof textVisibility)}><option value="INTERNAL_RESTRICTED">Internal only (not available to customer chatbot)</option><option value="PUBLIC_REFERENCE">Customer-facing business knowledge</option></select><small>Choose public only for information approved for customers.</small></label></>}<Btn type="submit" disabled={creating || (createType === 'faq' ? !question.trim() || !answer.trim() : !title.trim() || !content.trim())}>{creating ? 'Creating…' : 'Create source'}</Btn></form>}
-                    {createType === 'website' && <form className="knowledge-create-form" onSubmit={event => void createSource(event)}><label className="field"><span>Website URL</span><input type="url" required maxLength={2048} placeholder="https://example.com/policies" value={websiteUrl} onChange={event => setWebsiteUrl(event.target.value)}/></label><label className="field"><span>Customer visibility</span><select value={websiteVisibility} onChange={event => setWebsiteVisibility(event.target.value as typeof websiteVisibility)}><option value="PUBLIC_REFERENCE">Customer-facing public website</option><option value="INTERNAL_RESTRICTED">Internal only</option></select></label><p>The existing website service validates the URL and queues its initial crawl. The source remains unavailable until processing succeeds.</p><Btn type="submit" disabled={creating || !websiteUrl.trim()}>{creating ? 'Saving…' : 'Add website'}</Btn></form>}
-                    {createType === 'import' && <div className="knowledge-create-form"><SectionHeader title="Import FAQs from Excel" desc="Validate the spreadsheet before importing it into a workspace Knowledge Base." action={<Badge><FileSpreadsheet size={13}/> XLSX / CSV</Badge>}/><label className="field"><span>Destination Knowledge Base</span><select value={knowledgeBaseId} disabled={excelImporting || knowledgeBasesLoading} onChange={event => { previewSequence.current += 1; setKnowledgeBaseId(event.target.value); setExcelFile(null); setExcelPreview(null); setExcelResult(null); setExcelLoading(false); setExcelError(''); if (excelFileInput.current) excelFileInput.current.value = ''; }}><option value="">{knowledgeBasesLoading ? 'Loading Knowledge Bases…' : knowledgeBases.length ? 'Select Knowledge Base' : 'No active Knowledge Base available'}</option>{knowledgeBases.map(base => <option key={base.id} value={base.id}>{base.name}</option>)}</select></label>{!knowledgeBasesLoading && knowledgeBases.length === 0 && <><label className="field"><span>Create a destination Knowledge Base</span><input value={newKnowledgeBaseName} onChange={event => setNewKnowledgeBaseName(event.target.value)} maxLength={120} placeholder="Enter a name" disabled={creatingKnowledgeBase}/></label><Btn secondary disabled={creatingKnowledgeBase || !newKnowledgeBaseName.trim() || !isWorkspaceManager} onClick={() => void createDestinationBase()}>{creatingKnowledgeBase ? 'Creating…' : 'Create Knowledge Base'}</Btn>{!isWorkspaceManager && <small>Creating a Knowledge Base requires workspace owner or admin access.</small>}</>}<p>Use an .xlsx workbook or a .csv exported from Excel with <strong>question</strong> and <strong>answer</strong> columns. Category, language and visibility are optional. The first worksheet is used for .xlsx files.</p><label className="field"><span>Default visibility for rows without a visibility column</span><select value={importVisibility} onChange={event => setImportVisibility(event.target.value as typeof importVisibility)}><option value="INTERNAL_RESTRICTED">Internal only (not available to customer chatbot)</option><option value="PUBLIC_REFERENCE">Customer-facing FAQ</option></select><small>Rows with an explicit visibility value keep that value. Select public only when the answers are customer-safe.</small></label><label className="field"><span>Excel workbook or CSV (.xlsx, .csv)</span><input ref={excelFileInput} type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" disabled={!knowledgeBaseId || excelLoading || excelImporting} onChange={event => { const file = event.target.files?.[0]; if (file) void previewExcel(file); else clearExcelSelection(); }}/></label>{excelFile && <small role="status">Selected file: {excelFile.name}</small>}{excelError && <Notice tone="amber">{excelError}</Notice>}{excelFile && !excelLoading && !excelPreview && <Btn secondary onClick={() => void previewExcel(excelFile)}>Retry validation</Btn>}{excelFile && <Btn secondary disabled={excelImporting || excelLoading} onClick={clearExcelSelection}>Remove file</Btn>}{excelLoading && <Empty title="Validating FAQ file…" desc="The existing Knowledge Base API is checking rows and duplicates."/>}{excelPreview && <><div className="top-chip"><Badge>{excelPreview.total} rows</Badge><Badge tone="green">{excelPreview.valid} valid</Badge><Badge tone={excelPreview.invalid ? 'amber' : 'neutral'}>{excelPreview.invalid} invalid</Badge><Badge tone={excelPreview.duplicates ? 'amber' : 'neutral'}>{excelPreview.duplicates} duplicates</Badge></div><Card className="table-card"><TableWrap><thead><tr><th>Row</th><th>Question</th><th>Answer</th><th>Validation</th></tr></thead><tbody>{excelPreview.rows.slice(0, 20).map(row => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td>{row.question || '—'}</td><td>{row.answer.length > 160 ? `${row.answer.slice(0, 160)}…` : row.answer || '—'}</td><td>{row.errors.join(' ') || (row.duplicateInFile ? 'Duplicate in file' : row.duplicateExisting ? 'Already exists' : 'Valid')}</td></tr>)}</tbody></TableWrap>{excelPreview.rows.length > 20 && <div className="table-footer">Showing first 20 of {excelPreview.rows.length} validated rows</div>}</Card><label className="field"><span>Existing questions</span><select value={duplicatePolicy} disabled={excelImporting} onChange={event => setDuplicatePolicy(event.target.value as typeof duplicatePolicy)}><option value="SKIP_EXISTING">Skip existing questions</option><option value="REJECT_DUPLICATES">Reject import if duplicates exist</option></select></label><Btn disabled={excelImporting || !excelPreview.valid || (duplicatePolicy === 'REJECT_DUPLICATES' && excelPreview.duplicates > 0)} onClick={() => void importExcel()}>{excelImporting ? 'Importing…' : 'Import valid FAQ rows'}</Btn></>}{excelResult && <Notice tone="green">Backend import result: {excelResult.created} created, {excelResult.skipped} skipped, {excelResult.failed} failed, {excelResult.updated} updated. Indexing is queued separately; source status will update when indexing finishes.</Notice>}</div>}
-                </fieldset>
-            </Card>}
-            {loading ? <p role="status">Loading knowledge sources…</p> : sourceLoadError ? null : <Card className="table-card knowledge-source-table"><TableWrap><thead><tr><th>Source</th><th>Type</th><th>Section</th><th>Visibility</th><th>Status</th><th>Updated</th></tr></thead><tbody>{pagedSources.map(source => <tr key={source.id}><td><button type="button" className="text-link" onClick={() => source.document && selectedSection ? setPdfSourceId(source.id) : openKnowledge?.(source.id)}>{source.name}</button></td><td>{source.document ? 'PDF' : source.type}</td><td>{KNOWLEDGE_SECTION_CARDS.find(section => section.id === source.knowledgeSection)?.title ?? 'Unclassified'}</td><td>{source.visibility === 'PUBLIC_REFERENCE' ? 'Customer-facing' : source.visibility === 'INTERNAL_RESTRICTED' ? 'Restricted' : 'Unavailable'}</td><td><TinyBadge status={source.processingStatus.replaceAll('_', ' ')}/></td><td>{source.updatedAt ? new Date(source.updatedAt).toLocaleDateString() : '—'}</td></tr>)}</tbody></TableWrap>{visibleSources.length === 0 && <Empty title={q || sourceStatusFilter ? "No matching sources" : "No knowledge added yet."} desc={selectedSection ? "Upload a PDF or add knowledge to help your AI answer questions about this section." : "Choose another section or clear the filters."}/>}<div className="knowledge-pagination"><span>{sourceResult?.total ?? 0} matching sources · Page {currentSourcePage} of {sourcePageCount}</span><div className="action-line"><Btn secondary disabled={currentSourcePage <= 1} onClick={() => setSourcePage(currentSourcePage - 1)}>Previous</Btn><Btn secondary disabled={currentSourcePage >= sourcePageCount} onClick={() => setSourcePage(currentSourcePage + 1)}>Next</Btn></div></div></Card>}
-        </> : null}
-    </div>;
-}
 function SourceDetail({ go, workspaceSlug = '', workspaceRole = '', recordId = '', notify }: Props) {
     const [source, setSource] = useState<KnowledgeSource | null>(null);
     const [processing, setProcessing] = useState<ProcessingDetails | null>(null);
@@ -953,29 +697,6 @@ function SourceDetail({ go, workspaceSlug = '', workspaceRole = '', recordId = '
     return <><PageHeader eyebrow="Train AI / Knowledge / Source" title={source?.name ?? 'Knowledge Source'} desc={source?.description ?? source?.sourceUrl ?? 'Source details from this workspace.'} action={<div className="action-line"><Btn secondary disabled={!manager || !source || source.status === 'archived' || working} onClick={() => void reindex()}><RefreshCw size={15}/>{working ? 'Working…' : 'Re-index source'}</Btn><Btn secondary disabled={!manager || !source || working} onClick={() => void changeArchiveState()}>{source?.status === 'archived' ? 'Restore source' : 'Archive source'}</Btn></div>}/>
         {loading && <Empty title="Loading source…" desc="Fetching source details and indexing status."/>}{error && <Notice tone="amber"><span>{error} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry</button></span></Notice>}
         {!loading && source && <div className="two-col content-sidebar"><Card className="doc-preview"><SectionHeader title="Source preview" action={<TinyBadge status={source.status}/>} /><h2>{source.name}</h2><p>{source.description || source.sourceUrl || 'Source details from this workspace.'}</p>{source.contentBody ? <section className="doc-section"><h3>Content</h3><p>{source.contentBody}</p></section> : <Notice>Preview content is not included in this API response.</Notice>}</Card><Card><SectionHeader title="Indexing & retrieval"/><TinyBadge status={status}/>{[['Source type', source.type], ['Source URL', source.sourceUrl ?? '—'], ['Indexed chunks', processing?.chunkCount ?? '—'], ['Last successful sync', source.lastSuccessfulSyncAt ? new Date(source.lastSuccessfulSyncAt).toLocaleString() : '—'], ['Linked knowledge bases', source.knowledgeBaseMemberships?.map(item => item.name).join(', ') || 'None reported'], ['Visibility', source.visibility ?? 'Unavailable']].map(([label, value]) => <div className="detail-row bordered" key={label}><span>{label}</span><strong>{value}</strong></div>)}{source.lastSyncErrorCode && <Notice tone="amber">Latest sync error: {source.lastSyncErrorCode}</Notice>}<label className="field"><span>Assistant access status</span><select value={selectedAssistantId} disabled={!assistants.length || linkWorking} onChange={event => setSelectedAssistantId(event.target.value)}><option value="">{assistants.length ? 'Select assistant' : 'No assistants available'}</option>{assistants.map(assistant => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></label>{selectedAssistantId && assistantKnowledgeState && <Notice tone={assistantKnowledgeState === 'available' ? 'green' : 'amber'}>{assistantKnowledgeState === 'available' ? `Available to ${assistants.find(item => item.id === selectedAssistantId)?.name ?? 'selected assistant'} through effective knowledge access.` : assistantKnowledgeState === 'restricted' ? 'Restricted from public chatbot: source visibility is INTERNAL_RESTRICTED.' : assistantKnowledgeState === 'failed' ? 'Processing failed: resolve the source processing error before retrieval.' : assistantKnowledgeState === 'not-indexed' ? 'Not indexed: a current active generation with chunks is required before chatbot retrieval.' : assistantKnowledgeState === 'blocked' ? 'Automatic workspace access is enabled, but another authorization or source eligibility check blocks this source.' : assistantKnowledgeState === 'inactive-assistant' ? 'This assistant is inactive and cannot retrieve customer knowledge.' : 'Not enabled for this assistant: use the assistant’s centralized workspace access setting or the centralized customer knowledge activation workflow.'}</Notice>}{linkError && <Notice tone="amber">{linkError}</Notice>}{manager && assistantKnowledgeState === 'not-enabled' && !assistantAccess?.useAllEligibleWorkspaceKnowledge && <Btn secondary disabled={linkWorking || !source || source.visibility !== 'PUBLIC_REFERENCE'} onClick={() => void toggleAssistantKnowledge()}>{linkWorking ? 'Saving…' : 'Attach directly (manual mode)'}</Btn>}{assistantAccess?.useAllEligibleWorkspaceKnowledge && <Notice>Automatic workspace knowledge access is enabled for this assistant; source visibility, index and connector authorization checks still apply.</Notice>}<Btn secondary onClick={() => go('playground')}>Test in Playground <ArrowRight size={16}/></Btn></Card></div>}
-    </>;
-}
-function Crawler({ notify, workspaceSlug = '', openCrawl }: Props) {
-    const [domain, setDomain] = useState(''); const [data, setData] = useState<WebsitePagesResponse | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [retry, setRetry] = useState(0);
-    useEffect(() => { if (!workspaceSlug) return; const controller = new AbortController(); setData(null); setLoading(true); setError(''); listWebsitePages(workspaceSlug, { page: 1, pageSize: 50 }, controller.signal).then(result => { if (!controller.signal.aborted) setData(result); }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Website crawl data could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, retry]);
-    async function addWebsite() { const url = domain.trim(); if (!url || busy) return; setBusy(true); setError(''); try { const source = await createWebsiteSource(workspaceSlug, { sourceUrl: url }); const job = await crawlWebsiteSource(workspaceSlug, source.id); setDomain(''); setError(''); notify(`Crawl request accepted · ${job.status}`); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Website crawl could not be started.'); } finally { setBusy(false); } }
-    const sites = data?.sources ?? []; const pages = data?.pages ?? []; const discovered = sites.reduce((sum, source) => sum + source.pageCount, 0); const pending = sites.filter(source => ['QUEUED','PROCESSING','PENDING'].includes(source.processingStatus)).length; const indexed = pages.filter(page => page.searchReady).length;
-    return <><PageHeader eyebrow="Train AI / Website Crawler" title="Website Crawler" desc="Manage authorized website sources and actual crawl states." action={<Btn secondary onClick={() => setRetry(value => value + 1)}><RefreshCw size={16}/> Refresh</Btn>}/>
-        {error && <Notice tone="amber">{error}</Notice>}
-        <Card className="major"><SectionHeader title="Crawl an authorized website" desc="The existing crawler validates and processes registered website sources."/><div className="inline-field"><input placeholder="https://your-site.example" value={domain} onChange={event => setDomain(event.target.value)}/><Btn disabled={busy || !domain.trim()} onClick={() => void addWebsite()}>{busy ? 'Starting…' : 'Add and crawl'} <ArrowRight size={16}/></Btn></div></Card>
-        <Metrics items={[{ label: 'Domains', value: loading ? '…' : String(sites.length), change: 'Registered workspace sources', icon: Globe2 }, { label: 'Discovered pages', value: loading ? '…' : String(discovered), change: 'API-reported page count', icon: Search }, { label: 'Loaded pages ready', value: loading ? '…' : String(indexed), change: 'Current returned page', icon: Database }, { label: 'Processing sources', value: loading ? '…' : String(pending), change: 'Current backend state', positive: false, icon: RefreshCw }]}/>
-        <Card className="major"><SectionHeader title="Website sources" desc="Status, pages and timestamps returned by the crawler service."/>{sites.map(site => <button key={site.id} onClick={() => openCrawl?.(site.id)} className="crawl-row"><span><strong>{site.domain ?? site.name}</strong><small>{site.pageCount} pages · {site.lastSuccessfulSyncAt ? new Date(site.lastSuccessfulSyncAt).toLocaleString() : 'No successful crawl reported'}</small></span><div className="crawl-progress"><Progress label="Pages loaded" value={site.pageCount > 0 ? Math.round((pages.filter(page => page.sourceId === site.id && page.searchReady).length / site.pageCount) * 100) : 0}/></div><TinyBadge status={site.processingStatus}/><ChevronRight size={16}/></button>)}{loading && <Empty title="Loading website sources…"/>}{!loading && !error && sites.length === 0 && <Empty title="No website sources" desc="Add an authorized website URL to create a crawl job."/>}</Card>
-    </>;
-}
-function CrawlDetail({ go, notify, workspaceSlug = '', recordId = '' }: Props) {
-    const [details, setDetails] = useState<WebsiteSourceDetails | null>(null); const [response, setResponse] = useState<WebsitePagesResponse | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [retry, setRetry] = useState(0); const [search, setSearch] = useState('');
-    useEffect(() => { if (!workspaceSlug || !recordId || recordId === 'source-preview') { setDetails(null); setResponse(null); setLoading(false); setError('Choose a real website source from the crawler list.'); return; } const controller = new AbortController(); setDetails(null); setResponse(null); setLoading(true); setError(''); Promise.all([getWebsiteSourceDetails(workspaceSlug, recordId, controller.signal), listWebsitePages(workspaceSlug, { page: 1, pageSize: 50, sourceId: recordId }, controller.signal)]).then(([sourceDetails, pages]) => { if (!controller.signal.aborted) { setDetails(sourceDetails); setResponse(pages); } }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Website crawl details could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort(); }, [workspaceSlug, recordId, retry]);
-    async function crawl() { if (!recordId || busy) return; setBusy(true); setError(''); try { const job = await crawlWebsiteSource(workspaceSlug, recordId); notify(`Crawl request accepted · ${job.status}`); setRetry(value => value + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Crawl request failed.'); } finally { setBusy(false); } }
-    async function saveSchedule(event: React.ChangeEvent<HTMLSelectElement>) { if (!recordId || busy) return; const value = event.target.value as 'MANUAL' | 'DAILY' | 'WEEKLY'; setBusy(true); setError(''); try { await updateWebsiteSyncSettings(workspaceSlug, recordId, { syncPolicy: value }); setRetry(current => current + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Crawl schedule update failed.'); } finally { setBusy(false); } }
-    async function togglePaused() { if (!recordId || !details || busy) return; setBusy(true); setError(''); try { await updateWebsiteSyncSettings(workspaceSlug, recordId, { paused: !details.paused }); setRetry(current => current + 1); } catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Pause setting could not be saved.'); } finally { setBusy(false); } }
-    const pages = response?.pages.filter(page => `${page.title} ${page.canonicalUrl} ${page.crawlStatus}`.toLowerCase().includes(search.toLowerCase())) ?? [];
-    return <><PageHeader eyebrow="Train AI / Crawler / Domain" title={response?.sources[0]?.domain ?? response?.sources[0]?.name ?? 'Website Crawl'} desc="Actual source verification, crawl status and page records." action={<div className="action-line"><Btn secondary onClick={() => go('crawler')}>Back to websites</Btn><Btn disabled={busy || !details} onClick={() => void crawl()}>{busy ? 'Working…' : 'Crawl now'} <RefreshCw size={16}/></Btn></div>}/>{error && <Notice tone="amber">{error}</Notice>}{loading && <Empty title="Loading crawl details…"/>}
-        {details && <><div className="top-chip"><Badge>{details.verificationStatus}</Badge><Badge>{details.processingStatus}</Badge><Badge>{details.crawlJobStatus ?? 'No active job'}</Badge></div><div className="two-col reverse-sidebar"><Card><SectionHeader title="Crawl configuration" desc="Only settings supported by the current API are editable."/><div className="detail-row bordered"><span>Source ID</span><strong>{details.sourceId}</strong></div><div className="detail-row bordered"><span>Last attempt</span><strong>{details.lastSyncAttemptAt ? new Date(details.lastSyncAttemptAt).toLocaleString() : '—'}</strong></div><div className="detail-row bordered"><span>Last successful crawl</span><strong>{details.lastSuccessfulSyncAt ? new Date(details.lastSuccessfulSyncAt).toLocaleString() : '—'}</strong></div><div className="detail-row bordered"><span>Robots / crawler worker</span><strong>{details.workerEnabled ? 'Enabled' : 'Unavailable'}</strong></div><label className="field"><span>Sync schedule</span><select value={details.syncPolicy} disabled={busy} onChange={event => void saveSchedule(event)}><option value="MANUAL">Manual</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option></select></label><div className="toggle-row"><div><strong>Pause website sync</strong><p>Persist pause setting through crawler service.</p></div><button type="button" role="switch" aria-checked={details.paused} disabled={busy} className={'toggle '+(details.paused?'on':'')} onClick={() => void togglePaused()}><span/></button></div></Card><Card><SectionHeader title="Discovered & indexed pages" desc={`${response?.total ?? 0} total pages returned by crawler API.`}/><FilterInput value={search} onChange={setSearch} placeholder="Filter URLs"/>{pages.map(page => <div className="url-row" key={page.id}><strong>{page.canonicalUrl}</strong><TinyBadge status={page.crawlStatus}/><small>{page.crawledAt ? new Date(page.crawledAt).toLocaleString() : '—'}</small></div>)}{pages.length === 0 && <Empty title="No matching crawl pages" desc="The crawler API returned no page records for this filter."/>}</Card></div></>}
     </>;
 }
 function Builder(props: Pick<Props, 'workspaceSlug' | 'workspaceRole' | 'workspaceData'>) {
@@ -1299,10 +1020,10 @@ export default function Pages({ page, go, notify, workspaceSlug = '', workspaceR
         case 'train': return <Train go={go} notify={notify} workspaceSlug={workspaceSlug} />;
         case 'behavior': return <Behavior go={go} notify={notify} workspaceSlug={workspaceSlug} preferredAssistantId={preferredAssistantId} />;
         case 'playground': return <Playground go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} />;
-        case 'knowledge': return <Knowledge go={go} notify={notify} workspaceSlug={workspaceSlug} openKnowledge={openKnowledge} />;
+        case 'knowledge': return <KnowledgeLibrary slug={workspaceSlug} role={workspaceRole} openDocument={openKnowledge} />;
         case 'source-detail': return <SourceDetail go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} recordId={recordId} />;
-        case 'crawler': return <Crawler go={go} notify={notify} workspaceSlug={workspaceSlug} openCrawl={openCrawl} />;
-        case 'crawl-detail': return <CrawlDetail go={go} notify={notify} workspaceSlug={workspaceSlug} recordId={recordId} />;
+        case 'crawler':
+        case 'crawl-detail': return <KnowledgeLibrary slug={workspaceSlug} role={workspaceRole} openDocument={openKnowledge} />;
         case 'builder': return <Builder workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} workspaceData={workspaceData} />;
         case 'integrations': return <Integrations go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} openShopify={openShopify} />;
         case 'shopify': return <Shopify go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} recordId={recordId} openShopify={openShopify} />;

@@ -14,6 +14,9 @@ type InFlightGet = { controller: AbortController; promise: Promise<unknown>; sub
 const inFlightGets = new Map<string, InFlightGet>();
 let sessionGeneration = 0;
 
+/** Session-scoped caches may key private data by this monotonic, non-secret generation. */
+export function getApiSessionGeneration() { return sessionGeneration; }
+
 /** Drop pending private reads when the authenticated session ends or becomes invalid. */
 export function clearPendingApiGets() {
   sessionGeneration += 1;
@@ -47,11 +50,14 @@ async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
       const responseMessage = typeof responseBody === 'object' && responseBody !== null && 'message' in responseBody ? responseBody.message : undefined;
       const code = typeof responseBody === 'object' && responseBody !== null && 'code' in responseBody && typeof responseBody.code === 'string' ? responseBody.code : undefined;
       const details = typeof responseBody === 'object' && responseBody !== null && 'diagnostics' in responseBody ? responseBody.diagnostics : undefined;
+      const fieldErrors = typeof responseBody === 'object' && responseBody !== null && 'details' in responseBody && Array.isArray(responseBody.details)
+        ? responseBody.details.filter((item): item is string => typeof item === 'string').slice(0, 10)
+        : [];
       const requestId = response.headers.get('x-request-id') || options.requestId;
       const message = response.status === 401 ? 'Your session has expired. Sign in again.'
         : response.status === 403 ? 'You do not have permission to complete this request.'
           : response.status >= 500 ? `The server could not complete this request. Try again.${requestId ? ` Reference: ${requestId}` : ''}`
-          : typeof responseMessage === 'string' ? responseMessage
+          : typeof responseMessage === 'string' ? `${responseMessage}${response.status === 400 && code === 'VALIDATION_ERROR' && fieldErrors.length ? ` (${fieldErrors.join('; ')})` : ''}`
         : Array.isArray(responseMessage) && responseMessage.every((item) => typeof item === 'string')
           ? responseMessage.join(' ') : `API request failed with status ${response.status}`;
       if (response.status === 401) clearPendingApiGets();

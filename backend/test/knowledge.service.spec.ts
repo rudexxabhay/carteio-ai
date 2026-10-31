@@ -16,15 +16,16 @@ describe('KnowledgeService', () => {
 
   beforeEach(() => {
     db = {
-      knowledgeSource: { create: jest.fn().mockResolvedValue(source({ processingStatus: 'QUEUED' })), createMany: jest.fn().mockResolvedValue({ count: 1 }), findMany: jest.fn().mockResolvedValue([source()]), findFirst: jest.fn().mockResolvedValue(source()), update: jest.fn().mockResolvedValue(source()), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      knowledgeSource: { create: jest.fn().mockResolvedValue(source({ processingStatus: 'QUEUED' })), createMany: jest.fn().mockResolvedValue({ count: 1 }), findMany: jest.fn().mockResolvedValue([source()]), findFirst: jest.fn().mockResolvedValue(source()), count: jest.fn().mockResolvedValue(1), groupBy: jest.fn().mockResolvedValue([]), update: jest.fn().mockResolvedValue(source()), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       knowledgeProcessingJob: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({ id: 'job-a' }), createMany: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       knowledgeBase: { findFirst: jest.fn().mockResolvedValue({ id: 'base-a' }), findMany: jest.fn().mockResolvedValue([]) },
       knowledgeBaseSource: { create: jest.fn().mockResolvedValue({}), createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       chatbot: { findFirst: jest.fn().mockResolvedValue({ id: 'assistant-a', archivedAt: null }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       assistantKnowledgeSource: { create: jest.fn().mockResolvedValue({ assistantId: 'assistant-a', sourceId: 'source-a' }), findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
     };
-    db.$transaction = jest.fn((callback: (tx: any) => unknown) => callback(db));
+    db.$transaction = jest.fn((operation: unknown[] | ((tx: any) => unknown)) => Array.isArray(operation) ? Promise.all(operation) : (operation as (tx: any) => unknown)(db));
     workspaces = { requireAccess: jest.fn().mockResolvedValue({ organizationId: 'org-a', role: 'OWNER' }) };
     service = new KnowledgeService(db as unknown as PrismaService, workspaces as unknown as WorkspaceService);
   });
@@ -222,6 +223,20 @@ describe('KnowledgeService', () => {
     expect(db.knowledgeSource.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id_organizationId: { id: 'source-a', organizationId: 'org-a' } } }));
     await service.list('user-a', 'alpha');
     expect(db.knowledgeSource.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', status: { not: 'ARCHIVED' }, type: { in: ['FAQ', 'TEXT', 'WEBSITE'] } } }));
+  });
+
+  it('filters the PDF library to extracted document metadata and returns PDF-only tenant counts', async () => {
+    db.knowledgeSource.findMany.mockResolvedValueOnce([source({ type: 'TEXT', document: { extracted: true, filename: 'guide.pdf' } })]);
+    db.knowledgeSource.count.mockResolvedValueOnce(1);
+    db.knowledgeSource.groupBy.mockResolvedValueOnce([{ knowledgeSection: 'BUSINESS_INTRODUCTION', processingStatus: 'READY', _count: { _all: 27 } }]);
+    db.$queryRaw.mockResolvedValueOnce([{ section: 'BUSINESS_INTRODUCTION', status: 'ready', count: 1 }]);
+
+    const result = await service.list('user-a', 'alpha', undefined, { pdfOnly: true });
+
+    expect(db.knowledgeSource.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', document: { path: ['extracted'], equals: true } }) }));
+    expect(result).toMatchObject({ total: 1, pdfCounts: [{ section: 'BUSINESS_INTRODUCTION', status: 'ready', count: 1 }] });
+    expect(result.counts).toEqual([{ section: 'BUSINESS_INTRODUCTION', status: 'ready', count: 27 }]);
+    expect(db.$queryRaw).toHaveBeenCalled();
   });
 
   it('preserves Unicode text body exactly when creating a text source', async () => {

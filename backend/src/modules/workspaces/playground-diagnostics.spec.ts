@@ -267,6 +267,12 @@ describe('Playground diagnostics', () => {
     expect(JSON.stringify(result)).not.toContain('customer message');
   });
 
+  it('exposes the explicit assistant-capability Knowledge skip reason', () => {
+    const trace = new PlaygroundTraceRecorder('trace-capability-skip');
+    trace.milestone('KNOWLEDGE_RETRIEVAL_SKIPPED', { organizationId: 'workspace-1', assistantId: 'assistant-1', reason: 'assistant_capability_response' });
+    expect(trace.snapshot({}).events).toContainEqual(expect.objectContaining({ operation: 'KNOWLEDGE_RETRIEVAL_SKIPPED', status: 'completed', reason: 'assistant_capability_response' }));
+  });
+
   it('preserves truncation and empty-response categories separately from schema-invalid output', () => {
     const trace = new PlaygroundTraceRecorder('trace-provider-shapes');
     trace.record({ requestId: 'trace-provider-shapes', organizationId: 'workspace-1', assistantId: 'assistant-1', channel: 'PLAYGROUND', stage: 'INTENT_INTERPRETATION', outcome: 'FAILED', durationMs: 20, errorCategory: 'PROVIDER_OUTPUT_TRUNCATED' });

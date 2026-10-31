@@ -1210,6 +1210,17 @@ describe('AssistantService Playground chat', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('routes factual assistant identity questions through authorized Knowledge', async () => {
+    const message = 'What is this business?';
+    const semantics = { language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] }, responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'STATIC_BUSINESS_INFORMATION', businessScopeAssessment: 'IN_SCOPE', intents: [{ category: 'ASSISTANT_IDENTITY_INQUIRY', polarity: 'AFFIRMATIVE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false };
+    fetchMock.mockResolvedValueOnce(providerResponse(JSON.stringify({ retrievalQueries: [message, 'What does this business offer?'], answerAspects: [{ questionSpan: message, retrievalQuery: 'What does this business offer?' }], language: 'English', script: 'Latin', style: 'plain', intent: 'business', needsClarification: false, semantics })));
+    fetchMock.mockResolvedValueOnce(providerResponse('The business offers the items described in its approved information. [S1]'));
+    await service.playgroundChat(userId, 'workspace', assistantId, { message });
+    expect(searchPreview).toHaveBeenCalledWith(userId, 'workspace', assistantId, expect.arrayContaining([message, 'What does this business offer?']), 5, 'PUBLIC_VISITOR');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[1]?.body)).not.toContain('server_computed_capability_data');
+  });
+
   it('surfaces a wellbeing generation outage without inventing a social reply', async () => {
     const semantics = { language: { primary: 'Hindi', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] }, responseLanguagePreference: null, socialClassification: 'WELLBEING_EXCHANGE', intents: [{ category: 'WELLBEING_EXCHANGE', polarity: 'AFFIRMATIVE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false };
     fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ retrievalQueries: ['kaise ho'], language: 'Hindi', script: 'Latin', style: 'Hinglish', intent: 'wellbeing', needsClarification: false, semantics }) }, finish_reason: 'stop' }] }), { status: 200, headers: { 'content-type': 'application/json' } }));

@@ -3,12 +3,12 @@ import { isIP } from 'node:net';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkspaceService } from './workspace.service';
-import type { CreateFaqBatchDto, CreateFaqSourceDto, CreateTextSourceDto, CreateWebsiteSourceDto, UpdateKnowledgeSourceDto } from './knowledge.dto';
+import type { UpdateKnowledgeSourceDto } from './knowledge.dto';
 import { PrivateKnowledgeStorage } from './private-knowledge-storage';
-import { PDF_MAX_BYTES } from './local-knowledge-storage';
-import { pdfParserAvailable } from './pdf-extraction';
+import { PDF_MAX_BYTES, PDF_MAX_PAGES } from './local-knowledge-storage';
+import { extractPdf, pdfParserAvailable, type PdfExtraction } from './pdf-extraction';
 import type { KnowledgeListQueryDto, UploadKnowledgePdfDto } from './knowledge.dto';
-import type { ImportedFaq } from './faq-import';
+import { isVerifiedPdfDocumentSource } from './knowledge-document-eligibility';
 
 const managers = ['OWNER', 'ADMIN'] as const;
 const safeSelect = {
@@ -89,63 +89,121 @@ export class KnowledgeService {
     const scope = { organizationId: membership.organizationId, type: type ?? { in: ['FAQ', 'TEXT', 'WEBSITE'] }, status: { not: 'ARCHIVED' } };
     const where = { ...scope, ...(query.section ? { knowledgeSection: query.section === 'UNCLASSIFIED' ? null : query.section } : {}),
       ...(query.search?.trim() ? { name: { contains: query.search.trim(), mode: 'insensitive' } } : {}),
-      ...(query.processingStatus ? { processingStatus: query.processingStatus } : {}) };
+      ...(query.processingStatus ? { processingStatus: query.processingStatus } : {}),
+      ...(query.pdfOnly ? { document: { path: ['extracted'], equals: true } } : {}) };
     const page = query.page ?? 1, pageSize = query.pageSize ?? 100;
-    const [records, total, groups] = await this.db.$transaction([
+    const [records, total, groups, pdfGroups] = await this.db.$transaction([
       this.db.knowledgeSource.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], skip: (page - 1) * pageSize, take: pageSize,
         select: { ...safeSelect, contentBody: query.page === undefined, _count: { select: { assistantLinks: true } } } }),
       this.db.knowledgeSource.count({ where }),
       this.db.knowledgeSource.groupBy({ by: ['knowledgeSection', 'processingStatus'], where: scope, _count: { _all: true } }),
+      this.db.$queryRaw`SELECT "knowledgeSection" AS section, lower("processingStatus"::text) AS status, count(*)::int AS count
+        FROM "KnowledgeSource"
+        WHERE "organizationId"=${membership.organizationId}::uuid AND type='TEXT' AND status <> 'ARCHIVED'
+          AND document->>'extracted'='true'
+        GROUP BY "knowledgeSection", "processingStatus"`,
     ], { isolationLevel: 'RepeatableRead' });
     return { sources: records.map((source: any) => this.view(source)), total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)),
-      counts: groups.map((group: any) => ({ section: group.knowledgeSection, status: group.processingStatus.toLowerCase(), count: group._count._all })) };
+      counts: groups.map((group: any) => ({ section: group.knowledgeSection, status: group.processingStatus.toLowerCase(), count: group._count._all })),
+      pdfCounts: pdfGroups.map((group: any) => ({ section: group.section, status: group.status, count: group.count })) };
   }
 
   async documentCapabilities(userId: string, slug: string) {
     await this.workspaces.requireAccess(userId, slug);
-    const enabled = process.env.KNOWLEDGE_DOCUMENTS_ENABLED === 'true';
-    const configured = this.storage?.isConfigured() === true;
+    // New PDF ingestion is bounded and in-memory; permanent private-file storage is not a prerequisite.
+    // Keep an explicit false value as an operator kill switch, but do not disable uploads by default.
+    const enabled = process.env.KNOWLEDGE_DOCUMENTS_ENABLED !== 'false';
     const parser = pdfParserAvailable();
-    return { uploadAvailable: enabled && configured && parser, maxBytes: PDF_MAX_BYTES, maxPages: 200,
+    return { uploadAvailable: enabled && parser, maxBytes: PDF_MAX_BYTES, maxPages: PDF_MAX_PAGES,
       workerEnabled: process.env.KNOWLEDGE_WORKER_ENABLED === 'true',
-      blockedReason: !enabled ? 'DOCUMENTS_DISABLED' : !configured ? 'PRIVATE_STORAGE_UNAVAILABLE' : !parser ? 'PDF_PARSER_NOT_INSTALLED' : null };
+      blockedReason: !enabled ? 'DOCUMENTS_DISABLED' : !parser ? 'PDF_PARSER_NOT_INSTALLED' : null };
   }
 
   async uploadPdf(userId: string, slug: string, input: UploadKnowledgePdfDto, file?: { buffer: Buffer; originalname: string; mimetype: string }, sourceId?: string) {
+    const temporaryBytes = file?.buffer;
+    try { return await this.uploadPdfFromMemory(userId, slug, input, file, sourceId); }
+    finally { temporaryBytes?.fill(0); }
+  }
+
+  async createShopifyDiscoveredWebsite(userId: string, slug: string, input: { sourceUrl: string; name: string; description: string; visibility: 'PUBLIC_REFERENCE' }) {
+    const membership = await this.workspaces.requireAccess(userId, slug, managers);
+    const normalized = normalizePublicWebsiteUrl(input.sourceUrl);
+    const name = input.name.trim().replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200) || normalized.hostname;
+    return this.createRecord(userId, membership.organizationId, {
+      type: 'WEBSITE', name, description: input.description, sourceUrl: normalized.url,
+      category: 'SHOPIFY_STOREFRONT', visibility: input.visibility,
+      canonicalKey: sourceKey('website', normalized.url), verificationStatus: 'UNVERIFIED',
+      verificationTokenHash: null, verificationExpiresAt: null, verifiedAt: null,
+      syncPolicy: 'MANUAL', syncPaused: true, nextSyncAt: null,
+    }, 'knowledge.shopify_storefront_discovered');
+  }
+
+  private async uploadPdfFromMemory(userId: string, slug: string, input: UploadKnowledgePdfDto, file?: { buffer: Buffer; originalname: string; mimetype: string }, sourceId?: string) {
     const member = await this.workspaces.requireAccess(userId, slug, managers);
-    if (!(await this.documentCapabilities(userId, slug)).uploadAvailable || !this.storage) throw new ServiceUnavailableException({ code: 'PDF_UPLOAD_UNAVAILABLE', message: 'PDF storage/parser setup is required.' });
+    if (!(await this.documentCapabilities(userId, slug)).uploadAvailable) throw new ServiceUnavailableException({ code: 'PDF_UPLOAD_UNAVAILABLE', message: 'PDF extraction is not configured.' });
     if (!file || file.mimetype !== 'application/pdf' || !/\.pdf$/i.test(file.originalname) || file.buffer.length > PDF_MAX_BYTES
       || file.buffer.subarray(0, 5).toString('ascii') !== '%PDF-' || !file.buffer.subarray(-1024).includes(Buffer.from('%%EOF'))) {
-      throw new BadRequestException({ code: 'INVALID_PDF', message: 'Choose a complete PDF file of at most 10 MiB.' });
+      throw new BadRequestException({ code: 'INVALID_PDF', message: `Choose a complete PDF file no larger than ${(PDF_MAX_BYTES / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} MiB.` });
     }
     await this.requireActiveKnowledgeBase(member.organizationId, input.knowledgeBaseId);
     const existing = sourceId ? await this.findSource(member.organizationId, sourceId) : null;
-    if (existing && (!existing.document || existing.status !== 'REGISTERED')) throw this.invalidType();
+    if (existing && (!existing.document || existing.type !== 'TEXT' || existing.status !== 'REGISTERED')) throw this.invalidType();
     const hash = createHash('sha256').update(file.buffer).digest('hex');
-    if (existing?.document?.hash === hash) return this.view(existing);
+    const canonicalKey = `pdf:${hash}`;
+    if (existing?.document?.hash === hash && isVerifiedPdfDocumentSource(existing)) return this.uploadView(existing);
+    if (!existing) {
+      const duplicate = await this.db.knowledgeSource.findFirst({ where: { organizationId: member.organizationId, canonicalKey, type: 'TEXT', status: 'REGISTERED' }, select: safeSelect });
+      if (duplicate) return this.attachDuplicatePdf(userId, member.organizationId, input.knowledgeBaseId, duplicate);
+    }
     const filename = file.originalname.replace(/[\\/\x00-\x1f]/g, '_').slice(0, 180);
-    const { storageKey } = await this.storage.put(member.organizationId, file.buffer, 'application/pdf');
-    const document = { storageKey, hash, filename, bytes: file.buffer.length, pages: [], warnings: [], extracted: false,
-      retiredStorageKeys: existing ? [...(existing.document.retiredStorageKeys ?? []), existing.document.storageKey] : [] };
+    const title = input.title?.replace(/[\x00-\x1f\x7f]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 200) || filename;
+    let extracted: PdfExtraction;
     try {
-      if (!existing) return await this.createRecord(userId, member.organizationId, {
-        type: 'TEXT', name: filename, document, contentBody: null, canonicalKey: 'pdf:' + hash,
-        visibility: input.visibility, knowledgeSection: input.knowledgeSection,
-      }, 'knowledge.pdf_uploaded', input.knowledgeBaseId);
+      extracted = await extractPdf(file.buffer);
+    } catch (error: any) {
+      const code = typeof error?.code === 'string' && /^PDF_[A-Z_]+$/.test(error.code) ? error.code : 'PDF_EXTRACTION_FAILED';
+      const unreadablePages = Array.isArray(error?.unreadablePages) ? error.unreadablePages.filter((page: unknown) => Number.isInteger(page) && Number(page) > 0).slice(0, PDF_MAX_PAGES) : [];
+      const message = code === 'PDF_ENCRYPTED' ? 'This PDF is encrypted. Upload an unlocked copy.'
+        : code === 'PDF_OCR_REQUIRED' ? 'No selectable English text was found. Upload a text-based PDF; OCR is not available.'
+        : code === 'PDF_PARTIAL_OCR_REQUIRED' ? `Some pages need OCR and could not be read${unreadablePages.length ? ` (pages ${unreadablePages.join(', ')})` : ''}. Upload a complete text-based PDF.`
+        : code === 'PDF_PAGE_LIMIT' ? `This PDF exceeds the ${PDF_MAX_PAGES}-page limit.`
+        : code === 'PDF_TEXT_LIMIT' ? 'The extracted text exceeds the configured document limit.'
+        : code === 'PDF_EXTRACTION_TIMEOUT' ? 'PDF extraction took too long. Split the document and upload smaller files.'
+        : 'This PDF could not be read. Verify the file and try again.';
+      throw new BadRequestException({ code, message, ...(unreadablePages.length ? { unreadablePages } : {}) });
+    }
+    const document = { provenance: 'AUTHENTICATED_PDF_EXTRACTION_V1', filename, bytes: file.buffer.length, hash, contentHash: createHash('sha256').update(extracted.content, 'utf8').digest('hex'),
+      sourceLanguage: 'en', extracted: true, pages: extracted.pages, pageCount: extracted.pages.length,
+      characterCount: extracted.characterCount, wordCount: extracted.wordCount, warnings: extracted.warnings };
+    try {
+      if (!existing) {
+        const result = await this.createRecord(userId, member.organizationId, {
+          type: 'TEXT', name: title, description: null, document, contentBody: extracted.content, languageHint: 'en',
+          canonicalKey, visibility: input.visibility, knowledgeSection: input.knowledgeSection,
+        }, 'knowledge.pdf_uploaded', input.knowledgeBaseId);
+        return this.uploadView(result);
+      }
       const result = await this.db.$transaction(async (tx: any) => {
         const changed = await tx.knowledgeSource.updateMany({ where: { id: sourceId, organizationId: member.organizationId, sourceVersion: existing.sourceVersion, status: 'REGISTERED' },
-          data: { document, canonicalKey: 'pdf:' + hash, contentBody: null, sourceVersion: { increment: 1 }, activeIndexGeneration: null, processingStatus: 'QUEUED', processingErrorCode: null, semanticIndexStatus: 'NOT_CONFIGURED' } });
+          data: { name: title, document, canonicalKey, contentBody: extracted.content, languageHint: 'en', knowledgeSection: input.knowledgeSection, visibility: input.visibility,
+            sourceVersion: { increment: 1 }, activeIndexGeneration: null, processingStatus: 'QUEUED', processingErrorCode: null, semanticIndexStatus: 'NOT_CONFIGURED', semanticIndexErrorCode: null } });
         if (!changed.count) throw new ConflictException('Source changed; reload before replacing.');
-        await tx.knowledgeProcessingJob.updateMany({ where: { organizationId: member.organizationId, sourceId, status: { in: ['QUEUED', 'PROCESSING', 'RETRY_WAIT'] } }, data: { status: 'CANCELLED', leaseOwner: null } });
+        await tx.knowledgeProcessingJob.updateMany({ where: { organizationId: member.organizationId, sourceId, status: { in: ['QUEUED', 'PROCESSING', 'RETRY_WAIT'] } }, data: { status: 'CANCELLED', stage: 'CANCELLED', leaseOwner: null, leasedAt: null, heartbeatAt: null } });
         await this.queueIndex(tx, member.organizationId, sourceId!, existing.sourceVersion + 1);
-        await this.audit(tx, member.organizationId, userId, 'knowledge.pdf_replaced', sourceId!, {});
+        await this.audit(tx, member.organizationId, userId, 'knowledge.pdf_replaced', sourceId!, { sourceVersion: existing.sourceVersion + 1, pageCount: document.pageCount, wordCount: document.wordCount });
         return this.view(await tx.knowledgeSource.findFirst({ where: { id: sourceId, organizationId: member.organizationId }, select: safeSelect }));
       });
-      // Retain private cleanup references in metadata until permanent deletion, including any failed unlink.
-      // Metadata is never returned in the public source DTO.
-      await this.storage.delete(existing.document.storageKey).catch(() => undefined);
-      return result;
-    } catch (error) { await this.storage.delete(storageKey).catch(() => undefined); this.mapConflict(error); }
+      await this.cleanupLegacyDocumentFiles(member.organizationId, userId, sourceId!, existing.document);
+      return this.uploadView(result);
+    } catch (error) {
+      const response = error instanceof ConflictException ? error.getResponse() : undefined;
+      const sourceConflict = uniqueConflict(error) || (typeof response === 'object' && response !== null && 'code' in response && response.code === 'KNOWLEDGE_SOURCE_CONFLICT');
+      if (sourceConflict && !existing) {
+        const duplicate = await this.db.knowledgeSource.findFirst({ where: { organizationId: member.organizationId, canonicalKey, type: 'TEXT', status: 'REGISTERED' }, select: safeSelect });
+        if (duplicate) return this.attachDuplicatePdf(userId, member.organizationId, input.knowledgeBaseId, duplicate);
+      }
+      this.mapConflict(error);
+    }
   }
 
   async get(userId: string, slug: string, sourceId: string) {
@@ -159,141 +217,11 @@ export class KnowledgeService {
     return { ...this.view(sourceRecord), knowledgeBaseMemberships: knowledgeBaseLinks.map((link: any) => ({ ...link.knowledgeBase, status: String(link.knowledgeBase.status).toLowerCase(), assistantAssignments: (link.knowledgeBase.assistantLinks ?? []).map((assignment: any) => ({ ...assignment.assistant, status: String(assignment.assistant.status).toLowerCase() })) })), directAssistantAssignments: assistantLinks.map((link: any) => ({ ...link.assistant, status: String(link.assistant.status).toLowerCase() })) };
   }
 
-  async createWebsite(userId: string, slug: string, input: CreateWebsiteSourceDto) {
-    const member = await this.workspaces.requireAccess(userId, slug, managers);
-    const normalized = normalizePublicWebsiteUrl(input.sourceUrl);
-    const name = input.name?.trim().replace(/\s+/g, ' ') || new URL(normalized.url).hostname;
-    return this.createRecord(userId, member.organizationId, {
-      type: 'WEBSITE', name, description: input.description?.trim() || null, sourceUrl: normalized.url,
-      knowledgeSection: input.knowledgeSection ?? null,
-      visibility: input.visibility ?? 'PUBLIC_REFERENCE', canonicalKey: sourceKey('website', normalized.url),
-    }, 'knowledge.website_created', undefined, true);
-  }
-
-  /** Shopify storefront discovery keeps its separate verified-domain crawl gate. */
-  async createShopifyDiscoveredWebsite(userId: string, slug: string, input: CreateWebsiteSourceDto) {
-    const member = await this.workspaces.requireAccess(userId, slug, managers);
-    const normalized = normalizePublicWebsiteUrl(input.sourceUrl);
-    const name = input.name?.trim().replace(/\s+/g, ' ') || new URL(normalized.url).hostname;
-    return this.createRecord(userId, member.organizationId, {
-      type: 'WEBSITE', name, description: input.description?.trim() || 'Public storefront discovered from the connected Shopify shop. DNS ownership verification is required before crawling.', sourceUrl: normalized.url,
-      category: 'SHOPIFY_STOREFRONT', visibility: input.visibility ?? 'PUBLIC_REFERENCE', canonicalKey: sourceKey('website', normalized.url),
-    }, 'knowledge.website_created');
-  }
-
-  async createWebsiteInBase(userId: string, slug: string, baseId: string, input: CreateWebsiteSourceDto) {
-    const member = await this.workspaces.requireAccess(userId, slug, managers);
-    await this.requireActiveKnowledgeBase(member.organizationId, baseId);
-    const normalized = normalizePublicWebsiteUrl(input.sourceUrl);
-    const name = input.name?.trim().replace(/\s+/g, ' ') || new URL(normalized.url).hostname;
-    return this.createRecord(userId, member.organizationId, {
-      type: 'WEBSITE', name, description: input.description?.trim() || null, sourceUrl: normalized.url,
-      knowledgeSection: input.knowledgeSection ?? null,
-      visibility: input.visibility ?? 'PUBLIC_REFERENCE', canonicalKey: sourceKey('website', normalized.url),
-    }, 'knowledge.website_created', baseId, true);
-  }
-
-  async createFaq(userId: string, slug: string, input: CreateFaqSourceDto) {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    const question = input.question;
-    const answer = input.answer;
-    return this.createRecord(userId, membership.organizationId, {
-      type: 'FAQ', name: question, contentBody: answer, category: input.category?.trim() || null,
-      knowledgeSection: input.knowledgeSection ?? null,
-      visibility: input.visibility ?? 'INTERNAL_RESTRICTED',
-      languageHint: input.languageHint?.trim() || null, canonicalKey: sourceKey('faq', question.trim().replace(/\s+/g, ' ').normalize('NFKC').toLowerCase()),
-    }, 'knowledge.faq_created');
-  }
-
-  async createFaqInBase(userId: string, slug: string, baseId: string, input: CreateFaqSourceDto) {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    await this.requireActiveKnowledgeBase(membership.organizationId, baseId);
-    const question = input.question;
-    return this.createRecord(userId, membership.organizationId, { type: 'FAQ', name: question, contentBody: input.answer, category: input.category?.trim() || null, knowledgeSection: input.knowledgeSection ?? null, languageHint: input.languageHint?.trim() || null, visibility: input.visibility ?? 'INTERNAL_RESTRICTED', canonicalKey: sourceKey('faq', question.trim().replace(/\s+/g, ' ').normalize('NFKC').toLowerCase()) }, 'knowledge.faq_created', baseId);
-  }
-
-  async createFaqBatchInBase(userId: string, slug: string, baseId: string, input: CreateFaqBatchDto) {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    await this.requireActiveKnowledgeBase(membership.organizationId, baseId);
-    if (!input.faqs.length) throw new BadRequestException({ code: 'EMPTY_FAQ_BATCH', message: 'Add at least one FAQ.' });
-    const keys = input.faqs.map((faq) => canonicalFaqKey(faq.question));
-    if (new Set(keys).size !== keys.length) throw new ConflictException({ code: 'DUPLICATE_FAQ_QUESTION', message: 'Questions in this batch must be unique.' });
-    return this.db.$transaction(async (tx: any) => {
-      const base = await tx.knowledgeBase.findFirst({ where: { id: baseId, organizationId: membership.organizationId, status: 'ACTIVE' }, select: { id: true } });
-      if (!base) throw new NotFoundException({ code: 'KNOWLEDGE_BASE_NOT_FOUND', message: 'Active Knowledge Base not found in this workspace.' });
-      const duplicates = await tx.knowledgeSource.findMany({ where: { organizationId: membership.organizationId, canonicalKey: { in: keys } }, select: { canonicalKey: true } });
-      if (duplicates.length) throw new ConflictException({ code: 'DUPLICATE_FAQ_QUESTION', message: 'One or more FAQ questions already exist in this workspace.' });
-      await tx.knowledgeSource.createMany({ data: input.faqs.map((faq, index) => ({ organizationId: membership.organizationId, createdById: userId, type: 'FAQ', status: 'REGISTERED', processingStatus: 'QUEUED', name: faq.question, contentBody: faq.answer, category: faq.category?.trim() || null, knowledgeSection: faq.knowledgeSection ?? null, languageHint: faq.languageHint?.trim() || null, visibility: faq.visibility ?? 'INTERNAL_RESTRICTED', canonicalKey: keys[index] })) });
-      const created = await tx.knowledgeSource.findMany({ where: { organizationId: membership.organizationId, canonicalKey: { in: keys } }, select: { id: true, canonicalKey: true } });
-      await tx.knowledgeProcessingJob.createMany({ data: created.map((source: any) => ({ organizationId: membership.organizationId, sourceId: source.id, sourceVersion: 1, kind: 'INDEX', status: 'QUEUED' })) });
-      await tx.knowledgeBaseSource.createMany({ data: created.map((source: any) => ({ organizationId: membership.organizationId, knowledgeBaseId: baseId, sourceId: source.id })) });
-      await this.autoLinkToOptedInBases(tx, membership.organizationId, created.map((source: any) => source.id));
-      await tx.auditEvent.create({ data: { organizationId: membership.organizationId, actorUserId: userId, action: 'knowledge.faq_batch_created', entityType: 'knowledge_base', entityId: baseId, metadata: { createdCount: created.length } } });
-      return { created: created.length, sourceIds: created.map((source: any) => source.id) };
-    });
-  }
-
-  async inspectFaqImport(userId: string, slug: string, baseId: string, rows: ImportedFaq[]) {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    await this.requireActiveKnowledgeBase(membership.organizationId, baseId);
-    const eligible = rows.filter((row) => !row.errors.length && !row.duplicateInFile);
-    const keys = eligible.map((row) => canonicalFaqKey(row.question));
-    const existing = keys.length ? await this.db.knowledgeSource.findMany({ where: { organizationId: membership.organizationId, canonicalKey: { in: keys } }, select: { canonicalKey: true } }) : [];
-    const existingKeys = new Set(existing.map((row: any) => row.canonicalKey));
-    return rows.map((row) => ({ ...row, duplicateExisting: existingKeys.has(canonicalFaqKey(row.question)) }));
-  }
-
-  async importFaqRows(userId: string, slug: string, baseId: string, rows: ImportedFaq[], duplicatePolicy: 'SKIP_EXISTING' | 'REJECT_DUPLICATES') {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    if (rows.length > 500) throw new BadRequestException({ code: 'FAQ_IMPORT_TOO_LARGE', message: 'Import at most 500 FAQ rows at a time.' });
-    return this.db.$transaction(async (tx: any) => {
-      const base = await tx.knowledgeBase.findFirst({ where: { id: baseId, organizationId: membership.organizationId, status: 'ACTIVE' }, select: { id: true } });
-      if (!base) throw new NotFoundException({ code: 'KNOWLEDGE_BASE_NOT_FOUND', message: 'Active Knowledge Base not found in this workspace.' });
-      const fileDuplicateRows = new Set<string>(); const seen = new Set<string>();
-      for (const row of rows) { const key = canonicalFaqKey(row.question); if (seen.has(key)) fileDuplicateRows.add(key); seen.add(key); }
-      const usable = rows.filter((row) => !row.errors.length && !fileDuplicateRows.has(canonicalFaqKey(row.question)));
-      const keys = usable.map((row) => canonicalFaqKey(row.question));
-      const existing = keys.length ? await tx.knowledgeSource.findMany({ where: { organizationId: membership.organizationId, canonicalKey: { in: keys } }, select: { canonicalKey: true } }) : [];
-      const existingKeys = new Set(existing.map((row: any) => row.canonicalKey));
-      const duplicates = usable.filter((row) => existingKeys.has(canonicalFaqKey(row.question)));
-      if (duplicatePolicy === 'REJECT_DUPLICATES' && duplicates.length) throw new ConflictException({ code: 'FAQ_IMPORT_DUPLICATES', message: 'Import stopped because one or more questions already exist in the workspace.' });
-      const toCreate = usable.filter((row) => !existingKeys.has(canonicalFaqKey(row.question)));
-      if (toCreate.length) {
-        await tx.knowledgeSource.createMany({ data: toCreate.map((row) => ({ organizationId: membership.organizationId, createdById: userId, type: 'FAQ', status: 'REGISTERED', processingStatus: 'QUEUED', name: row.question, contentBody: row.answer, category: row.category || null, knowledgeSection: row.knowledgeSection ?? null, languageHint: row.language || null, visibility: row.visibility ?? 'INTERNAL_RESTRICTED', canonicalKey: canonicalFaqKey(row.question) })) });
-        const created = await tx.knowledgeSource.findMany({ where: { organizationId: membership.organizationId, canonicalKey: { in: toCreate.map((row) => canonicalFaqKey(row.question)) } }, select: { id: true } });
-        await tx.knowledgeProcessingJob.createMany({ data: created.map((source: any) => ({ organizationId: membership.organizationId, sourceId: source.id, sourceVersion: 1, kind: 'INDEX', status: 'QUEUED' })) });
-        await tx.knowledgeBaseSource.createMany({ data: created.map((source: any) => ({ organizationId: membership.organizationId, knowledgeBaseId: baseId, sourceId: source.id })) });
-        await this.autoLinkToOptedInBases(tx, membership.organizationId, created.map((source: any) => source.id));
-        await tx.auditEvent.create({ data: { organizationId: membership.organizationId, actorUserId: userId, action: 'knowledge.faq_imported', entityType: 'knowledge_base', entityId: baseId, metadata: { createdCount: created.length, skippedCount: duplicates.length + rows.filter((row) => row.duplicateInFile).length, invalidCount: rows.filter((row) => row.errors.length).length } } });
-      }
-      const failed = rows.filter((row) => row.errors.length).length;
-      const duplicateRowsInFile = rows.filter((row) => row.duplicateInFile).length;
-      return { created: toCreate.length, skipped: duplicates.length + duplicateRowsInFile, failed, updated: 0, duplicateRowsInFile };
-    });
-  }
-
-  async createText(userId: string, slug: string, input: CreateTextSourceDto) {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    const title = input.title.trim().replace(/\s+/g, ' ');
-    return this.createRecord(userId, membership.organizationId, {
-      type: 'TEXT', name: title, contentBody: input.content, description: input.description?.trim() || null,
-      knowledgeSection: input.knowledgeSection ?? null,
-      visibility: input.visibility ?? 'INTERNAL_RESTRICTED',
-      category: input.category?.trim() || null, languageHint: input.languageHint?.trim() || null,
-      canonicalKey: sourceKey('text', title.normalize('NFKC').toLowerCase()),
-    }, 'knowledge.text_created');
-  }
-
-  async createTextInBase(userId: string, slug: string, baseId: string, input: CreateTextSourceDto) {
-    const membership = await this.workspaces.requireAccess(userId, slug, managers);
-    await this.requireActiveKnowledgeBase(membership.organizationId, baseId);
-    const title = input.title.trim().replace(/\s+/g, ' ');
-    return this.createRecord(userId, membership.organizationId, { type: 'TEXT', name: title, contentBody: input.content, description: input.description?.trim() || null, category: input.category?.trim() || null, knowledgeSection: input.knowledgeSection ?? null, languageHint: input.languageHint?.trim() || null, visibility: input.visibility ?? 'INTERNAL_RESTRICTED', canonicalKey: sourceKey('text', title.normalize('NFKC').toLowerCase()) }, 'knowledge.text_created', baseId);
-  }
 
   async update(userId: string, slug: string, sourceId: string, input: UpdateKnowledgeSourceDto) {
     const membership = await this.workspaces.requireAccess(userId, slug, managers);
     const existing = await this.findSource(membership.organizationId, sourceId);
+    if (!isVerifiedPdfDocumentSource(existing)) throw new BadRequestException({ code: 'LEGACY_KNOWLEDGE_RETIRED', message: 'Upload a PDF document to manage static knowledge.' });
     if (existing.document && input.content !== undefined) throw new BadRequestException({ code: 'PDF_REPLACEMENT_REQUIRED', message: 'Replace the PDF to change its extracted content.' });
     if (existing.type === 'FAQ' && input.name !== undefined) throw this.invalidType();
     const data: Record<string, unknown> = {};
@@ -383,64 +311,6 @@ export class KnowledgeService {
     });
   }
 
-  async bulkMakeFaqSourcesPublic(userId: string, slug: string, sourceIdsInput: string[]) {
-    const member = await this.workspaces.requireAccess(userId, slug, ['OWNER']);
-    const sourceIds = [...new Set(sourceIdsInput)];
-    if (!sourceIds.length || sourceIds.length > 100) throw new BadRequestException({ code: 'INVALID_SOURCE_BATCH', message: 'Select between 1 and 100 FAQ sources for visibility review.' });
-    return this.db.$transaction(async (tx: any) => {
-      const rows = await tx.knowledgeSource.findMany({ where: { organizationId: member.organizationId, id: { in: sourceIds } }, select: { id: true, type: true, visibility: true, status: true, connectorInstanceId: true } });
-      const safeFaqIds = rows.filter((row: any) => row.type === 'FAQ' && row.status === 'REGISTERED' && row.connectorInstanceId === null && row.visibility === 'INTERNAL_RESTRICTED').map((row: any) => row.id);
-      const alreadyPublic = rows.filter((row: any) => row.type === 'FAQ' && row.status === 'REGISTERED' && row.connectorInstanceId === null && row.visibility === 'PUBLIC_REFERENCE').length;
-      const updated = safeFaqIds.length ? await tx.knowledgeSource.updateMany({ where: { organizationId: member.organizationId, id: { in: safeFaqIds }, type: 'FAQ', status: 'REGISTERED', connectorInstanceId: null, visibility: 'INTERNAL_RESTRICTED' }, data: { visibility: 'PUBLIC_REFERENCE' } }) : { count: 0 };
-      const found = new Map<string, { id: string; type: string; status: string; connectorInstanceId: string | null; visibility: string }>(rows.map((row: any) => [row.id, row] as const));
-      const blockedReasons: Record<string, number> = {};
-      for (const id of sourceIds) {
-        const row = found.get(id);
-        if (!row) blockedReasons.NOT_FOUND_IN_WORKSPACE = (blockedReasons.NOT_FOUND_IN_WORKSPACE ?? 0) + 1;
-        else if (row.type !== 'FAQ') blockedReasons.NOT_FAQ = (blockedReasons.NOT_FAQ ?? 0) + 1;
-        else if (row.status !== 'REGISTERED') blockedReasons.SOURCE_NOT_REGISTERED = (blockedReasons.SOURCE_NOT_REGISTERED ?? 0) + 1;
-        else if (row.connectorInstanceId !== null) blockedReasons.CONNECTOR_MANAGED = (blockedReasons.CONNECTOR_MANAGED ?? 0) + 1;
-        else if (row.visibility === 'PUBLIC_REFERENCE') continue;
-        else if (row.visibility !== 'INTERNAL_RESTRICTED') blockedReasons.VISIBILITY_NOT_RESTRICTED = (blockedReasons.VISIBILITY_NOT_RESTRICTED ?? 0) + 1;
-      }
-      const blocked = Object.values(blockedReasons).reduce((sum, count) => sum + count, 0);
-      if (updated.count) await this.audit(tx, member.organizationId, userId, 'knowledge.faq_visibility_bulk_public', sourceIds[0]!, { updatedCount: updated.count, alreadyPublic, blockedCount: blocked });
-      return { requested: sourceIds.length, changedToPublic: updated.count, alreadyPublic, blocked, blockedReasons, publicVisibilityRequiresOwnerReview: true };
-    });
-  }
-
-  async activateCustomerKnowledge(userId: string, slug: string, assistantId: string, sourceIdsInput: string[]) {
-    const member = await this.workspaces.requireAccess(userId, slug, ['OWNER']);
-    const sourceIds = [...new Set(sourceIdsInput)];
-    if (sourceIds.length > 100) throw new BadRequestException({ code: 'INVALID_SOURCE_BATCH', message: 'Select no more than 100 FAQ sources for customer knowledge activation.' });
-    return this.db.$transaction(async (tx: any) => {
-      const assistant = await tx.chatbot.findFirst({ where: { id: assistantId, organizationId: member.organizationId }, select: { id: true, status: true, archivedAt: true } });
-      if (!assistant) throw new NotFoundException({ code: 'ASSISTANT_NOT_FOUND', message: 'Assistant not found in this workspace.' });
-      if (assistant.archivedAt) throw new ConflictException({ code: 'ASSISTANT_ARCHIVED', message: 'Restore this assistant before enabling customer knowledge access.' });
-      if (assistant.status !== 'ACTIVE') throw new ConflictException({ code: 'ASSISTANT_INACTIVE', message: 'Activate this assistant before enabling customer knowledge retrieval.' });
-      const assistantUpdated = await tx.chatbot.updateMany({ where: { id: assistantId, organizationId: member.organizationId, archivedAt: null }, data: { useAllEligibleWorkspaceKnowledge: true } });
-      if (assistantUpdated.count !== 1) throw new ConflictException({ code: 'ASSISTANT_CUSTOMER_KNOWLEDGE_UPDATE_FAILED', message: 'Assistant settings changed before activation completed. No customer visibility changes were saved.' });
-
-      const rows = sourceIds.length ? await tx.knowledgeSource.findMany({ where: { organizationId: member.organizationId, id: { in: sourceIds } }, select: { id: true, type: true, visibility: true, status: true, connectorInstanceId: true } }) : [];
-      const safeFaqIds = rows.filter((row: any) => row.type === 'FAQ' && row.status === 'REGISTERED' && row.connectorInstanceId === null && row.visibility === 'INTERNAL_RESTRICTED').map((row: any) => row.id);
-      const alreadyPublic = rows.filter((row: any) => row.type === 'FAQ' && row.status === 'REGISTERED' && row.connectorInstanceId === null && row.visibility === 'PUBLIC_REFERENCE').length;
-      const updated = safeFaqIds.length ? await tx.knowledgeSource.updateMany({ where: { organizationId: member.organizationId, id: { in: safeFaqIds }, type: 'FAQ', status: 'REGISTERED', connectorInstanceId: null, visibility: 'INTERNAL_RESTRICTED' }, data: { visibility: 'PUBLIC_REFERENCE' } }) : { count: 0 };
-      const found = new Map<string, { id: string; type: string; status: string; connectorInstanceId: string | null; visibility: string }>(rows.map((row: any) => [row.id, row] as const));
-      const blockedReasons: Record<string, number> = {};
-      for (const id of sourceIds) {
-        const row = found.get(id);
-        if (!row) blockedReasons.NOT_FOUND_IN_WORKSPACE = (blockedReasons.NOT_FOUND_IN_WORKSPACE ?? 0) + 1;
-        else if (row.type !== 'FAQ') blockedReasons.NOT_FAQ = (blockedReasons.NOT_FAQ ?? 0) + 1;
-        else if (row.status !== 'REGISTERED') blockedReasons.SOURCE_NOT_REGISTERED = (blockedReasons.SOURCE_NOT_REGISTERED ?? 0) + 1;
-        else if (row.connectorInstanceId !== null) blockedReasons.CONNECTOR_MANAGED = (blockedReasons.CONNECTOR_MANAGED ?? 0) + 1;
-        else if (row.visibility !== 'PUBLIC_REFERENCE' && row.visibility !== 'INTERNAL_RESTRICTED') blockedReasons.VISIBILITY_NOT_RESTRICTED = (blockedReasons.VISIBILITY_NOT_RESTRICTED ?? 0) + 1;
-      }
-      const blocked = Object.values(blockedReasons).reduce((sum, count) => sum + count, 0);
-      await tx.auditEvent.create({ data: { organizationId: member.organizationId, actorUserId: userId, action: 'assistant.customer_knowledge_activated', entityType: 'assistant', entityId: assistantId, metadata: { selectedFaqCount: sourceIds.length, changedToPublic: updated.count, alreadyPublic, blockedCount: blocked } } });
-      if (updated.count) await this.audit(tx, member.organizationId, userId, 'knowledge.faq_visibility_bulk_public', sourceIds[0]!, { updatedCount: updated.count, alreadyPublic, blockedCount: blocked });
-      return { assistantId, useAllEligibleWorkspaceKnowledge: true, requested: sourceIds.length, changedToPublic: updated.count, alreadyPublic, blocked, blockedReasons };
-    });
-  }
 
   async restore(userId: string, slug: string, sourceId: string) {
     const membership = await this.workspaces.requireAccess(userId, slug, managers);
@@ -584,6 +454,28 @@ export class KnowledgeService {
     });
   }
 
+  private async attachDuplicatePdf(userId: string, organizationId: string, baseId: string, source: any) {
+    if (!isVerifiedPdfDocumentSource(source)) throw new ConflictException({ code: 'PDF_PROVENANCE_REPROCESS_REQUIRED', message: 'Replace the existing PDF with its original file to establish authenticated document provenance.' });
+    await this.db.$transaction(async (tx: any) => {
+      const base = await tx.knowledgeBase.findFirst({ where: { id: baseId, organizationId, status: 'ACTIVE' }, select: { id: true } });
+      if (!base) throw new NotFoundException({ code: 'KNOWLEDGE_BASE_NOT_FOUND', message: 'Active Knowledge Base not found in this workspace.' });
+      const linked = await tx.knowledgeBaseSource.createMany({ data: [{ organizationId, knowledgeBaseId: baseId, sourceId: source.id }], skipDuplicates: true });
+      if (linked.count) await tx.auditEvent.create({ data: { organizationId, actorUserId: userId, action: 'knowledge_base.source_added', entityType: 'knowledge_base', entityId: baseId, metadata: { sourceId: source.id, sourceType: 'PDF' } } });
+    });
+    return this.uploadView(source);
+  }
+
+  private async cleanupLegacyDocumentFiles(organizationId: string, userId: string, sourceId: string, document: any) {
+    if (!this.storage) return;
+    const keys = [...new Set([...(Array.isArray(document?.retiredStorageKeys) ? document.retiredStorageKeys : []), document?.storageKey].filter((key): key is string => typeof key === 'string'))];
+    for (const storageKey of keys) {
+      try { await this.storage.delete(storageKey); }
+      catch {
+        await this.db.auditEvent.create({ data: { organizationId, actorUserId: userId, action: 'knowledge.private_file_cleanup_required', entityType: 'knowledge_source', entityId: sourceId, metadata: { storageKey } } }).catch(() => undefined);
+      }
+    }
+  }
+
   private async findSource(organizationId: string, id: string) {
     const source = await this.db.knowledgeSource.findFirst({ where: { id, organizationId }, select: safeSelect });
     if (!source) throw this.sourceNotFound();
@@ -602,7 +494,12 @@ export class KnowledgeService {
 
   private view(source: any) {
     const { _count, ...record } = source;
-    return { ...record, ...(record.document ? { document: { filename: record.document.filename, bytes: record.document.bytes, hash: record.document.hash, pages: record.document.pages, warnings: record.document.warnings, extracted: record.document.extracted } } : {}), type: String(record.type).toLowerCase(), status: String(record.status).toLowerCase(), processingStatus: String(record.processingStatus).toLowerCase(), linkedAssistantCount: _count?.assistantLinks ?? undefined };
+    return { ...record, ...(record.document ? { document: { provenance: record.document.provenance === 'AUTHENTICATED_PDF_EXTRACTION_V1' ? record.document.provenance : null, filename: record.document.filename, bytes: record.document.bytes, hash: record.document.hash, contentHash: record.document.contentHash, sourceLanguage: record.document.sourceLanguage, pages: record.document.pages, pageCount: record.document.pageCount, characterCount: record.document.characterCount, wordCount: record.document.wordCount, warnings: record.document.warnings, extracted: record.document.extracted } } : {}), type: String(record.type).toLowerCase(), status: String(record.status).toLowerCase(), processingStatus: String(record.processingStatus).toLowerCase(), linkedAssistantCount: _count?.assistantLinks ?? undefined };
+  }
+
+  private uploadView(source: any) {
+    const { contentBody: _contentBody, ...summary } = this.view(source);
+    return summary;
   }
 
   private invalidType() { return new BadRequestException({ code: 'KNOWLEDGE_FIELDS_DO_NOT_MATCH_TYPE', message: 'The submitted fields do not match this source type.' }); }

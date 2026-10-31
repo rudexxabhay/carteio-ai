@@ -1,4 +1,5 @@
 import type { ConversationEvidence, ConversationVerification } from './conversation.contracts';
+import { isCustomerReportedQuotation, normalizeNumericScript } from './fact-provenance';
 
 type MoneyFact = Readonly<{ amount: string; currency: string }>;
 
@@ -103,13 +104,21 @@ const numericFacts = (text: string): NumericFact[] => [...text.matchAll(/\b(\d+(
     const unit = rawUnit === '%' ? 'percent' : /^(?:days?|दिन(?:ों)?|din)$/u.test(rawUnit) ? 'day' : rawUnit;
     return [{ value: amount, unit }];
   });
-const URLs = (text: string) => [...text.matchAll(/https?:\/\/[^\s\])}>"']+/giu)].map((match) => match[0].replace(/[.,!?;:]+$/u, ''));
+const URLs = (text: string) => [...text.matchAll(/https?:\/\/[^\s\])}>"']+/giu)].map((match) => match[0].replace(/[.,!?;:]+$/u, '').replace(/[)\]}]+$/u, ''));
+function normalizedUrl(value: string): string | null {
+  try { const parsed = new URL(value); if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password) return null; parsed.hash = ''; return parsed.href; } catch { return null; }
+}
 const emails = (text: string) => [...text.matchAll(/[\p{L}\p{N}.!#$%&'*+/=?^_`{|}~-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/giu)].map((match) => match[0]);
 const labeledPhones = (text: string) => [...text.matchAll(/\b(?:phone|telephone|tel|call|contact(?:\s+us)?\s+at)\s*[:#]?\s*(\+?\d[\d\s().-]{5,}\d)/giu)].map((match) => match[1]!);
 const labeledSkus = (text: string) => [...text.matchAll(/\bSKU\s*(?:is|:|#)?\s*([A-Z0-9][A-Z0-9._/-]{1,})/giu)].map((match) => match[1]!);
 
 /** Deterministic checks only; this does not establish prose claim entailment. */
-export function validateGroundedResponse(response: string, evidence: readonly ConversationEvidence[], onNumericCheck?: (check: { claimKind: 'date' | 'number'; matched: boolean; sourceCandidateCount: number; citedReferenceCount: number }) => void, options?: { relevantReferences?: readonly string[] }): ConversationVerification {
+export function validateGroundedResponse(response: string, evidence: readonly ConversationEvidence[], onNumericCheck?: (check: { claimKind: 'date' | 'number'; matched: boolean; sourceCandidateCount: number; citedReferenceCount: number }) => void, options?: { relevantReferences?: readonly string[]; customerStatements?: readonly string[]; onNumericComparison?: (comparison: Record<string, unknown>) => void }): ConversationVerification {
+  // Remove only complete, attributed user quotations before sentence splitting.
+  // The rest of the answer (including any merchant conclusion) is still verified.
+  response = response.split(/\n+/u).filter((line) => !isCustomerReportedQuotation(line, options?.customerStatements ?? [])).join('\n');
+  response = normalizeNumericScript(response);
+  evidence = evidence.map((item) => ({ ...item, excerpt: normalizeNumericScript(item.excerpt) }));
   const allowed = new Map(evidence.map((item) => [item.reference, item]));
   const references = citationReferences(response);
   const citedReferences = [...new Set(references.filter((reference) => allowed.has(reference)))];
@@ -147,12 +156,18 @@ export function validateGroundedResponse(response: string, evidence: readonly Co
     for (const sku of labeledSkus(textWithoutCitations)) numericText = numericText.replace(sku, '');
     for (const claim of numericFacts(numericText)) {
       const exactMatch = sourceNumbers.some((fact) => fact.value === claim.value && fact.unit === claim.unit);
+      if (options?.onNumericComparison) {
+        try { options.onNumericComparison({ rule: 'numericFacts_exact_value_and_unit', claimText: paragraph, normalizedClaim: claim, matched: exactMatch, localReferences: refs, relevantReferences: options.relevantReferences ?? null, candidates: cited.map((item) => ({ reference: item.reference, sourceId: item.sourceId, chunkId: item.chunkId, sourceVersion: item.sourceVersion, contentHash: item.contentHash, excerpt: item.excerpt, normalizedFacts: numericFacts(item.excerpt.replace(isoDatePattern, '')) })), limitation: 'These are the actual numeric comparisons. Subject/condition entailment and exact original character offsets are not established.' }); } catch { /* Debug observers must not change acceptance. */ }
+      }
       onNumericCheck?.({ claimKind: 'number', matched: exactMatch, sourceCandidateCount: sourceNumbers.length, citedReferenceCount: refs.length });
       if (exactMatch) verifiedFactCount++;
       else { unsupportedClaimCount++; reason = 'unsupported_numeric_claim'; }
     }
     for (const url of URLs(textWithoutCitations)) {
-      const supported = cited.some((item) => item.locator === url || item.excerpt.includes(url));
+      const normalized = normalizedUrl(url);
+      const supported = Boolean(normalized && cited.some((item) => item.excerpt.includes(url)
+        || item.excerpt.includes(normalized)
+        || (item.sourceAuthority === 'PUBLIC_WEBSITE' && normalizedUrl(item.locator ?? '') === normalized)));
       if (supported) verifiedFactCount++;
       else { unsupportedClaimCount++; reason = 'unsupported_url'; }
     }
@@ -199,4 +214,17 @@ export function validateGroundedResponse(response: string, evidence: readonly Co
     }
   }
   return { accepted: unsupportedClaimCount === 0, citedReferences, reason: unsupportedClaimCount === 0 ? 'valid_references' : reason, unsupportedClaimCount, verifiedFactCount };
+}
+
+/** Metadata-only line attribution for bounded repair; never log draft text.
+ * A line passing deterministic checks is not a semantic entailment verdict.
+ */
+export function groundingFailureMetadata(response: string, evidence: readonly ConversationEvidence[], options?: { relevantReferences?: readonly string[]; customerStatements?: readonly string[] }) {
+  return response.split(/\n+/u).slice(0, 40).map((line, index) => {
+    if (isCustomerReportedQuotation(line, options?.customerStatements ?? [])) {
+      return { lineIndex: index, provenance: 'CUSTOMER_REPORTED', accepted: true, reason: 'attributed_customer_context', citedReferences: [] as readonly string[] };
+    }
+    const result = validateGroundedResponse(line, evidence, undefined, options);
+    return { lineIndex: index, provenance: 'UNVERIFIED_GENERATED', accepted: result.accepted, reason: result.reason, citedReferences: result.citedReferences };
+  });
 }

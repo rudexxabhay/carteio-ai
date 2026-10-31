@@ -1,11 +1,18 @@
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, lstat, open, rename, unlink, realpath } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, lstat, open, unlink, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { isAbsolute, relative, resolve, join, sep } from 'node:path';
 import { PrivateKnowledgeStorage } from './private-knowledge-storage';
 
-export const PDF_MAX_BYTES = 10 * 1024 * 1024;
+function boundedLimit(name: string, fallback: number, minimum: number, maximum: number): number {
+  const configured = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(configured) ? Math.max(minimum, Math.min(maximum, configured)) : fallback;
+}
+// These configurable limits may be lowered per deployment, but never raised
+// beyond bounds suitable for a 128 MiB isolated parser worker.
+export const PDF_MAX_BYTES = boundedLimit('KNOWLEDGE_PDF_MAX_BYTES', 10 * 1024 * 1024, 1024, 10 * 1024 * 1024);
+export const PDF_MAX_PAGES = boundedLimit('KNOWLEDGE_PDF_MAX_PAGES', 200, 1, 200);
 const tenantKey = (id: string) => createHash('sha256').update(id).digest('hex');
 
 /** Explicit local development storage. Never falls back to filesystem storage in production. */
@@ -31,17 +38,6 @@ export class LocalKnowledgeStorage extends PrivateKnowledgeStorage {
   private parse(key: string) {
     if (!/^[a-f0-9]{64}\/[a-f0-9-]{36}\.pdf$/.test(key)) throw new BadRequestException('Invalid private document key.');
     const [tenant, file] = key.split('/'); return { tenant: tenant!, file: file! };
-  }
-  async put(organizationId: string, bytes: Uint8Array, contentType: string) {
-    if (contentType !== 'application/pdf' || !bytes.length || bytes.length > PDF_MAX_BYTES) throw new BadRequestException('PDF exceeds storage limits.');
-    const tenant = tenantKey(organizationId), directory = await this.directory(tenant), file = `${randomUUID()}.pdf`;
-    const temporary = join(directory, `${file}.pending`);
-    try {
-      const handle = await open(temporary, 'wx', 0o600);
-      try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
-      await rename(temporary, join(directory, file));
-      return { storageKey: `${tenant}/${file}` };
-    } catch (error) { await unlink(temporary).catch(() => undefined); throw error; }
   }
   override async read(organizationId: string, storageKey: string) {
     const { tenant, file } = this.parse(storageKey);

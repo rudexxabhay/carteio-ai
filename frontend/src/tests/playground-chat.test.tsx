@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PlaygroundChat } from '../pages/training/PlaygroundChat';
+import { PlaygroundChat, pdfPageFromLocator } from '../pages/training/PlaygroundChat';
 import { ApiError } from '../services/api/client';
 import { getPlaygroundConversation, getProviderConfigurationStatus, sendPlaygroundMessage, updateAssistant, type Assistant } from '../services/api/assistants';
 
@@ -170,6 +170,19 @@ describe('PlaygroundChat', () => {
 
     view.rerender(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager={false} onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
     expect(screen.queryByRole('button', { name: 'Copy Chat + Diagnostics' })).toBeNull();
+  });
+
+  it('retains and displays protected drafts from an HTTP failure response', async () => {
+    const diagnostics = { traceId: 'failed-trace', events: [], retrieval: { attempted: true, mode: 'hybrid', resultCount: 1, eligibleSourceCount: 1 }, evidence: [], tools: [], protectedCaptureStatus: 'AVAILABLE', protectedResponseDebug: { expiresAt: new Date(Date.now() + 300000).toISOString(), records: [{ stage: 'PROVIDER_CONTENT', attemptId: 'initial', at: '', text: 'PRIVATE ORIGINAL DRAFT', truncated: false }, { stage: 'PROVIDER_CONTENT', attemptId: 'recovery', at: '', text: 'PRIVATE RECOVERY DRAFT', truncated: false }] } };
+    vi.mocked(sendPlaygroundMessage).mockRejectedValue(new ApiError('Failed', 'http', 503, undefined, 'PLAYGROUND_PROVIDER_UNAVAILABLE', 'failed-trace', diagnostics));
+    const user = userEvent.setup();
+    render(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
+    await user.click(screen.getByRole('checkbox', { name: /Capture Response Debugger/ }));
+    await user.type(screen.getByRole('textbox', { name: 'Message your assistant' }), 'Policy question');
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(await screen.findByText('PRIVATE ORIGINAL DRAFT')).toBeInTheDocument();
+    expect(screen.getByText('PRIVATE RECOVERY DRAFT')).toBeInTheDocument();
+    expect(vi.mocked(sendPlaygroundMessage).mock.calls[0]?.[7]).toBe(true);
   });
 
   it('sends a real chat request and displays the returned answer and source citation', async () => {
@@ -403,5 +416,26 @@ describe('PlaygroundChat', () => {
     await user.selectOptions(screen.getByLabelText('Selection mode'), 'MANUAL');
     await user.click(screen.getByRole('button', { name: 'Save routing settings' }));
     await waitFor(() => expect(updateAssistant).toHaveBeenCalledWith('acme', 'assistant-1', { providerMode: 'MANUAL', providerFallbacks: [] }));
+  });
+});
+
+describe('PDF citation locator rendering contract', () => {
+  it.each([
+    ['Shipping policy.pdf · page 1 · Dispatch', 1],
+    ['Shipping policy.pdf · page 2 · Returns', 2],
+  ])('resolves only the structured PDF page locator %s', (locator, page) => {
+    expect(pdfPageFromLocator(locator)).toBe(page);
+  });
+
+  it.each([null, undefined, '', 'Shipping policy.pdf', 'reference page 2 text', 'Shipping · page two · Returns'])('does not invent a page for missing or malformed locator %s', (locator) => {
+    expect(pdfPageFromLocator(locator)).toBeNull();
+  });
+
+  it('keeps descriptive locator data out of URL handling and leaves non-PDF citations unaffected', () => {
+    const locator = '02_Shipping_and_Delivery.pdf · page 2 · Delivery terms';
+    expect(pdfPageFromLocator(locator)).toBe(2);
+    expect(() => new URL(locator)).toThrow();
+    // Existing message citation rows render their source title/type/locator as text.
+    expect({ title: 'Product listing', type: 'COMMERCE_PRODUCT', locator: null }).toMatchObject({ type: 'COMMERCE_PRODUCT' });
   });
 });

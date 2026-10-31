@@ -9,6 +9,15 @@ const evidence = (input: Partial<ConversationEvidence> & Pick<ConversationEviden
 });
 
 describe('conversation diagnostics metadata', () => {
+  it('reports real compared numeric values without changing validation', () => {
+    const source = evidence({ reference: 'S1', excerpt: 'Delivery takes 3 business days.' });
+    const candidate = 'Delivery takes 9 days. [S1]';
+    const comparisons: Record<string, unknown>[] = [];
+    const plain = validateGroundedResponse(candidate, [source]);
+    expect(validateGroundedResponse(candidate, [source], undefined, { onNumericComparison: (value) => comparisons.push(value) })).toEqual(plain);
+    expect(comparisons[0]).toMatchObject({ normalizedClaim: { value: '9.00', unit: 'day' }, matched: false, localReferences: ['S1'], candidates: [expect.objectContaining({ reference: 'S1', normalizedFacts: [{ value: '3.00', unit: 'business day' }] })] });
+    expect(validateGroundedResponse(candidate, [source], undefined, { onNumericComparison: () => { throw new Error('capture failed'); } })).toEqual(plain);
+  });
   it('reports bounded history truncation without including message content', () => {
     expect(historyDiagnostic(12, 8, 1024)).toEqual({ loadedMessageCount: 12, includedMessageCount: 8, contextBytes: 1024, contentTruncated: false, truncated: true });
     expect(historyDiagnostic(4, 4, 256).truncated).toBe(false);
@@ -127,9 +136,14 @@ describe('conversation diagnostics metadata', () => {
   });
 
   it('checks exact cited URLs and rejects URLs absent from that source', () => {
-    const page = evidence({ reference: 'S1', excerpt: 'Contact support.', locator: 'https://shop.example/returns' });
+    const page = evidence({ reference: 'S1', type: 'WEBSITE', sourceAuthority: 'PUBLIC_WEBSITE', excerpt: 'Contact support.', locator: 'https://shop.example/returns' });
     expect(validateGroundedResponse('See https://shop.example/returns [S1]', [page]).accepted).toBe(true);
     expect(validateGroundedResponse('See https://other.example/returns [S1]', [page])).toMatchObject({ accepted: false, reason: 'unsupported_url' });
+  });
+
+  it('does not treat a descriptive PDF locator as authorization for a URL', () => {
+    const pdf = evidence({ reference: 'S1', type: 'TEXT', excerpt: 'Return conditions are listed here.', locator: '02_Returns_and_Refunds.pdf · page 2 · Refund policy' });
+    expect(validateGroundedResponse('Visit https://shop.example/returns [S1]', [pdf])).toMatchObject({ accepted: false, reason: 'unsupported_url' });
   });
 
   it('binds the complete snapshot date to its cited source and rejects changed or uncited dates', () => {

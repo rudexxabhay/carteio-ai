@@ -85,11 +85,18 @@ function tokens(value: string): Set<string> {
   }).filter((token) => token.length > 1 && !STOP_WORDS.has(token)) ?? []);
 }
 
-function matchesAspect(query: string, evidence: ConversationEvidence): boolean {
+function matchesAspect(query: string, evidence: ConversationEvidence, options: { broadProductBrowse?: boolean } = {}): boolean {
+  // A server-authorized bounded catalog browse is a candidate for a validated
+  // broad browse aspect even when generic words do not occur in product text.
+  // This is only candidate mapping; deterministic claim validation still runs.
+  if (options.broadProductBrowse && evidence.type === 'COMMERCE_PRODUCT') return true;
   const queryTokens = tokens(query);
   if (queryTokens.size === 0) return false;
   const sourceTokens = tokens(`${evidence.title} ${evidence.locator ?? ''} ${evidence.excerpt}`);
-  return [...queryTokens].some((token) => sourceTokens.has(token));
+  if ([...queryTokens].some((token) => sourceTokens.has(token))) return true;
+  // Semantic/hybrid retrieval already selected these authorized candidates.
+  // Retain cross-language candidates for planning without asserting entailment.
+  return evidence.type !== 'COMMERCE_PRODUCT' && /(?:semantic|hybrid_rrf)/iu.test(evidence.retrievalReason ?? '');
 }
 
 function numericMeasures(text: string): ReadonlyArray<Readonly<{ value: string; unit: string }>> {
@@ -138,10 +145,11 @@ export function buildGroundedAnswerPlan(input: {
   aspects: readonly InterpretedAnswerAspect[];
   evidence: readonly ConversationEvidence[];
   requiresLiveLimitation: boolean;
+  broadProductBrowse?: boolean;
 }): GroundedAnswerPlan {
   const evidence = input.evidence.slice(0, 5);
   const aspects = input.aspects.slice(0, MAX_ANSWER_ASPECTS).map((aspect, index): GroundedAnswerAspect => {
-    const candidates = evidence.filter((item) => matchesAspect(aspect.retrievalQuery, item));
+    const candidates = evidence.filter((item) => matchesAspect(aspect.retrievalQuery, item, { broadProductBrowse: input.broadProductBrowse }));
     const values = differingMeasures(candidates);
     return Object.freeze({
       id: `A${index + 1}`,

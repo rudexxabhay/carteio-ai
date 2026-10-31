@@ -5,6 +5,13 @@ import type { RequestWithId } from '../middleware/request-id.middleware';
 import { playgroundDiagnosticsEnabled } from '../../modules/workspaces/playground-diagnostics';
 
 const HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const safeValidationDetails = (messages: string[]) => messages
+  .map((message) => {
+    const field = /^([A-Za-z][A-Za-z0-9_.-]{0,63})\s+(?:must|should)\b/u.exec(message)?.[1];
+    return field ? `${field} is invalid.` : null;
+  })
+  .filter((message): message is string => message !== null)
+  .slice(0, 10);
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -95,6 +102,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       requestId: request.requestId ?? 'unknown',
       timestamp: new Date().toISOString(),
       path,
+      ...(isValidationFailure && safeValidationDetails(validationMessages).length ? { details: safeValidationDetails(validationMessages) } : {}),
     };
     const diagnosticPath = path.endsWith('/playground/chat') || path.endsWith('/playground/chat/');
     const diagnostics = typeof exceptionResponse === 'object' && exceptionResponse !== null && 'diagnostics' in exceptionResponse

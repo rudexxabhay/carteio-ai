@@ -11,14 +11,14 @@ function makeHost() {
 }
 
 describe('AllExceptionsFilter', () => {
-  it('returns validation failures without exposing submitted values or arbitrary detail text', () => {
+  it('returns field-specific validation details without exposing submitted values or arbitrary detail text', () => {
     const { host, response } = makeHost();
-    new AllExceptionsFilter().catch(new BadRequestException({ message: ['name must be a string'], error: 'Bad Request', statusCode: 400 }), host);
+    new AllExceptionsFilter().catch(new BadRequestException({ message: ['name must be a string', 'property private-token-value should not exist'], error: 'Bad Request', statusCode: 400 }), host);
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'VALIDATION_ERROR', message: 'Invalid request data', requestId: 'trace-test', path: '/items',
+      code: 'VALIDATION_ERROR', message: 'Invalid request data', details: ['name is invalid.'], requestId: 'trace-test', path: '/items',
     }));
-    expect(JSON.stringify((response.json as jest.Mock).mock.calls)).not.toContain('details');
+    expect(JSON.stringify((response.json as jest.Mock).mock.calls)).not.toContain('private-token-value');
     const unsafe = makeHost();
     new AllExceptionsFilter().catch(new BadRequestException({ message: ['submitted credential private-token-value was rejected'] }), unsafe.host);
     expect(unsafe.response.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'VALIDATION_ERROR', message: 'Invalid request data' }));

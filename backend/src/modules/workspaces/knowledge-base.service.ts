@@ -1,3 +1,4 @@
+import { isVerifiedPdfDocumentSource } from './knowledge-document-eligibility';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -11,7 +12,7 @@ const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').norma
 const nameKey = (value: string) => normalizeName(value).toLowerCase().normalize('NFKC');
 const sourceSelect = {
   id: true, organizationId: true, createdById: true, type: true, status: true, processingStatus: true, visibility: true,
-  name: true, description: true, sourceUrl: true, contentBody: true, category: true, knowledgeSection: true, languageHint: true,
+  name: true, description: true, sourceUrl: true, contentBody: true, document: true, category: true, knowledgeSection: true, languageHint: true,
   sourceVersion: true, activeIndexGeneration: true, lastSyncAt: true, lastSuccessfulSyncAt: true, lastSyncErrorCode: true,
   verificationStatus: true, verifiedAt: true, syncPolicy: true, syncPaused: true, nextSyncAt: true,
   lastSyncAttemptAt: true, crawlPathPrefix: true, crawlMaxPages: true, crawlMaxDepth: true,
@@ -354,7 +355,7 @@ export class KnowledgeBaseService {
       ids.add(row.source.id);
       readySourceIdsByBase.set(row.knowledgeBase.id, ids);
     }
-    const sourceRows = [...sources.values()].filter((source) => source.type === 'FAQ' || source.type === 'TEXT' || source.type === 'WEBSITE');
+    const sourceRows = [...sources.values()].filter((source) => isVerifiedPdfDocumentSource(source) && source.deletedAt === null && (sourceBaseIds.get(source.id)?.size ?? 0) > 0);
     const activeChunkGroups = sourceRows.length ? await this.db.knowledgeChunk.groupBy({
       by: ['sourceId', 'sourceVersion', 'generation'],
       where: { organizationId, OR: sourceRows.map((source: any) => ({ sourceId: source.id, sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration })) },

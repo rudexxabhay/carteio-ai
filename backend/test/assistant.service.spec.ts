@@ -42,6 +42,27 @@ describe('AssistantService', () => {
     expect(db.auditEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ organizationId: 'org-a', actorUserId: 'user-a', action: 'assistant.created' }) }));
   });
 
+  it('validates and persists the observed create payload, including nullable optional messages', async () => {
+    const payload = {
+      name: 'workspace-helper', description: '', businessPurpose: '', systemInstructions: '', defaultLanguage: 'auto',
+      responseStyle: 'balanced', responseTone: 'professional', fallbackMessage: 'I do not have enough authorized information to answer that.',
+      greetingMessage: null, escalationMessage: null,
+    };
+    const dto = plainToInstance(CreateAssistantDto, payload);
+    expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+    db.chatbot.create.mockResolvedValueOnce(record({ id: 'persisted-assistant-id', name: payload.name, greetingMessage: null, escalationMessage: null }));
+
+    const created = await service.create('user-a', 'authorized-workspace', dto);
+
+    expect(created.id).toBe('persisted-assistant-id');
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.chatbot.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      organizationId: 'org-a', createdById: 'user-a', name: 'workspace-helper', description: null,
+      businessPurpose: null, systemInstructions: null, defaultLanguage: 'auto', responseStyle: 'balanced', responseTone: 'professional',
+      greetingMessage: null, escalationMessage: null, status: 'DRAFT',
+    }) }));
+  });
+
   it('round-trips all saved Bot Behavior fields through tenant-qualified persistence', async () => {
     let persisted = record({ providerMode: 'MANUAL', providerFallbacks: [] });
     db.chatbot.findFirst.mockImplementation(async () => persisted);
@@ -104,6 +125,19 @@ describe('AssistantService', () => {
     expect(await validate(valid)).toHaveLength(0);
     const invalid = plainToInstance(AssistantListQueryDto, { status: 'DELETED' });
     expect(await validate(invalid)).not.toHaveLength(0);
+  });
+
+  it.each([
+    ['ALL', { organizationId: 'org-a', archivedAt: null }],
+    ['DRAFT', { organizationId: 'org-a', archivedAt: null, status: 'DRAFT' }],
+    ['ACTIVE', { organizationId: 'org-a', archivedAt: null, status: 'ACTIVE' }],
+    ['INACTIVE', { organizationId: 'org-a', archivedAt: null, status: 'INACTIVE' }],
+    ['ARCHIVED', { organizationId: 'org-a', archivedAt: { not: null } }],
+  ] as const)('accepts the %s assistant list filter and keeps it workspace-scoped', async (status, where) => {
+    const query = plainToInstance(AssistantListQueryDto, { page: '1', pageSize: '100', status });
+    expect(await validate(query)).toHaveLength(0);
+    await service.list('user-a', 'alpha', query);
+    expect(db.chatbot.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
   });
 
   it('requires manager access before archiving an assistant', async () => {
@@ -216,6 +250,8 @@ describe('AssistantService', () => {
   it('rejects invalid create payload values', async () => {
     const dto = plainToInstance(CreateAssistantDto, { name: '  ', defaultLanguage: 'not a language tag', responseTone: 'system' });
     expect(await validate(dto)).not.toHaveLength(0);
+    const invalidEnum = plainToInstance(CreateAssistantDto, { name: 'Valid name', responseStyle: 'verbose' });
+    expect(await validate(invalidEnum)).not.toHaveLength(0);
   });
 
   it('rejects client-supplied primary provider and model fields at the DTO boundary', async () => {

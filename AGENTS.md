@@ -17,4 +17,8 @@ Keep historical failure evidence immutable and current results separate. Offline
 
 Do not install or upgrade dependencies, change secrets or configured providers/models, run migrations or database resets, invoke paid providers, crawl externally, perform live Shopify synchronization/writes, deploy, commit, push, or discard work without explicit authorization.
 
-Phase 01 requires closure of the Phase 00 gate and explicit user approval. Do not start it automatically.
+The existing 12-phase roadmap remains gated: its Phase 01 and later phases require closure of the Phase 00 gate and explicit user approval. Do not start those roadmap phases automatically.
+
+## Owner-approved independent Knowledge Base rebuild track — 2026-10-29
+
+The repository owner has authorized a separate **Knowledge Base Rebuild — Phases 01 to 04** track. This track may proceed independently of the existing Phase 00 closure gate, subject to its own explicit phase scope/approval and all safety and regression requirements above. This is an exception for the Knowledge Base rebuild and necessary supporting infrastructure only; it does not close Phase 00, resolve or reclassify any of its 201 recorded failures, or authorize unrelated roadmap work. Keep the historical Phase 00 evidence immutable and its status BLOCKED until its own closure criteria are met. Preserve the existing AI execution, provider, prompt, conversation, Shopify, widget, and RAG retrieval contracts unless a later Knowledge Base phase is separately approved to change a specifically identified integration point.

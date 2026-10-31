@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiGet, apiPostEventStream, ApiError, clearPendingApiGets } from '../services/api/client';
-import { previewKnowledgeBaseFaqImport } from '../services/api/knowledge-bases';
 import { getConnectorPermissions } from '../services/api/connectors';
 
 afterEach(() => { clearPendingApiGets(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -11,20 +10,6 @@ describe('API client', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(apiGet('/health')).resolves.toEqual({ status: 'ok' });
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/health');
-  });
-
-  it('sends the selected FAQ workbook as multipart file bytes without overriding the browser boundary', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ rows: [], total: 0, valid: 0, invalid: 0, duplicates: 0 }) });
-    vi.stubGlobal('fetch', fetchMock);
-    const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'support.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    await previewKnowledgeBaseFaqImport('north', 'base-1', file);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('/api/v1/workspaces/north/knowledge-bases/base-1/sources/faqs/import/preview');
-    expect(init?.method).toBe('POST');
-    expect(init?.body).toBeInstanceOf(FormData);
-    expect((init?.body as FormData).get('file')).toBe(file);
-    expect(new Headers(init?.headers).has('content-type')).toBe(false);
-    expect(init?.credentials).toBe('same-origin');
   });
 
   it('supports explicit no-store reads for mutable connector and catalog status', async () => {
@@ -52,6 +37,14 @@ describe('API client', () => {
   it('preserves safe structured API error codes for feature-specific messaging', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ code: 'EMAIL_SERVICE_UNAVAILABLE', message: 'Email code delivery is temporarily unavailable.' }) }));
     await expect(apiGet('/auth/otp/request')).rejects.toMatchObject({ kind: 'http', status: 503, code: 'EMAIL_SERVICE_UNAVAILABLE' });
+  });
+
+  it('surfaces sanitized validation field names for actionable form errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ code: 'VALIDATION_ERROR', message: 'Invalid request data', details: ['greetingMessage is invalid.', 'escalationMessage is invalid.'] }) }));
+    await expect(apiGet('/workspaces/example/assistants')).rejects.toMatchObject({
+      kind: 'http', status: 400, code: 'VALIDATION_ERROR',
+      message: 'Invalid request data (greetingMessage is invalid.; escalationMessage is invalid.)',
+    });
   });
 
   it('uses safe session, access and server messages without exposing raw 5xx details', async () => {

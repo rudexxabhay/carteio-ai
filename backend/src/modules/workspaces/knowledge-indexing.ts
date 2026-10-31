@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 import { ServiceUnavailableException } from '@nestjs/common';
 
 export const EMBEDDING_DIMENSIONS = 1536;
-export const SEMANTIC_INDEX_ENABLED = process.env.KNOWLEDGE_SEMANTIC_ENABLED === 'true';
+const OPENAI_EMBEDDING_BASE_URL = 'https://api.openai.com/v1';
+const OPENROUTER_EMBEDDING_BASE_URL = 'https://openrouter.ai/api/v1';
+
+/** Resolve at use time: the API entry point loads .env after its static imports. */
+export function semanticIndexEnabled(): boolean {
+  return process.env.KNOWLEDGE_SEMANTIC_ENABLED === 'true';
+}
 
 /** Cosine similarity is a relevance gate, applied before reciprocal-rank fusion. */
 export function semanticMinimumSimilarity(): number {
@@ -10,27 +16,43 @@ export function semanticMinimumSimilarity(): number {
 }
 
 export interface EmbeddingProvider {
-  readonly provider: 'openai';
-  readonly model: 'text-embedding-3-small';
+  readonly provider: 'openai' | 'openrouter';
+  readonly model: 'text-embedding-3-small' | 'openai/text-embedding-3-small';
   readonly dimensions: 1536;
   embed(inputs: string[]): Promise<number[][]>;
 }
 
-/** Embeddings are opt-in. Groq credentials are not an embeddings capability. */
+type EmbeddingConfiguration = { provider: 'openai' | 'openrouter'; model: EmbeddingProvider['model']; baseUrl: string; apiKey: string };
+
+function embeddingConfiguration(): EmbeddingConfiguration | null {
+  if (!semanticIndexEnabled() || semanticConfigurationError()) return null;
+  const provider = process.env.KNOWLEDGE_EMBEDDING_PROVIDER as EmbeddingConfiguration['provider'];
+  const model = (process.env.KNOWLEDGE_EMBEDDING_MODEL || (provider === 'openai' ? 'text-embedding-3-small' : 'openai/text-embedding-3-small')) as EmbeddingConfiguration['model'];
+  const baseUrl = process.env.KNOWLEDGE_EMBEDDING_BASE_URL || (provider === 'openai' ? OPENAI_EMBEDDING_BASE_URL : OPENROUTER_EMBEDDING_BASE_URL);
+  const apiKey = provider === 'openrouter' ? process.env.OPENROUTER_API_KEY! : process.env.OPENAI_API_KEY!;
+  return { provider, model, baseUrl, apiKey };
+}
+
+/** Embeddings are opt-in and use a Knowledge-only provider profile, independent of chat routing. */
 export function createEmbeddingProvider(): EmbeddingProvider | null {
-  if (!SEMANTIC_INDEX_ENABLED) return null;
+  if (!semanticIndexEnabled()) return null;
   if (semanticConfigurationError()) return null;
-  return new OpenAiEmbeddingProvider();
+  const config = embeddingConfiguration();
+  return config?.provider === 'openrouter' ? new OpenRouterEmbeddingProvider(config.apiKey, config.baseUrl) : config ? new OpenAiEmbeddingProvider(config.apiKey, config.baseUrl) : null;
 }
 
 export function semanticConfigurationError(): string | undefined {
-  if (!SEMANTIC_INDEX_ENABLED) return undefined;
+  if (!semanticIndexEnabled()) return undefined;
   const minimumSimilarity = semanticMinimumSimilarity();
   if (!Number.isFinite(minimumSimilarity) || minimumSimilarity < 0 || minimumSimilarity > 1) return 'SEMANTIC_SIMILARITY_CONFIGURATION_INVALID';
-  if (process.env.KNOWLEDGE_EMBEDDING_PROVIDER !== 'openai') return 'EMBEDDING_PROFILE_UNSUPPORTED';
-  const model = process.env.KNOWLEDGE_EMBEDDING_MODEL ?? 'text-embedding-3-small';
-  if (model !== 'text-embedding-3-small') return 'EMBEDDING_PROFILE_UNSUPPORTED';
-  if (!process.env.OPENAI_API_KEY) return 'EMBEDDING_PROVIDER_NOT_CONFIGURED';
+  const provider = process.env.KNOWLEDGE_EMBEDDING_PROVIDER;
+  if (provider !== 'openai' && provider !== 'openrouter') return 'EMBEDDING_PROFILE_UNSUPPORTED';
+  const model = process.env.KNOWLEDGE_EMBEDDING_MODEL || (provider === 'openai' ? 'text-embedding-3-small' : 'openai/text-embedding-3-small');
+  if ((provider === 'openai' && model !== 'text-embedding-3-small') || (provider === 'openrouter' && model !== 'openai/text-embedding-3-small')) return 'EMBEDDING_PROFILE_UNSUPPORTED';
+  const expectedBaseUrl = provider === 'openai' ? OPENAI_EMBEDDING_BASE_URL : OPENROUTER_EMBEDDING_BASE_URL;
+  const baseUrl = process.env.KNOWLEDGE_EMBEDDING_BASE_URL || expectedBaseUrl;
+  if (baseUrl !== expectedBaseUrl) return 'EMBEDDING_PROVIDER_BASE_URL_INVALID';
+  if (!(provider === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY)) return 'EMBEDDING_PROVIDER_NOT_CONFIGURED';
   return undefined;
 }
 
@@ -97,28 +119,57 @@ function validateBatch(inputs: string[]) {
   if (!inputs.length || inputs.length > 64 || inputs.some((item) => item.length > 8000)) throw new Error('Embedding batch exceeds configured bounds');
 }
 
-/** Optional semantic adapter. It is never created or called without explicit opt-in. */
-export class OpenAiEmbeddingProvider implements EmbeddingProvider {
-  readonly provider = 'openai' as const;
-  readonly model = 'text-embedding-3-small' as const;
-  readonly dimensions = 1536 as const;
-  constructor(private readonly apiKey = process.env.OPENAI_API_KEY) {}
+/** Shared OpenAI-compatible wire client; provider/model identity remains explicit in persisted chunks. */
+class OpenAiCompatibleEmbeddingClient {
+  readonly dimensions = EMBEDDING_DIMENSIONS as 1536;
+  constructor(readonly provider: EmbeddingProvider['provider'], readonly model: EmbeddingProvider['model'], private readonly apiKey: string | undefined, private readonly baseUrl: string) {}
   async embed(inputs: string[]): Promise<number[][]> {
     validateBatch(inputs);
-    if (!this.apiKey) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_NOT_CONFIGURED', message: 'Configure an OpenAI API key and explicitly enable semantic indexing.' });
+    if (!this.apiKey) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_NOT_CONFIGURED', message: 'Configure the selected Knowledge embedding provider and explicitly enable semantic indexing.' });
     let response: Response;
     try {
-      response = await fetch('https://api.openai.com/v1/embeddings', {
+      response = await fetch(`${this.baseUrl}/embeddings`, {
         method: 'POST', headers: { authorization: `Bearer ${this.apiKey}`, 'content-type': 'application/json' },
         body: JSON.stringify({ model: this.model, dimensions: this.dimensions, input: inputs, encoding_format: 'float' }),
         signal: AbortSignal.timeout(30_000), redirect: 'error',
       });
     } catch { throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_UNAVAILABLE', message: 'The configured embedding service could not be reached.' }); }
     if (response.status === 429 || response.status >= 500) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_RETRYABLE', message: 'The configured embedding service is temporarily unavailable.' });
-    if (!response.ok) throw new ServiceUnavailableException({ code: response.status === 401 ? 'EMBEDDING_PROVIDER_AUTH_FAILED' : 'EMBEDDING_PROVIDER_REQUEST_FAILED', message: 'The configured embedding service rejected the request.' });
-    const payload = await response.json() as { data?: Array<{ index: number; embedding: number[] }> };
-    const vectors = (payload.data ?? []).sort((a, b) => a.index - b.index).map((item) => item.embedding);
-    if (vectors.length !== inputs.length || vectors.some((vector) => vector.length !== this.dimensions || vector.some((n) => !Number.isFinite(n)))) throw Object.assign(new Error('Embedding provider returned incompatible vector dimensions'), { code: 'EMBEDDING_DIMENSION_MISMATCH' });
+    if (response.status === 401) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_AUTH_FAILED', message: 'The configured embedding credential was rejected.' });
+    if (response.status === 403) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_FORBIDDEN', message: 'The configured embedding account is not permitted to use this model.' });
+    if (response.status === 402) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_PAYMENT_REQUIRED', message: 'The embedding provider requires an active account or available credits.' });
+    if (response.status === 404) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND', message: 'The configured embedding model or endpoint was not found.' });
+    if (!response.ok) throw new ServiceUnavailableException({ code: 'EMBEDDING_PROVIDER_REQUEST_FAILED', message: 'The configured embedding service rejected the request.' });
+    let payload: { data?: Array<{ index: number; embedding: unknown }> };
+    try { payload = await response.json() as typeof payload; }
+    catch { throw Object.assign(new Error('Embedding provider returned invalid JSON'), { code: 'EMBEDDING_PROVIDER_INVALID_RESPONSE' }); }
+    if (!Array.isArray(payload.data) || payload.data.length !== inputs.length || payload.data.some((item) => !Number.isInteger(item?.index) || item.index < 0 || item.index >= inputs.length || !Array.isArray(item.embedding))) {
+      throw Object.assign(new Error('Embedding provider returned an invalid response shape'), { code: 'EMBEDDING_PROVIDER_INVALID_RESPONSE' });
+    }
+    const ordered = [...payload.data].sort((a, b) => a.index - b.index);
+    if (ordered.some((item, index) => item.index !== index)) throw Object.assign(new Error('Embedding provider returned invalid result indices'), { code: 'EMBEDDING_PROVIDER_INVALID_RESPONSE' });
+    const vectors = ordered.map((item) => item.embedding as number[]);
+    if (vectors.some((vector) => vector.length !== this.dimensions || vector.some((n) => !Number.isFinite(n)))) throw Object.assign(new Error('Embedding provider returned incompatible vector dimensions'), { code: 'EMBEDDING_DIMENSION_MISMATCH' });
     return vectors;
   }
+}
+
+/** Direct OpenAI embeddings remain supported for existing explicitly configured deployments. */
+export class OpenAiEmbeddingProvider implements EmbeddingProvider {
+  readonly provider = 'openai' as const;
+  readonly model = 'text-embedding-3-small' as const;
+  readonly dimensions = EMBEDDING_DIMENSIONS as 1536;
+  private readonly client: OpenAiCompatibleEmbeddingClient;
+  constructor(apiKey = process.env.OPENAI_API_KEY, baseUrl = OPENAI_EMBEDDING_BASE_URL) { this.client = new OpenAiCompatibleEmbeddingClient(this.provider, this.model, apiKey, baseUrl); }
+  embed(inputs: string[]) { return this.client.embed(inputs); }
+}
+
+/** OpenRouter embedding profile; it reuses only the existing OpenRouter backend credential. */
+export class OpenRouterEmbeddingProvider implements EmbeddingProvider {
+  readonly provider = 'openrouter' as const;
+  readonly model = 'openai/text-embedding-3-small' as const;
+  readonly dimensions = EMBEDDING_DIMENSIONS as 1536;
+  private readonly client: OpenAiCompatibleEmbeddingClient;
+  constructor(apiKey = process.env.OPENROUTER_API_KEY, baseUrl = OPENROUTER_EMBEDDING_BASE_URL) { this.client = new OpenAiCompatibleEmbeddingClient(this.provider, this.model, apiKey, baseUrl); }
+  embed(inputs: string[]) { return this.client.embed(inputs); }
 }

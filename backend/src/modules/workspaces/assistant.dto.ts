@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsIn, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { WorkspacePaginationDto } from './workspace.dto';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
@@ -37,11 +37,11 @@ export class CreateAssistantDto {
   @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MinLength(1) @MaxLength(500)
   fallbackMessage?: string;
 
-  @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(500)
-  greetingMessage?: string;
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(500)
+  greetingMessage?: string | null;
 
-  @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(500)
-  escalationMessage?: string;
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(500)
+  escalationMessage?: string | null;
 
 }
 
@@ -73,11 +73,11 @@ export class UpdateAssistantDto {
   @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MinLength(1) @MaxLength(500)
   fallbackMessage?: string;
 
-  @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(500)
-  greetingMessage?: string;
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(500)
+  greetingMessage?: string | null;
 
-  @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(500)
-  escalationMessage?: string;
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(500)
+  escalationMessage?: string | null;
 
 }
 

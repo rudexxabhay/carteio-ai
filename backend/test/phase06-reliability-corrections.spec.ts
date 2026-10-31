@@ -125,10 +125,13 @@ describe('Phase 06 actual shared provider payloads', () => {
 
   it('does not repeat the initial query through a native Knowledge tool', async () => {
     const message = 'Shipping time?';
-    respond(result(interpretation(message)), result('', { finishReason: 'tool_calls', toolCalls: [{ id: 'call-1', name: 'search_business_knowledge', arguments: JSON.stringify({ query: '  SHIPPING   time? ' }) }] }), result('I cannot confirm that detail.'));
-    await run(message);
+    respond(result(interpretation(message)), result('', { finishReason: 'tool_calls', toolCalls: [{ id: 'call-1', name: 'search_business_knowledge', arguments: JSON.stringify({ query: '  SHIPPING   time? ' }) }] }), result('No verified policy detail was found.'), result('I could not confirm the shipping timing from the available information.'));
+    const reply = await run(message);
     expect(knowledge.searchPreview).toHaveBeenCalledTimes(1);
-    expect(payloads.at(-1).messages.some((item: any) => item.role === 'tool' && item.content.includes('query_already_searched'))).toBe(true);
+    expect(adapter.complete).toHaveBeenCalledTimes(4);
+    expect(payloads[2].messages.some((item: any) => item.role === 'tool' && item.content.includes('query_already_searched'))).toBe(true);
+    expect(reply.reply).not.toMatch(/\[(?:S|C)\d+\]|https?:\/\//u);
+    expect(reply.reply).not.toMatch(/shipping takes|delivery takes|dispatch takes/iu);
   });
 
   it.each([true, false])('preserves product routing after legacy failure with native tools=%s', async (nativeTools) => {
@@ -138,12 +141,19 @@ describe('Phase 06 actual shared provider payloads', () => {
     commerce.canSearchProducts.mockResolvedValue(true);
     knowledge.searchPreview.mockResolvedValue({ mode: 'lexical_only', audience: 'PUBLIC_VISITOR', eligibleSourceCount: 0, results: [] });
     const first = result(interpretation(message, semantic('PRODUCT_INQUIRY'), { intent: 'invalid-legacy' }));
-    if (nativeTools) respond(first, result('', { finishReason: 'tool_calls', toolCalls: [{ id: 'products-1', name: 'search_store_products', arguments: JSON.stringify({ query: message, browse: true }) }] }), result('I cannot confirm a matching item.'));
+    if (nativeTools) respond(first, result('', { finishReason: 'tool_calls', toolCalls: [{ id: 'products-1', name: 'search_store_products', arguments: JSON.stringify({ query: message, browse: true }) }] }), result('No matching products were returned from the authorized catalog.'), result('I could not find a matching product in the available catalog.'));
     else respond(first, result('I cannot confirm a matching item.'));
-    await run(message);
+    const reply = await run(message);
     expect(commerce.searchCatalog).toHaveBeenCalled();
     expect(commerce.searchCatalog.mock.calls[0].slice(0, 2)).toEqual(['north', 'assistant-north']);
-    if (nativeTools) expect(knowledge.searchPreview).not.toHaveBeenCalled();
+    if (nativeTools) {
+      expect(knowledge.searchPreview).not.toHaveBeenCalled();
+      expect(adapter.complete).toHaveBeenCalledTimes(4);
+      expect(reply.reply).toBe('I could not find a matching product in the available catalog.');
+      expect(reply.reply).not.toMatch(/North Shirt|₹|\[(?:S|C)\d+\]/u);
+    } else {
+      expect(adapter.complete).toHaveBeenCalledTimes(2);
+    }
   });
 
   it('keeps stale Shopify permissions blocked even after product semantics are recovered', async () => {
@@ -205,10 +215,13 @@ describe('Phase 06 actual shared provider payloads', () => {
 
   it('bounds zero-match recovery to one distinct additional retrieval', async () => {
     const message = 'Shipping time?';
-    respond(result(interpretation(message)), result('', { finishReason: 'tool_calls', toolCalls: [{ id: 'k1', name: 'search_business_knowledge', arguments: JSON.stringify({ query: 'delivery duration' }) }, { id: 'k2', name: 'search_business_knowledge', arguments: JSON.stringify({ query: 'dispatch turnaround' }) }] }), result('I cannot confirm that detail.'));
-    await run(message);
+    respond(result(interpretation(message)), result('', { finishReason: 'tool_calls', toolCalls: [{ id: 'k1', name: 'search_business_knowledge', arguments: JSON.stringify({ query: 'delivery duration' }) }, { id: 'k2', name: 'search_business_knowledge', arguments: JSON.stringify({ query: 'dispatch turnaround' }) }] }), result('No verified shipping details were found.'), result('I could not confirm the shipping timing from the available information.'));
+    const reply = await run(message);
     expect(knowledge.searchPreview).toHaveBeenCalledTimes(2);
-    expect(payloads.at(-1).messages.some((item: any) => item.role === 'tool' && item.content.includes('knowledge_recovery_budget_exhausted'))).toBe(true);
+    expect(adapter.complete).toHaveBeenCalledTimes(4);
+    expect(payloads[2].messages.filter((item: any) => item.role === 'tool').some((item: any) => item.content.includes('knowledge_recovery_budget_exhausted'))).toBe(true);
+    expect(reply.reply).not.toMatch(/\[(?:S|C)\d+\]|https?:\/\//u);
+    expect(reply.reply).not.toMatch(/shipping takes|delivery takes|dispatch takes/iu);
   });
 
   it('does not deliver tool evidence after authorization is revoked', async () => {
@@ -247,7 +260,13 @@ describe('Phase 06 actual shared provider payloads', () => {
     const reply = await run(message);
     expect(reply.reply).toContain('3 business days');
     expect(payloads).toHaveLength(3);
-    expect(payloads[2].messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'assistant', content: 'Shipping takes 99 business days. [S1]' }), expect.objectContaining({ role: 'system', content: expect.stringContaining('unsupported_numeric_claim') })]));
+    const recoveryMessages = payloads[2].messages;
+    const recoveryInstruction = recoveryMessages.find((item: any) => item.role === 'system' && item.content.includes('unsupported_numeric_claim'));
+    const rejectedDraftMessage = recoveryMessages.find((item: any) => item.role === 'user' && item.content.includes('untrusted_initial_answer_draft'));
+    expect(recoveryInstruction?.content).toContain('Remove any URL unless that exact URL is present in cited evidence text or is the authorized URL of a PUBLIC_WEBSITE evidence item');
+    expect(recoveryInstruction?.content).toContain('a descriptive PDF locator is not a URL');
+    expect(recoveryInstruction?.content).toContain('do not turn a missing or conflicting policy detail into a guarantee');
+    expect(JSON.parse(rejectedDraftMessage!.content)).toEqual({ type: 'untrusted_initial_answer_draft', verificationReason: 'unsupported_numeric_claim', draft: 'Shipping takes 99 business days. [S1]' });
   });
 
   it('keeps a provider rate limit distinct from citation rejection and does not retry it here', async () => {

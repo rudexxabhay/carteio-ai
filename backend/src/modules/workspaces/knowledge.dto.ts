@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { KNOWLEDGE_SECTIONS } from './knowledge-sections';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
@@ -143,18 +143,52 @@ export class KnowledgeListQueryDto {
   processingStatus?: string;
   @Transform(trim) @IsOptional() @IsString() @IsIn(['WEBSITE', 'FAQ', 'TEXT'])
   type?: 'WEBSITE' | 'FAQ' | 'TEXT';
+  @Transform(({ value }) => value === true || value === 'true') @IsOptional() @IsBoolean()
+  pdfOnly?: boolean;
 }
 
 export class UploadKnowledgePdfDto {
   @IsUUID('4') knowledgeBaseId!: string;
   @IsIn(KNOWLEDGE_SECTIONS) knowledgeSection!: (typeof KNOWLEDGE_SECTIONS)[number];
   @IsIn(['INTERNAL_RESTRICTED', 'PUBLIC_REFERENCE']) visibility!: 'INTERNAL_RESTRICTED' | 'PUBLIC_REFERENCE';
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(200)
+  title?: string;
+}
+
+/** Stages are derived from persisted source/job state; upload-time extraction is synchronous. */
+export const KNOWLEDGE_DOCUMENT_STAGES = ['UPLOADING', 'EXTRACTING', 'SAVING', 'QUEUED', 'INDEXING', 'READY', 'FAILED'] as const;
+export type KnowledgeDocumentStage = (typeof KNOWLEDGE_DOCUMENT_STAGES)[number];
+
+export class KnowledgeDocumentProcessingDto {
+  @IsUUID('4') processingId!: string;
+  @IsIn(KNOWLEDGE_DOCUMENT_STAGES) stage!: KnowledgeDocumentStage;
+  @IsOptional() @IsInt() @Min(1) totalPages?: number;
+  @IsInt() @Min(0) pagesExtracted!: number;
+  @IsInt() @Min(0) pagesPersisted!: number;
+  @IsInt() @Min(0) chunksIndexed!: number;
+  @IsOptional() @IsString() @MaxLength(100) failureReason?: string;
+  @IsDateString() lastUpdatedAt!: string;
+  @IsOptional() @IsDateString() completedAt?: string;
 }
 
 export class KnowledgeSearchPreviewDto {
   @IsUUID('4') assistantId!: string;
   @IsString() @Matches(/\S/) @MaxLength(2000) query!: string;
   @IsOptional() @IsInt() @Min(1) @Max(10) limit?: number;
+}
+
+export class KnowledgeEvidenceMetadataItemDto {
+  @IsUUID('4') sourceId!: string;
+  @IsUUID() chunkId!: string;
+  @IsOptional() @IsUUID() pageId?: string | null;
+  @IsInt() @Min(1) sourceVersion!: number;
+  @IsInt() @Min(1) generation!: number;
+}
+
+export class KnowledgeEvidenceMetadataDto {
+  @IsUUID('4') assistantId!: string;
+  @IsArray() @ArrayMaxSize(40) @ValidateNested({ each: true }) @Type(() => KnowledgeEvidenceMetadataItemDto)
+  items!: KnowledgeEvidenceMetadataItemDto[];
 }
 
 export class WebsitePagesQueryDto {

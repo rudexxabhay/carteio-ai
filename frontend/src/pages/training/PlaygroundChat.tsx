@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Activity, BookOpen, Bot, ChevronDown, CircleAlert, Copy, Database, LoaderCircle, Plus, Send, Settings2, UserRound, X } from 'lucide-react';
+import { Activity, BookOpen, Bot, ChevronDown, CircleAlert, Copy, LoaderCircle, Plus, Send, Settings2, UserRound, X } from 'lucide-react';
 import { ApiError } from '../../services/api/client';
 import { GEMINI_MODEL_OPTIONS_FALLBACK, geminiModelOptionLabel, getPlaygroundConversation, getProviderConfigurationStatus, sendPlaygroundMessage, updateAssistant, type Assistant, type AssistantProvider, type ProviderConfigurationStatus, type ProviderRoute, type PlaygroundChatReply, type ResponseProvenance } from '../../services/api/assistants';
-import { getAssistantKnowledge, listWebsitePages, type AssistantKnowledge, type WebsitePagesResponse } from '../../services/api/knowledge';
 import { formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundHistory, PLAYGROUND_EXPORT_MAX_BYTES, PLAYGROUND_EXPORT_MAX_MESSAGES } from './playground-copy';
+import { resolveKnowledgeEvidenceMetadata, type KnowledgeEvidenceMetadataItem } from '../../services/api/knowledge';
 import './playground-chat.css';
 
 type Message = { id: string; role: 'user' | 'assistant' | 'notice' | 'error'; content: string; createdAt: number; sources?: PlaygroundChatReply['sources']; provenance?: ResponseProvenance; providerUsed?: AssistantProvider | null; modelUsed?: string | null; diagnostics?: PlaygroundChatReply['diagnostics']; retryText?: string; retryTurnId?: string };
@@ -18,15 +18,23 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
   const [savingProvider, setSavingProvider] = useState(false);
   const [providerSaved, setProviderSaved] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [captureResponseDebug, setCaptureResponseDebug] = useState(false);
+  useEffect(() => {
+    const expiries = messages.flatMap((message) => message.diagnostics?.protectedResponseDebug ? [Date.parse(message.diagnostics.protectedResponseDebug.expiresAt)] : []).filter(Number.isFinite);
+    if (!expiries.length) return;
+    const timer = setTimeout(() => setMessages((current) => current.map((message) => {
+      if (!message.diagnostics?.protectedResponseDebug || Date.parse(message.diagnostics.protectedResponseDebug.expiresAt) > Date.now()) return message;
+      const { protectedResponseDebug: _expired, ...diagnostics } = message.diagnostics;
+      return { ...message, diagnostics: { ...diagnostics, protectedCaptureStatus: 'EXPIRED' } };
+    })), Math.max(0, Math.min(...expiries) - Date.now()));
+    return () => clearTimeout(timer);
+  }, [messages]);
   const [providerMode, setProviderMode] = useState<'MANUAL' | 'AUTO_FALLBACK'>(assistant.providerMode || 'MANUAL');
   const [fallbacks, setFallbacks] = useState<ProviderRoute[]>(assistant.providerFallbacks || []);
   const [providerStatus, setProviderStatus] = useState<ProviderConfigurationStatus | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState<'trace' | 'sources' | 'knowledge' | 'diagnostics'>('trace');
+  const [inspectorTab, setInspectorTab] = useState<'trace' | 'sources' | 'diagnostics'>('trace');
   const [selectedTraceMessageId, setSelectedTraceMessageId] = useState<string | null>(null);
-  const [knowledgeSnapshot, setKnowledgeSnapshot] = useState<{ assistant: AssistantKnowledge; pages: WebsitePagesResponse } | null>(null);
-  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
-  const [knowledgeUnavailable, setKnowledgeUnavailable] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const generation = useRef(0);
@@ -81,18 +89,6 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
 
   useEffect(() => { const list = bottom.current?.parentElement; if (list) list.scrollTop = list.scrollHeight; }, [messages, sending]);
   useEffect(() => { const input = composer.current; if (!input) return; input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 144)}px`; }, [text]);
-  useEffect(() => {
-    if (!inspectorOpen || inspectorTab !== 'knowledge' || knowledgeSnapshot || !manager) return;
-    const controller = new AbortController();
-    setKnowledgeLoading(true); setKnowledgeUnavailable(false);
-    Promise.all([
-      getAssistantKnowledge(workspaceSlug, assistant.id, controller.signal),
-      listWebsitePages(workspaceSlug, { page: 1, pageSize: 20 }, controller.signal),
-    ]).then(([assistantKnowledge, pages]) => {
-      if (!controller.signal.aborted) setKnowledgeSnapshot({ assistant: assistantKnowledge, pages });
-    }).catch(() => { if (!controller.signal.aborted) setKnowledgeUnavailable(true); }).finally(() => { if (!controller.signal.aborted) setKnowledgeLoading(false); });
-    return () => controller.abort();
-  }, [inspectorOpen, inspectorTab, knowledgeSnapshot, workspaceSlug, assistant.id, manager]);
   useEffect(() => () => { generation.current++; request.current?.abort(); copyToken.current++; copyRequest.current?.abort(); }, []);
 
   async function saveProvider(event: FormEvent) {
@@ -122,7 +118,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     else setMessages((current) => current.filter((item) => item.id !== retryMessageId));
     const controller = new AbortController(); request.current = controller;
     try {
-      const result = await sendPlaygroundMessage(workspaceSlug, assistantAtStart, message, sessionId ?? undefined, clientTurnId, controller.signal);
+      const result = await sendPlaygroundMessage(workspaceSlug, assistantAtStart, message, sessionId ?? undefined, clientTurnId, controller.signal, undefined, manager && captureResponseDebug);
       if (generation.current !== generationAtStart || assistant.id !== assistantAtStart) return;
       setSessionId(result.sessionId);
       const respondedAt = Date.now();
@@ -137,7 +133,13 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
         setSessionNeedsNewChat(true);
         setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'notice', content: 'This saved conversation is no longer available. Select New Chat to continue.', createdAt: Date.now() }]);
       } else {
-        setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'error', content: messageFor(cause), retryText: message, retryTurnId: clientTurnId, createdAt: Date.now() }]);
+        const errorId = crypto.randomUUID();
+        const details = cause instanceof ApiError ? cause.details : undefined;
+        const diagnostics = details && typeof details === 'object' && 'traceId' in details && typeof details.traceId === 'string' && 'events' in details && Array.isArray(details.events)
+          ? details as PlaygroundChatReply['diagnostics'] : undefined;
+        setMessages((current) => [...current, { id: errorId, role: 'error', content: messageFor(cause), diagnostics, retryText: message, retryTurnId: clientTurnId, createdAt: Date.now() }]);
+        setSelectedTraceMessageId(errorId);
+        if (manager && captureResponseDebug) { setInspectorOpen(true); setInspectorTab('diagnostics'); }
       }
     } finally {
       if (generation.current === generationAtStart) { lock.current = false; setSending(false); requestAnimationFrame(() => composer.current?.focus()); }
@@ -218,6 +220,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
   const selectedTraceMessage = messages.find((item) => item.id === selectedTraceMessageId);
   const selectedTrace = selectedTraceMessage?.diagnostics;
   return <section className="playground-panel" aria-label="AI Playground">
+    {manager && <label><input type="checkbox" checked={captureResponseDebug} onChange={(event) => setCaptureResponseDebug(event.target.checked)}/> Capture Response Debugger for subsequent turns (requires server development opt-in; expires after five minutes)</label>}
     <header className="playground-header"><div className="playground-avatar" aria-hidden="true"><Bot size={18}/></div><div className="playground-title"><h2 id="playground-dialog-title">{assistant.name}</h2><span><i/> Testing</span></div><span className="playground-provider-label" title={providerLabel}>{providerLabel}</span><button type="button" className="playground-icon-button" onClick={() => void copyHistory()} aria-label="Copy entire conversation" title="Copy entire conversation" disabled={!manager || sending || !messages.length}><Copy size={17}/></button><button type="button" className="playground-icon-button" onClick={() => startNewChat()} aria-label="Start a new chat" title="New chat"><Plus size={18}/></button>{manager && <button type="button" className="playground-icon-button" aria-label="Provider settings" aria-expanded={settingsOpen} aria-controls="playground-settings-panel" title="Settings" onClick={() => { setSettingsError(''); setSettingsOpen((open) => !open); }}><Settings2 size={17}/></button>}{manager && <button type="button" className={`playground-icon-button ${inspectorOpen ? 'is-active' : ''}`} aria-label={inspectorOpen ? 'Close Developer Inspector' : 'Open Developer Inspector'} aria-expanded={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)} title="Developer Inspector"><Activity size={17}/></button>}<button type="button" className="playground-icon-button playground-close" onClick={onClose} aria-label="Close Playground" title="Close"><X size={18}/></button></header>
     <div className={`playground-workspace ${inspectorOpen ? 'has-inspector' : ''}`}>
     <div className="playground-chat-column">
@@ -233,10 +236,9 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     <form className="playground-composer" onSubmit={(event) => { event.preventDefault(); const value = text; if (value.trim() && !sending) { setText(''); void send(value); } }}><label className="sr-only" htmlFor="playground-message-input">Message your assistant</label><textarea id="playground-message-input" ref={composer} dir="auto" rows={1} maxLength={2000} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onInputKeyDown} placeholder={sessionNeedsNewChat ? 'Start a new chat to continue…' : configured ? 'Type a customer message…' : 'Provider configuration is unavailable…'} disabled={!manager || assistant.status !== 'active' || sending || !configured || sessionNeedsNewChat} aria-describedby="playground-composer-help"/><span id="playground-composer-help" className="sr-only">Press Enter to send. Press Shift and Enter for a new line.</span><button type="submit" aria-label="Send message" className="button button-primary" disabled={!manager || assistant.status !== 'active' || sending || !text.trim() || !configured || sessionNeedsNewChat}><Send size={17}/></button></form>
     <p className="playground-composer-hint">Enter to send <span>·</span> Shift+Enter for a new line</p>
     </div>
-    {inspectorOpen && manager && <aside className="playground-inspector" aria-label="Developer Inspector"><div className="playground-inspector-heading"><div><strong>Developer Inspector</strong><small>{selectedTrace ? `Trace ${selectedTrace.traceId.slice(0, 8)} · ${selectedTrace.totalLatencyMs} ms` : 'Select a response to inspect its execution'}</small></div><button type="button" className="playground-icon-button" aria-label="Close Developer Inspector" onClick={() => setInspectorOpen(false)}><X size={16}/></button></div><nav className="playground-inspector-tabs" aria-label="Inspector tabs">{([['trace', 'Execution Trace'], ['sources', 'Sources'], ['knowledge', 'Knowledge'], ['diagnostics', 'Diagnostics']] as const).map(([key, label]) => <button key={key} type="button" className={inspectorTab === key ? 'active' : ''} onClick={() => setInspectorTab(key)}>{label}</button>)}</nav><div className="playground-inspector-content" key={`${inspectorTab}:${selectedTraceMessageId || 'none'}`}>
+    {inspectorOpen && manager && <aside className="playground-inspector" aria-label="Developer Inspector"><div className="playground-inspector-heading"><div><strong>Developer Inspector</strong><small>{selectedTrace ? `Trace ${selectedTrace.traceId.slice(0, 8)} · ${selectedTrace.totalLatencyMs} ms` : 'Select a response to inspect its execution'}</small></div><button type="button" className="playground-icon-button" aria-label="Close Developer Inspector" onClick={() => setInspectorOpen(false)}><X size={16}/></button></div><nav className="playground-inspector-tabs" aria-label="Inspector tabs">{([['trace', 'Execution Trace'], ['sources', 'Sources'], ['diagnostics', 'Diagnostics']] as const).map(([key, label]) => <button key={key} type="button" className={inspectorTab === key ? 'active' : ''} onClick={() => setInspectorTab(key)}>{label}</button>)}</nav><div className="playground-inspector-content" key={`${inspectorTab}:${selectedTraceMessageId || 'none'}`}>
       {inspectorTab === 'trace' && <TraceInspector trace={selectedTrace} message={selectedTraceMessage} sending={sending} onCopy={() => selectedTrace && void navigator.clipboard?.writeText(selectedTrace.traceId)}/>}
-      {inspectorTab === 'sources' && <SourcesInspector trace={selectedTrace} message={selectedTraceMessage}/>}
-      {inspectorTab === 'knowledge' && <KnowledgeInspector loading={knowledgeLoading} unavailable={knowledgeUnavailable} snapshot={knowledgeSnapshot}/>}
+      {inspectorTab === 'sources' && <SourcesInspector workspaceSlug={workspaceSlug} assistantId={assistant.id} trace={selectedTrace} message={selectedTraceMessage}/>}
       {inspectorTab === 'diagnostics' && <DiagnosticsInspector trace={selectedTrace} message={selectedTraceMessage}/>}
     </div></aside>}
     </div>
@@ -293,27 +295,46 @@ function TraceInspector({ trace, message, sending, onCopy }: { trace?: Playgroun
   return <div className="playground-trace-view"><div className="playground-trace-id"><span>Trace ID</span><code>{trace.traceId}</code><button type="button" aria-label="Copy trace ID" onClick={onCopy}><Copy size={13}/></button></div><div className="playground-trace-summary"><span>Total latency <strong>{trace.totalLatencyMs} ms</strong></span><span>Final source <strong>{trace.finalSource.replaceAll('_', ' ')}</strong></span></div><ol>{trace.events.map((event, index) => <li key={`${event.operation}:${event.at}:${index}`}><i className={`trace-status trace-${event.status}`}/><div><strong>{event.operation.replaceAll('_', ' ')}</strong><small>{event.status}{event.durationMs ? ` · ${event.durationMs} ms` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.errorCategory ? ` · ${event.errorCategory}` : ''}</small></div></li>)}</ol>{trace.events.some((event) => event.provider) && <p>Provider/model shown only for stages where the backend recorded an invocation.</p>}</div>;
 }
 
-function SourcesInspector({ trace, message }: { trace?: PlaygroundChatReply['diagnostics']; message?: Message }) {
+export function pdfPageFromLocator(locator: unknown): number | null {
+  if (typeof locator !== 'string') return null;
+  // pdfChunks emits this structured delimiter around the page token.
+  const match = locator.match(/(?:^|\s·\s)page\s+(\d+)(?=\s·\s|$)/i);
+  if (!match) return null;
+  const page = Number(match[1]);
+  return Number.isSafeInteger(page) && page > 0 ? page : null;
+}
+
+function SourcesInspector({ workspaceSlug, assistantId, trace, message }: { workspaceSlug: string; assistantId: string; trace?: PlaygroundChatReply['diagnostics']; message?: Message }) {
+  const [metadata, setMetadata] = useState<Map<string, KnowledgeEvidenceMetadataItem>>(new Map());
+  const [metadataLoading, setMetadataLoading] = useState(false);
+  useEffect(() => {
+    const evidence = trace?.evidence ?? [];
+    const items = evidence.filter((item) => Number.isSafeInteger(item.sourceVersion) && Number.isSafeInteger(item.indexGeneration))
+      .map((item) => ({ sourceId: item.sourceId, chunkId: item.chunkId, pageId: item.pageId, sourceVersion: item.sourceVersion!, generation: item.indexGeneration! }));
+    if (!message || !trace || !items.length) { setMetadata(new Map()); setMetadataLoading(false); return; }
+    const controller = new AbortController();
+    setMetadata(new Map()); setMetadataLoading(true);
+    void resolveKnowledgeEvidenceMetadata(workspaceSlug, { assistantId, items }, controller.signal)
+      .then((result) => setMetadata(new Map(result.items.map((item) => [`${item.sourceId}:${item.chunkId}`, item] as const))))
+      .catch(() => { if (!controller.signal.aborted) setMetadata(new Map()); })
+      .finally(() => { if (!controller.signal.aborted) setMetadataLoading(false); });
+    return () => controller.abort();
+  }, [workspaceSlug, assistantId, trace?.traceId, message?.id]);
   if (!message) return <div className="playground-inspector-empty"><BookOpen size={20}/><strong>Select a response</strong><span>Validated citations and retrieved evidence are shown per message.</span></div>;
   if (!trace) return <div className="playground-inspector-empty"><BookOpen size={20}/><strong>Trace unavailable</strong><span>Historical or uninstrumented messages cannot be classified beyond saved citation metadata.</span></div>;
-  return <div className="playground-source-inspector"><p>Retrieval {trace.retrieval.attempted ? 'attempted' : 'not attempted'} · audience {trace.retrieval.audience ?? 'not evaluated'} · {trace.retrieval.mode} · {trace.retrieval.resultCount} result(s), {trace.retrieval.eligibleSourceCount} eligible source(s) · {trace.retrieval.eligibilityStatus}</p>{trace.retrieval.queryHash && <small>Query fingerprint: {trace.retrieval.queryHash}</small>}{trace.evidence.length ? trace.evidence.map((item) => <details key={item.reference}><summary><strong>[{item.reference}] {item.title}</strong><span>{item.cited ? 'Cited / validated' : item.suppliedToProvider ? 'Sent to provider' : item.selectedForContext ? 'Selected, not confirmed sent' : 'Retrieved only'}</span></summary><small>{item.sourceType} · source {shortId(item.sourceId)} · page {item.pageId ? shortId(item.pageId) : 'n/a'} · chunk {shortId(item.chunkId)}{item.indexGeneration ? ` · generation ${item.indexGeneration}` : ''}{item.rankingPosition ? ` · rank ${item.rankingPosition}` : ''}{item.score !== undefined ? ` · ${item.scoreMethod || 'retrieval'} score ${item.score}` : ''}{item.sourceVersion ? ` · version ${item.sourceVersion}` : ''}</small><small>Retrieved {item.retrieved ? 'yes' : 'no'} · selected {item.selectedForContext ? 'yes' : 'no'} · revalidated {item.revalidated ? 'yes' : 'no'} · supplied {item.suppliedToProvider ? 'yes' : 'no'} · cited {item.cited ? 'yes' : 'no'}{item.contentHash ? ` · hash ${item.contentHash.slice(0, 16)}` : ''}</small>{item.locator && <a href={item.locator} target="_blank" rel="noreferrer">{item.locator}</a>}<p>{item.excerpt || 'No excerpt returned.'}</p></details>) : <p>No authorized evidence returned for this turn.</p>}</div>;
+  const pdfEvidence = trace.evidence.map((item) => ({ item, resolved: metadata.get(`${item.sourceId}:${item.chunkId}`) }))
+    .filter(({ resolved }) => resolved?.status === 'CURRENT_VERIFIED_PDF');
+  const staticEvidencePresent = trace.evidence.some((item) => item.sourceType !== 'COMMERCE_PRODUCT');
+  return <div className="playground-source-inspector"><p>Retrieval {trace.retrieval.attempted ? 'attempted' : 'not attempted'} · audience {trace.retrieval.audience ?? 'not evaluated'} · {trace.retrieval.mode} · {trace.retrieval.resultCount} result(s), {trace.retrieval.eligibleSourceCount} eligible source(s) · {trace.retrieval.eligibilityStatus}</p>{trace.retrieval.queryHash && <small>Query fingerprint: {trace.retrieval.queryHash}</small>}{trace.retrieval.attempted && <p>Search method: Not recorded per evidence item.</p>}{!pdfEvidence.length && <p>{staticEvidencePresent ? 'No verified PDF Knowledge metadata was available for this message.' : 'No PDF Knowledge retrieved for this message.'}</p>}{trace.evidence.map((item) => { const resolved = metadata.get(`${item.sourceId}:${item.chunkId}`); const currentPdf = resolved?.status === 'CURRENT_VERIFIED_PDF'; const historical = resolved?.status === 'HISTORICAL_SOURCE_NO_LONGER_ELIGIBLE'; const commerce = item.sourceType === 'COMMERCE_PRODUCT'; const page = currentPdf ? pdfPageFromLocator(resolved.locator) : null; return <details key={item.reference}><summary><strong>[{item.reference}] {currentPdf ? resolved.title : commerce ? item.title : 'Knowledge evidence'}</strong><span>{item.cited ? 'Cited' : item.suppliedToProvider ? 'Supplied to LLM' : item.selectedForContext ? 'Selected' : item.retrieved ? 'Retrieved' : 'Not recorded'}</span></summary>{currentPdf ? <><strong>PDF SOURCE</strong><small>Origin: Uploaded PDF · Verified source · {resolved.filename ?? 'Filename unavailable'}{page ? ` — Page ${page}` : ''}</small><small>Section: {resolved.section?.replaceAll('_', ' ') ?? 'Not recorded'} · Knowledge Base: {resolved.knowledgeBaseName ?? 'Not recorded'} · Customer-visible: {resolved.customerVisible ? 'Yes' : 'No'}</small><small>Source {shortId(item.sourceId)} · version {resolved.sourceVersion} (current) · generation {resolved.generation}{page ? ` · page ${page}` : ''} · chunk {shortId(item.chunkId)}{resolved.chunkSequence !== undefined ? ` · order ${resolved.chunkSequence + 1}` : ''}</small><small>Retrieved {item.retrieved ? 'Yes' : 'No'} · selected {item.selectedForContext ? 'Yes' : 'No'} · revalidated {item.revalidated ? 'Yes' : 'No'} · supplied to LLM {item.suppliedToProvider ? 'Yes' : 'No'} · cited {item.cited ? 'Yes' : 'No'}</small><p>{item.excerpt || 'No excerpt returned.'}</p></> : historical ? <p>Historical source — no longer eligible. Current authorization does not validate this older generation.</p> : commerce ? <><small>Commerce source · source {shortId(item.sourceId)} · retrieved {item.retrieved ? 'Yes' : 'No'} · selected {item.selectedForContext ? 'Yes' : 'No'} · revalidated {item.revalidated ? 'Yes' : 'No'} · supplied {item.suppliedToProvider ? 'Yes' : 'No'} · cited {item.cited ? 'Yes' : 'No'}</small><p>{item.excerpt || 'No excerpt returned.'}</p></> : <p>{metadataLoading ? 'Resolving authorized PDF metadata…' : 'Metadata unavailable; source content is hidden because current PDF authorization could not be established.'}</p>}</details>; })}</div>;
 }
 
-function KnowledgeInspector({ loading, unavailable, snapshot }: { loading: boolean; unavailable: boolean; snapshot: { assistant: AssistantKnowledge; pages: WebsitePagesResponse } | null }) {
-  if (loading) return <div className="playground-inspector-empty" role="status"><LoaderCircle size={18}/>Loading authorized source inventory…</div>;
-  if (unavailable) return <div className="playground-inspector-empty" role="alert"><Database size={20}/><strong>Knowledge inventory unavailable</strong><span>Check workspace access and retry by reopening the Knowledge tab.</span></div>;
-  if (!snapshot) return <div className="playground-inspector-empty"><Database size={20}/><strong>Knowledge inventory not loaded</strong><span>Open this tab to load the current workspace-scoped source inventory.</span></div>;
-  const linkedIds = new Set(snapshot.assistant.linked.map((source) => source.id));
-  const websiteRows = snapshot.pages.pages.filter((page) => linkedIds.has(page.sourceId) || page.assignedAssistants?.length || page.linkedAssistants?.length);
-  return <div className="playground-knowledge-inspector"><p><strong>{snapshot.assistant.linked.length}</strong> directly assigned source(s) · <strong>{snapshot.pages.sources.length}</strong> website source(s) in workspace</p>{snapshot.assistant.linked.map((source) => {
-    const pages = websiteRows.filter((page) => page.sourceId === source.id);
-    return <details key={source.id}><summary><strong>{source.name}</strong><span>{source.processingStatus}</span></summary><small>{source.type.toUpperCase()} · {source.visibility || 'visibility unavailable'} · source {shortId(source.id)}</small>{source.sourceUrl && <a href={source.sourceUrl} target="_blank" rel="noreferrer">{source.sourceUrl}</a>}<p>Registered: {source.status} · Index generation: {source.activeIndexGeneration ?? 'none'} · Last successful sync: {source.lastSuccessfulSyncAt ? new Date(source.lastSuccessfulSyncAt).toLocaleString() : 'none recorded'}</p>{source.processingErrorCode && <p className="inspector-warning">Processing error: {source.processingErrorCode}</p>}{pages.length ? <ul>{pages.map((page) => <li key={page.id}><strong>{page.title}</strong><small>{page.crawlStatus} · {page.indexedChunkCount} indexed chunk(s) · generation {page.generation} · fetched {new Date(page.crawledAt).toLocaleString()}</small><a href={page.canonicalUrl} target="_blank" rel="noreferrer">{page.canonicalUrl}</a><p>{page.preview}</p></li>)}</ul> : source.type === 'website' ? <p>No saved pages returned for this assigned source.</p> : null}</details>;
-  })}{!snapshot.assistant.linked.length && <p>No directly assigned sources are returned by the current assistant source API. Knowledge Base memberships are shown only when present in the source inventory contract.</p>}{snapshot.pages.total > snapshot.pages.pageSize && <small>Showing the first {snapshot.pages.pageSize} saved website pages from the current inventory response.</small>}</div>;
-}
 
 function DiagnosticsInspector({ trace, message }: { trace?: PlaygroundChatReply['diagnostics']; message?: Message }) {
+  // Capture status is separate from sanitized stage diagnostics.
+  if (trace && message && !trace.protectedResponseDebug && trace.protectedCaptureStatus) return <><p role="status">Response capture: {trace.protectedCaptureStatus}. Protected records are returned with the turn response; they are not saved in conversation history.</p><DiagnosticsInspector trace={{ ...trace, protectedCaptureStatus: undefined }} message={message}/></>;
   if (!message) return <div className="playground-inspector-empty"><CircleAlert size={20}/><strong>No message selected</strong><span>Select a response or failed turn to inspect recorded diagnostics.</span></div>;
-  if (!trace) return <div className="playground-inspector-empty"><CircleAlert size={20}/><strong>Diagnostics unavailable</strong><span>No inferred failure reason is shown when the server did not return operational trace data.</span></div>;
+  if (!trace) return <div className="playground-inspector-empty"><CircleAlert size={20}/><strong>Record unavailable</strong><span>The server did not return a trace for this message. Historical messages do not retain protected captures; a network timeout may also prevent delivery.</span></div>;
+  if (trace.protectedResponseDebug && Date.parse(trace.protectedResponseDebug.expiresAt) > Date.now()) return <div className="playground-diagnostics-inspector"><details open><summary>Response Debugger — protected development capture</summary><p>Trace {trace.traceId} · message {message.id}. Provider content is the adapter-returned text; the raw provider HTTP body is not captured. Comparison values not recorded by the validator remain not established.</p>{trace.protectedResponseDebug.records.map((record, index) => <details key={`${record.attemptId}:${record.stage}:${index}`}><summary>{record.attemptId} · {record.stage} · {record.at}{record.truncated ? ' · truncated' : ''}</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{record.text}</pre></details>)}<p>Protected drafts are excluded from the sanitized diagnostics export. Use Execution Trace and Sources for stage outcomes and evidence authorization.</p></details></div>;
   const notes = [!trace.retrieval.attempted ? 'Knowledge retrieval was not attempted in this turn.' : null, trace.retrieval.attempted && trace.retrieval.eligibleSourceCount === 0 ? 'No eligible public Knowledge sources were reported by retrieval.' : null, trace.retrieval.attempted && trace.retrieval.resultCount === 0 && trace.retrieval.eligibleSourceCount > 0 ? 'Eligible sources existed, but retrieval returned no chunks.' : null, trace.retrieval.semanticUnavailableCode ? `Semantic retrieval status: ${trace.retrieval.semanticUnavailableCode}.` : null, ...trace.events.filter((event) => event.errorCategory).map((event) => `${event.operation}: ${event.errorCategory}`), ...trace.tools.filter((tool) => tool.outcome !== 'completed' && tool.outcome !== 'requested').map((tool) => `${tool.tool}: ${tool.reason || tool.outcome}`) ].filter(Boolean);
   return <div className="playground-diagnostics-inspector">{trace.assistantConfiguration && <p>Assistant {trace.assistantConfiguration.id} · configuration {trace.assistantConfiguration.version ?? 'version unavailable'} · loaded {String(trace.assistantConfiguration.loaded)} · sections {Object.entries(trace.assistantConfiguration.sectionLengths).filter(([, length]) => length > 0).map(([name]) => name).join(', ') || 'none'}</p>}{trace.memory && <p>Memory: {trace.memory.includedMessageCount}/{trace.memory.loadedMessageCount} loaded turns · {trace.memory.order} · {trace.memory.contextBytes} bytes · dropped {trace.memory.droppedMessageCount} · truncation {trace.memory.truncationReasons.join(', ') || 'none'}{trace.memory.windowAtCapacity ? ' · database history window at capacity' : ''}</p>}{trace.promptAssembly && <p>Prompt assembled: {String(trace.promptAssembly.completed)} · platform {String(trace.promptAssembly.platformInstructionsIncluded)} · Bot Behavior {String(trace.promptAssembly.assistantBehaviorIncluded)} · Agent Builder node {String(trace.promptAssembly.agentBuilderNodeInstructionsIncluded)} · behavior dispatched {String(trace.promptAssembly.assistantBehaviorSentToProvider)} · history dispatched {String(trace.promptAssembly.historySentToProvider ?? false)} · last payload history {trace.promptAssembly.historyMessageCount ?? 0} turns ({trace.promptAssembly.historyRoles?.join(' → ') || 'none'})</p>}{trace.configuredFacts && <p>Validated support contacts: configured {String(trace.configuredFacts.configured)} · selected {String(trace.configuredFacts.selected)} · revalidated {String(trace.configuredFacts.revalidated)} · dispatched {String(trace.configuredFacts.supplied)}{trace.configuredFacts.excludedReason ? ` · ${trace.configuredFacts.excludedReason}` : ''}</p>}{notes.length ? notes.map((note, index) => <p key={index}><CircleAlert size={14}/>{note}</p>) : <p>No failed or missing-knowledge condition was recorded in this response trace.</p>}{trace.commerceReadiness && <p>Shopify: {trace.commerceReadiness.connectionStatus} · scope snapshot {trace.commerceReadiness.scopeSnapshotStatus} · catalog {trace.commerceReadiness.eligible ? 'eligible' : trace.commerceReadiness.reason ?? 'unavailable'} · {trace.commerceReadiness.recordCount} product(s) · scopes {trace.commerceReadiness.relevantGrantedScopes.join(', ') || 'none'} · assistant operations {trace.commerceReadiness.assistantEnabledOperations.join(', ') || 'none'} · {trace.commerceReadiness.dataSource}</p>}{trace.tools.map((tool, index) => <p key={`${tool.tool}:${index}`}>Tool {tool.tool}: {tool.outcome}{tool.resultCount !== undefined ? ` · ${tool.resultCount} result(s)` : ''}{tool.reason ? ` · ${tool.reason}` : ''}{tool.durationMs !== undefined ? ` · ${tool.durationMs}ms` : ''}{tool.dataSource ? ` · ${tool.dataSource}` : ''}{tool.input ? ` · input (redacted): ${tool.input}` : ''}</p>)}</div>;
 }

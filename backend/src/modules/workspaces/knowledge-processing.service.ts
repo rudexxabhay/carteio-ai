@@ -5,8 +5,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { WorkspaceService } from './workspace.service';
 import { KnowledgeBaseService } from './knowledge-base.service';
-import { createEmbeddingProvider, semanticConfigurationError, semanticMinimumSimilarity, chunkKnowledgeText, contentHash, deduplicateKnowledgeChunks, stableKnowledgeChunkId, type EmbeddingProvider } from './knowledge-indexing';
-import { originMatchesVerifiedDomain, sourceUrlMatchesVerifiedDomain, sourcesForAudience } from './knowledge-retrieval-policy';
+import { createEmbeddingProvider, semanticConfigurationError, semanticIndexEnabled, semanticMinimumSimilarity, chunkKnowledgeText, contentHash, deduplicateKnowledgeChunks, stableKnowledgeChunkId, type EmbeddingProvider } from './knowledge-indexing';
+import { originMatchesVerifiedDomain, sourcesForAudience } from './knowledge-retrieval-policy';
+import { isVerifiedPdfDocumentSource } from './knowledge-document-eligibility';
 import { WebsiteCrawler, type CrawlPage, type WebsitePageCategory } from './website-crawler';
 import { authoritativeRemovedUrls, canReuseIndexedChunks, prepareWebsiteSyncPages } from './website-sync';
 import { SHOPIFY_CONTENT_SCOPE_REQUIREMENTS, isShopifyScopeSnapshotFresh, shopifyContentCategoryAllowed } from './connectors/shopify-granted-scope-discovery.service';
@@ -71,115 +72,6 @@ type WebsiteVerificationGate = { category: string | null; description: string | 
 const requiresVerifiedWebsiteDomain = (source: WebsiteVerificationGate) => source.category === 'SHOPIFY_STOREFRONT'
   || Boolean(source.description?.startsWith('Public storefront discovered from the connected Shopify shop.'));
 const websiteDomainIsVerified = (source: WebsiteVerificationGate) => source.verificationStatus === 'VERIFIED' && source.verifiedAt !== null;
-function websiteAssistantCanUseSource(assistant: any, sourceUrl: string | null): boolean {
-  return assistant?.status === 'ACTIVE' && assistant.website?.status === 'ACTIVE' && assistant.website.verificationStatus === 'VERIFIED' && Boolean(assistant.website.domain) && Boolean(sourceUrl && sourceUrlMatchesVerifiedDomain(sourceUrl, assistant.website.domain));
-}
-function eligibleWebsiteAssistants(candidates: any[], sourceUrl: string | null): Array<{ id: string; name: string; status: string }> {
-  const eligible = new Map<string, { id: string; name: string; status: string }>();
-  for (const assistant of candidates) {
-    if (websiteAssistantCanUseSource(assistant, sourceUrl)) eligible.set(assistant.id, { id: assistant.id, name: assistant.name, status: assistant.status });
-  }
-  return [...eligible.values()];
-}
-function linkedWebsiteAssistants(candidates: any[]): Array<{ id: string; name: string; status: string }> {
-  const linked = new Map<string, { id: string; name: string; status: string }>();
-  for (const assistant of candidates) {
-    if (assistant?.id && assistant.name) linked.set(assistant.id, { id: assistant.id, name: assistant.name, status: String(assistant.status).toLowerCase() });
-  }
-  return [...linked.values()];
-}
-function websiteKnowledgeFreshness(lastSuccessfulSyncAt: Date | null): 'FRESH' | 'STALE' | 'UNAVAILABLE' {
-  if (!lastSuccessfulSyncAt) return 'UNAVAILABLE';
-  return Date.now() - lastSuccessfulSyncAt.getTime() <= 24 * 60 * 60 * 1000 ? 'FRESH' : 'STALE';
-}
-function websiteHostname(sourceUrl: string | null): string | null {
-  if (!sourceUrl) return null;
-  try { return new URL(sourceUrl).hostname; } catch { return null; }
-}
-const websiteDashboardAssistantSelect = {
-  id: true,
-  name: true,
-  status: true,
-  website: { select: { domain: true, status: true, verificationStatus: true } },
-};
-function websiteDashboardAssignments(organizationId: string) {
-  return {
-    assistantLinks: {
-      where: { organizationId },
-      select: { assistant: { select: websiteDashboardAssistantSelect } },
-    },
-    knowledgeBaseLinks: {
-      where: { organizationId, knowledgeBase: { is: { status: 'ACTIVE', archivedAt: null } } },
-      select: {
-        knowledgeBase: {
-          select: {
-            assistantLinks: {
-              where: { organizationId },
-              select: { assistant: { select: websiteDashboardAssistantSelect } },
-            },
-          },
-        },
-      },
-    },
-  };
-}
-function websiteDashboardPageSourceSelect(organizationId: string) {
-  return {
-    id: true,
-    name: true,
-    sourceUrl: true,
-    verificationStatus: true,
-    verifiedAt: true,
-    visibility: true,
-    syncPolicy: true,
-    processingStatus: true,
-    activeIndexGeneration: true,
-    sourceVersion: true,
-    lastSuccessfulSyncAt: true,
-    processingErrorCode: true,
-    semanticIndexStatus: true,
-    semanticIndexErrorCode: true,
-    lastSyncErrorCode: true,
-    ...websiteDashboardAssignments(organizationId),
-  };
-}
-function websiteDashboardSourceSelect(organizationId: string) {
-  return {
-    id: true,
-    name: true,
-    sourceUrl: true,
-    verificationStatus: true,
-    verifiedAt: true,
-    syncPolicy: true,
-    syncPaused: true,
-    processingStatus: true,
-    activeIndexGeneration: true,
-    sourceVersion: true,
-    processingErrorCode: true,
-    lastSyncErrorCode: true,
-    lastSyncAttemptAt: true,
-    lastSuccessfulSyncAt: true,
-    ...websiteDashboardAssignments(organizationId),
-    syncRuns: {
-      where: { organizationId },
-      orderBy: { startedAt: 'desc' },
-      take: 1,
-      select: {
-        status: true,
-        discoveredPages: true,
-        changedPages: true,
-        unchangedPages: true,
-        removedPages: true,
-        failedPages: true,
-        skippedPages: true,
-        errorCode: true,
-        startedAt: true,
-        finishedAt: true,
-      },
-    },
-    _count: { select: { pages: true } },
-  };
-}
 type WebsitePageSnapshot = {
   id: string;
   canonicalUrl: string;
@@ -197,9 +89,9 @@ type IndexedWebsitePage = { page: CrawlPage; parts: string[] };
 type StoredWebsiteChunk = { pageId: string; content: string; contentHash: string; locator: string | null; embeddingProvider: string; embeddingModel: string; embeddingDimensions: number; embedding: string | null };
 const SAFE_PROCESSING_ERROR_CODES = new Set([
   'PDF_PAGE_LIMIT', 'PDF_TEXT_LIMIT', 'PDF_OCR_REQUIRED', 'PDF_PARTIAL_OCR_REQUIRED', 'PDF_ENCRYPTED',
-  'PDF_INVALID', 'PDF_EXTRACTION_TIMEOUT', 'PDF_EXTRACTION_FAILED', 'PDF_IDENTITY_MISMATCH', 'PRIVATE_STORAGE_UNAVAILABLE',
+  'PDF_INVALID', 'PDF_EXTRACTION_TIMEOUT', 'PDF_EXTRACTION_FAILED', 'PDF_IDENTITY_MISMATCH', 'PDF_CLEANUP_FAILED', 'PRIVATE_STORAGE_UNAVAILABLE',
   'EMBEDDING_PROVIDER_RETRYABLE', 'EMBEDDING_PROVIDER_UNAVAILABLE', 'EMBEDDING_PROVIDER_AUTH_FAILED',
-  'EMBEDDING_PROVIDER_NOT_CONFIGURED', 'EMBEDDING_DIMENSION_MISMATCH', 'SOURCE_TYPE_NOT_SUPPORTED',
+  'EMBEDDING_PROVIDER_NOT_CONFIGURED', 'EMBEDDING_PROVIDER_PAYMENT_REQUIRED', 'EMBEDDING_PROVIDER_FORBIDDEN', 'EMBEDDING_PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND', 'EMBEDDING_PROVIDER_REQUEST_FAILED', 'EMBEDDING_PROVIDER_BASE_URL_INVALID', 'EMBEDDING_PROVIDER_INVALID_RESPONSE', 'EMBEDDING_DIMENSION_MISMATCH', 'EMBEDDING_INDEX_PROFILE_MISMATCH', 'EMBEDDING_INDEX_VECTOR_COUNT_MISMATCH', 'SOURCE_TYPE_NOT_SUPPORTED',
   'EMPTY_SOURCE', 'STALE_SOURCE_VERSION', 'WORKER_LEASE_LOST', 'WEBSITE_NO_INDEXABLE_CONTENT',
   'WEBSITE_SOURCE_NOT_VERIFIED', 'CRAWL_DESTINATION_BLOCKED', 'CRAWL_URL_BLOCKED', 'CRAWL_REDIRECT_OUT_OF_SCOPE',
   'SHOPIFY_STOREFRONT_DOMAIN_NOT_VERIFIED',
@@ -291,6 +183,17 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
   }
 
   onModuleInit() {
+    const semanticEnabled = semanticIndexEnabled();
+    this.logger.log(JSON.stringify({
+      event: 'knowledge_embedding_configuration_loaded',
+      workerMode: process.env.VERCEL === '1' ? 'SERVERLESS_EXTERNAL_WORKER_REQUIRED' : process.env.KNOWLEDGE_WORKER_STANDALONE === 'true' ? 'STANDALONE' : process.env.KNOWLEDGE_WORKER_ENABLED === 'true' ? 'IN_PROCESS' : 'DISABLED',
+      workerEnabled: process.env.KNOWLEDGE_WORKER_ENABLED === 'true',
+      semanticIndexEnabled: semanticEnabled,
+      provider: this.embeddings?.provider ?? null,
+      model: this.embeddings?.model ?? null,
+      dimensions: this.embeddings?.dimensions ?? null,
+      configurationError: semanticEnabled ? semanticConfigurationError() ?? (this.embeddings ? null : 'EMBEDDING_PROVIDER_NOT_CONFIGURED') : 'SEMANTIC_INDEX_DISABLED',
+    }));
     if (process.env.KNOWLEDGE_WORKER_DIAGNOSTIC_ONLY === 'true') {
       this.logger.log(JSON.stringify({ event: 'knowledge_worker_diagnostic_mode_polling_skipped' }));
       return;
@@ -329,14 +232,65 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
 
   async status(userId: string, slug: string, sourceId: string) {
     const member = await this.workspaces.requireAccess(userId, slug);
-    const source = await this.db.knowledgeSource.findFirst({ where: { id: sourceId, organizationId: member.organizationId }, select: { id: true, type: true, status: true, processingStatus: true, processingErrorCode: true, semanticIndexStatus: true, semanticIndexErrorCode: true, sourceVersion: true, activeIndexGeneration: true, updatedAt: true } });
+    const source = await this.db.knowledgeSource.findFirst({ where: { id: sourceId, organizationId: member.organizationId }, select: { id: true, type: true, status: true, processingStatus: true, processingErrorCode: true, semanticIndexStatus: true, semanticIndexErrorCode: true, sourceVersion: true, activeIndexGeneration: true, document: true, updatedAt: true } });
     if (!source) throw this.sourceNotFound();
-    const [jobs, chunks, latestIndexed] = await Promise.all([
-      this.db.knowledgeProcessingJob.findMany({ where: { organizationId: member.organizationId, sourceId }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, kind: true, status: true, attempts: true, errorCode: true, createdAt: true, updatedAt: true } }),
+    const [jobs, chunks, latestIndexed, vectorProfiles] = await Promise.all([
+      this.db.knowledgeProcessingJob.findMany({ where: { organizationId: member.organizationId, sourceId, sourceVersion: source.sourceVersion }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, kind: true, status: true, stage: true, attempts: true, errorCode: true, createdAt: true, updatedAt: true } }),
       this.db.knowledgeChunk.count({ where: { organizationId: member.organizationId, sourceId, sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration ?? -1 } }),
       this.db.knowledgeChunk.aggregate({ where: { organizationId: member.organizationId, sourceId, sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration ?? -1 }, _max: { indexedAt: true } }),
+      source.activeIndexGeneration == null ? Promise.resolve([]) : this.db.$queryRaw`SELECT "embeddingProvider", "embeddingModel", "embeddingDimensions", COUNT(*)::int AS "vectorCount" FROM "KnowledgeChunk" WHERE "organizationId"=${member.organizationId}::uuid AND "sourceId"=${sourceId}::uuid AND "sourceVersion"=${source.sourceVersion} AND generation=${source.activeIndexGeneration} AND embedding IS NOT NULL GROUP BY "embeddingProvider", "embeddingModel", "embeddingDimensions"`,
     ]);
-    return { ...source, jobs, chunkCount: chunks, lastIndexedAt: latestIndexed._max.indexedAt };
+    const latestJob = jobs[0];
+    const pageCount = Number(source.document?.pageCount ?? source.document?.pages?.length ?? 0);
+    const stage = latestJob?.status === 'QUEUED' || latestJob?.status === 'RETRY_WAIT' ? 'QUEUED'
+      : latestJob?.status === 'PROCESSING' ? latestJob.stage ?? 'INDEXING'
+        : source.processingStatus === 'READY' ? 'READY'
+          : source.processingStatus === 'FAILED' ? 'FAILED' : 'SAVING';
+    const documentProgress = source.document ? {
+      processingId: latestJob?.id ?? source.id,
+      stage,
+      totalPages: pageCount || undefined,
+      pagesExtracted: source.document.extracted ? pageCount : 0,
+      pagesPersisted: source.document.extracted ? pageCount : 0,
+      chunksIndexed: chunks,
+      ...(source.processingErrorCode || latestJob?.errorCode ? { failureReason: source.processingErrorCode ?? latestJob?.errorCode } : {}),
+      lastUpdatedAt: (latestJob?.updatedAt ?? source.updatedAt).toISOString(),
+      ...(['READY', 'FAILED'].includes(stage) && !['QUEUED', 'PROCESSING', 'RETRY_WAIT'].includes(latestJob?.status ?? '') ? { completedAt: (latestJob?.updatedAt ?? source.updatedAt).toISOString() } : {}),
+    } : undefined;
+    const { document: _document, ...sourceSummary } = source;
+    const vectorCount = (vectorProfiles as Array<{ vectorCount: number }>).reduce((sum, profile) => sum + Number(profile.vectorCount), 0);
+    const embeddingProfile = (vectorProfiles as Array<{ embeddingProvider: string; embeddingModel: string; embeddingDimensions: number }>).length === 1 ? (vectorProfiles as Array<{ embeddingProvider: string; embeddingModel: string; embeddingDimensions: number }>)[0] : null;
+    const semanticEnabled = semanticIndexEnabled() && Boolean(this.embeddings) && !semanticConfigurationError();
+    // The queue enforces one active job per source/version/kind; its current job
+    // is therefore present in this bounded five-row history window.
+    const activeIndexJob = jobs.some((job: any) => job.kind === 'INDEX' && ['QUEUED', 'PROCESSING', 'RETRY_WAIT'].includes(job.status));
+    const profileMatchesConfiguration = Boolean(this.embeddings && embeddingProfile
+      && embeddingProfile.embeddingProvider === this.embeddings.provider
+      && embeddingProfile.embeddingModel === this.embeddings.model
+      && embeddingProfile.embeddingDimensions === this.embeddings.dimensions);
+    const completeCurrentVectors = source.processingStatus === 'READY' && chunks > 0 && vectorCount === chunks && profileMatchesConfiguration;
+    let semanticStatus: 'NOT_CONFIGURED' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+    let semanticStatusError: string | null;
+    if (!semanticEnabled) {
+      semanticStatus = 'NOT_CONFIGURED';
+      semanticStatusError = semanticIndexEnabled() ? semanticConfigurationError() ?? 'EMBEDDING_PROVIDER_NOT_CONFIGURED' : 'SEMANTIC_INDEX_DISABLED';
+    } else if (activeIndexJob) {
+      semanticStatus = 'PROCESSING';
+      semanticStatusError = null;
+    } else if (completeCurrentVectors) {
+      semanticStatus = 'READY';
+      semanticStatusError = null;
+    } else if (source.processingStatus === 'FAILED' || source.semanticIndexStatus === 'FAILED') {
+      semanticStatus = 'FAILED';
+      semanticStatusError = source.semanticIndexErrorCode ?? source.processingErrorCode ?? 'SEMANTIC_INDEX_FAILED';
+    } else if (vectorCount > 0 && (!profileMatchesConfiguration || vectorCount !== chunks)) {
+      semanticStatus = 'FAILED';
+      semanticStatusError = !profileMatchesConfiguration ? 'EMBEDDING_INDEX_PROFILE_MISMATCH' : 'EMBEDDING_INDEX_VECTOR_COUNT_MISMATCH';
+    } else {
+      semanticStatus = 'PENDING';
+      semanticStatusError = null;
+    }
+    return { ...sourceSummary, semanticIndexStatus: semanticStatus, semanticIndexErrorCode: semanticStatusError, ...(documentProgress ? { documentProgress } : {}), jobs, chunkCount: chunks, semanticVectorCount: vectorCount, semanticEmbeddingModel: embeddingProfile?.embeddingModel ?? null, semanticEmbeddingProvider: embeddingProfile?.embeddingProvider ?? null, semanticEmbeddingDimensions: embeddingProfile?.embeddingDimensions ?? null, lastIndexedAt: latestIndexed._max.indexedAt };
   }
 
   async listSourceChunks(userId: string, slug: string, sourceId: string, query: { page?: number; pageSize?: number; search?: string }) {
@@ -355,114 +309,48 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     return { sourceId, sourceVersion: source.sourceVersion, activeGeneration: source.activeIndexGeneration, processingStatus: source.processingStatus, activeChunkCount: activeCount, chunks: rows.map(({ content, ...row }: any) => ({ ...row, contentPreview: String(content).slice(0, 800), active: source.processingStatus === 'READY' && row.sourceVersion === source.sourceVersion && row.generation === source.activeIndexGeneration })), total, page, pageSize, pageCount: Math.ceil(total / pageSize) };
   }
 
-  /** Paginated, tenant-scoped view of persisted website page records for workspace managers. */
-  async listWebsitePages(userId: string, slug: string, query: { page?: number; pageSize?: number; search?: string; sourceId?: string }) {
+  /** Resolve trace IDs in one authenticated, tenant-scoped read. This is presentation metadata only. */
+  async resolveEvidenceMetadata(userId: string, slug: string, assistantId: string, items: Array<{ sourceId: string; chunkId: string; pageId?: string | null; sourceVersion: number; generation: number }>) {
     const member = await this.workspaces.requireAccess(userId, slug, managers);
-    const page = Math.min(10000, Math.max(1, query.page ?? 1));
-    const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 20));
-    const search = query.search?.trim().slice(0, 200);
-    const sourceWhere = { organizationId: member.organizationId, type: 'WEBSITE', status: 'REGISTERED', deletedAt: null, ...(query.sourceId ? { id: query.sourceId } : {}) };
-    const where = {
-      organizationId: member.organizationId,
-      source: { is: sourceWhere },
-      ...(search ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { canonicalUrl: { contains: search, mode: 'insensitive' } }] } : {}),
-    };
-    const [rows, total, sources] = await Promise.all([
-      this.db.knowledgePage.findMany({
-        where,
-        orderBy: [{ fetchedAt: 'desc' }, { id: 'asc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: {
-          id: true,
-          sourceId: true,
-          title: true,
-          canonicalUrl: true,
-          pageCategory: true,
-          status: true,
-          contentHash: true,
-          sourceVersion: true,
-          generation: true,
-          fetchedAt: true,
-          indexedAt: true,
-          source: { select: websiteDashboardPageSourceSelect(member.organizationId) },
-        },
-      }),
-      this.db.knowledgePage.count({ where }),
-      this.db.knowledgeSource.findMany({
-        where: sourceWhere,
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
-        select: websiteDashboardSourceSelect(member.organizationId),
-      }),
-    ]);
-    const rowIds: string[] = rows.map((row: any): string => row.id);
-    const [chunkGroups, previews] = rowIds.length ? await Promise.all([
-      this.db.knowledgeChunk.groupBy({
-        by: ['pageId', 'sourceVersion', 'generation'],
-        where: { organizationId: member.organizationId, pageId: { in: rowIds } },
-        _count: { _all: true },
-      }),
-      this.db.$queryRawUnsafe(
-        `
-        SELECT "id", LEFT("content", 360) AS "preview"
-        FROM "KnowledgePage"
-        WHERE "organizationId" = $1::uuid
-          AND "id" IN (${rowIds.map((_id: string, index: number) => `$${index + 2}::uuid`).join(', ')})
-        `,
-        member.organizationId,
-        ...rowIds,
-      ) as Promise<Array<{ id: string; preview: string }>>,
+    const bounded = items.slice(0, 40);
+    const effective = await this.bases.resolveEffectiveSources(member.organizationId, assistantId, { publicOnly: true });
+    const eligible = new Map(effective.sources.map((source: any) => [source.id, source] as const));
+    const sourceIds = [...new Set(bounded.map((item) => item.sourceId).filter((id) => eligible.has(id)))];
+    const baseNames = new Map(effective.knowledgeBases.map((base: any) => [base.id, base.name] as const));
+    const [sources, chunks] = sourceIds.length ? await Promise.all([
+      this.db.knowledgeSource.findMany({ where: { organizationId: member.organizationId, id: { in: sourceIds } }, select: { id: true, name: true, type: true, document: true, knowledgeSection: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, processingStatus: true, status: true, deletedAt: true } }),
+      this.db.knowledgeChunk.findMany({ where: { organizationId: member.organizationId, sourceId: { in: sourceIds }, id: { in: bounded.map((item) => item.chunkId) } }, select: { id: true, sourceId: true, pageId: true, locator: true, sourceVersion: true, generation: true, sequence: true } }),
     ]) : [[], []];
-    const chunkCountByPage = new Map<string, number>(chunkGroups.map((group: any) => [`${group.pageId}:${group.sourceVersion}:${group.generation}`, group._count._all]));
-    const previewByPage = new Map<string, string>(previews.map((item: { id: string; preview: string }) => [item.id, item.preview]));
-    const pageItems = rows.map((row: any) => {
-      const source = row.source;
-      const indexedChunkCount = chunkCountByPage.get(`${row.id}:${row.sourceVersion}:${row.generation}`) ?? 0;
-      const assistantCandidates = [...source.assistantLinks.map((link: any) => link.assistant), ...source.knowledgeBaseLinks.flatMap((link: any) => link.knowledgeBase.assistantLinks.map((assistantLink: any) => assistantLink.assistant))];
-      const linkedAssistants = linkedWebsiteAssistants(assistantCandidates);
-      const domainEligibleAssistants = eligibleWebsiteAssistants(assistantCandidates, source.sourceUrl);
-      const isIndexed = row.indexedAt !== null && source.activeIndexGeneration === row.generation && source.sourceVersion === row.sourceVersion && indexedChunkCount > 0;
-      const searchReady = isIndexed && source.processingStatus === 'READY' && source.visibility === 'PUBLIC_REFERENCE';
-      const availability = source.processingStatus === 'FAILED' ? 'FAILED' : !isIndexed || source.processingStatus !== 'READY' ? 'INDEX_PENDING' : !source.visibility || source.visibility !== 'PUBLIC_REFERENCE' ? 'BLOCKED_ASSIGNMENT_OR_VISIBILITY' : 'AI_READY';
-      return { id: row.id, sourceId: row.sourceId, website: source.name, domain: websiteHostname(source.sourceUrl), title: row.title, canonicalUrl: row.canonicalUrl, category: row.pageCategory, crawlStatus: row.status, preview: previewByPage.get(row.id) ?? '', contentHash: row.contentHash, sourceVersion: row.sourceVersion, generation: row.generation, crawledAt: row.fetchedAt, indexedAt: row.indexedAt, indexedChunkCount, freshness: websiteKnowledgeFreshness(source.lastSuccessfulSyncAt), searchReady, assignedAssistants: domainEligibleAssistants, linkedAssistants, domainEligibleAssistants, availability, errorCode: source.processingErrorCode ?? source.lastSyncErrorCode ?? source.semanticIndexErrorCode ?? null };
-    });
-    const sourceItems = sources.map((source: any) => { const assistantCandidates = [...source.assistantLinks.map((link: any) => link.assistant), ...source.knowledgeBaseLinks.flatMap((link: any) => link.knowledgeBase.assistantLinks.map((assistantLink: any) => assistantLink.assistant))]; const linkedAssistants = linkedWebsiteAssistants(assistantCandidates); const domainEligibleAssistants = eligibleWebsiteAssistants(assistantCandidates, source.sourceUrl); return { id: source.id, name: source.name, url: source.sourceUrl, domain: websiteHostname(source.sourceUrl), verificationStatus: source.verificationStatus, verifiedAt: source.verifiedAt, syncPolicy: source.syncPolicy, syncPaused: source.syncPaused, processingStatus: source.processingStatus, pageCount: source._count.pages, lastAttemptAt: source.lastSyncAttemptAt, lastSuccessfulSyncAt: source.lastSuccessfulSyncAt, freshness: websiteKnowledgeFreshness(source.lastSuccessfulSyncAt), latestRun: source.syncRuns[0] ?? null, errorCode: source.processingErrorCode ?? source.lastSyncErrorCode ?? source.syncRuns[0]?.errorCode ?? null, assignedAssistants: domainEligibleAssistants, linkedAssistants, domainEligibleAssistants }; });
-    return { pages: pageItems, sources: sourceItems, total, page, pageSize, pageCount: Math.ceil(total / pageSize) };
+    const sourceById = new Map((sources as any[]).map((source) => [source.id, source] as const));
+    const chunkById = new Map((chunks as any[]).map((chunk) => [chunk.id, chunk] as const));
+    return { items: bounded.map((trace) => {
+      const source: any = sourceById.get(trace.sourceId);
+      const current: any = eligible.get(trace.sourceId);
+      if (!source || !current) return { sourceId: trace.sourceId, chunkId: trace.chunkId, status: 'METADATA_UNAVAILABLE' as const };
+      const historical = trace.sourceVersion !== source.sourceVersion || trace.generation !== source.activeIndexGeneration;
+      if (historical) return { sourceId: trace.sourceId, chunkId: trace.chunkId, status: 'HISTORICAL_SOURCE_NO_LONGER_ELIGIBLE' as const };
+      const chunk: any = chunkById.get(trace.chunkId);
+      if (!chunk || chunk.sourceId !== source.id || chunk.sourceVersion !== source.sourceVersion || chunk.generation !== source.activeIndexGeneration || (trace.pageId && chunk.pageId !== trace.pageId)) {
+        return { sourceId: trace.sourceId, chunkId: trace.chunkId, status: 'METADATA_UNAVAILABLE' as const };
+      }
+      const knowledgeBaseIds: string[] = current.knowledgeBaseIds ?? [];
+      const knowledgeBase = effective.knowledgeBases.find((base: any) => knowledgeBaseIds.includes(base.id));
+      return { sourceId: source.id, chunkId: chunk.id, status: 'CURRENT_VERIFIED_PDF' as const,
+        provenance: 'AUTHENTICATED_PDF_EXTRACTION_V1' as const, filename: source.document?.filename ?? null, title: source.name,
+        section: source.knowledgeSection, knowledgeBaseId: knowledgeBase?.id ?? null, knowledgeBaseName: knowledgeBase ? baseNames.get(knowledgeBase.id) ?? null : null,
+        sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration, pageId: chunk.pageId,
+        locator: chunk.locator, chunkSequence: chunk.sequence, customerVisible: source.visibility === 'PUBLIC_REFERENCE' };
+    }) };
   }
 
-  async getWebsitePage(userId: string, slug: string, pageId: string) {
-    const member = await this.workspaces.requireAccess(userId, slug, managers);
-    const row = await this.db.knowledgePage.findFirst({
-      where: {
-        id: pageId,
-        organizationId: member.organizationId,
-        source: {
-          is: {
-            organizationId: member.organizationId,
-            type: 'WEBSITE',
-            status: 'REGISTERED',
-            deletedAt: null,
-          },
-        },
-      },
-      include: { source: { select: websiteDashboardPageSourceSelect(member.organizationId) } },
-    });
-    if (!row) throw this.sourceNotFound();
-    const source = row.source;
-    const indexedChunkCount = await this.db.knowledgeChunk.count({ where: { organizationId: member.organizationId, sourceId: row.sourceId, pageId: row.id, sourceVersion: row.sourceVersion, generation: row.generation } });
-    const assistantCandidates = [...source.assistantLinks.map((link: any) => link.assistant), ...source.knowledgeBaseLinks.flatMap((link: any) => link.knowledgeBase.assistantLinks.map((assistantLink: any) => assistantLink.assistant))];
-    const linkedAssistants = linkedWebsiteAssistants(assistantCandidates);
-    const domainEligibleAssistants = eligibleWebsiteAssistants(assistantCandidates, source.sourceUrl);
-    const isIndexed = row.indexedAt !== null && source.activeIndexGeneration === row.generation && source.sourceVersion === row.sourceVersion && indexedChunkCount > 0;
-    const searchReady = isIndexed && source.processingStatus === 'READY' && source.visibility === 'PUBLIC_REFERENCE';
-    return { id: row.id, sourceId: row.sourceId, website: source.name, domain: websiteHostname(source.sourceUrl), title: row.title, canonicalUrl: row.canonicalUrl, category: row.pageCategory, crawlStatus: row.status, content: row.content.slice(0, 60000), contentHash: row.contentHash, sourceVersion: row.sourceVersion, generation: row.generation, crawledAt: row.fetchedAt, indexedAt: row.indexedAt, indexedChunkCount, freshness: websiteKnowledgeFreshness(source.lastSuccessfulSyncAt), searchReady, assignedAssistants: domainEligibleAssistants, linkedAssistants, domainEligibleAssistants, errorCode: source.processingErrorCode ?? source.lastSyncErrorCode ?? null };
-  }
+  /** Paginated, tenant-scoped view of persisted website page records for workspace managers. */
 
   async retry(userId: string, slug: string, sourceId: string) {
     const member = await this.workspaces.requireAccess(userId, slug, managers);
     const source = await this.db.knowledgeSource.findFirst({ where: { id: sourceId, organizationId: member.organizationId, status: 'REGISTERED' } });
     if (!source) throw this.sourceNotFound();
     if (source.type === 'WEBSITE') return this.enqueueWebsite(userId, slug, sourceId);
+    if (!isVerifiedPdfDocumentSource(source)) throw new ConflictException({ code: 'PDF_PROVENANCE_REPROCESS_REQUIRED', message: 'Replace this historical document with its original PDF before reindexing customer Knowledge.' });
     await this.enqueueRecord(source, 'INDEX');
     return { sourceId, status: 'queued', sourceVersion: source.sourceVersion };
   }
@@ -509,7 +397,8 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     const eligibleSources = sourcesForAudience(scope.sources, 'PUBLIC_VISITOR').filter((source: any) => ['FAQ', 'TEXT', 'WEBSITE'].includes(source.type));
     const websiteIds = eligibleSources.filter((source: any) => source.type === 'WEBSITE').map((source: any) => source.id);
     const websiteBoundIds = await this.filterEligiblePublicWebsiteSources(member.organizationId, websiteIds);
-    const eligibleIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, [...eligibleSources.filter((source: any) => source.type !== 'WEBSITE').map((source: any) => source.id), ...websiteBoundIds]);
+    const connectorEligibleIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, [...eligibleSources.filter((source: any) => source.type !== 'WEBSITE').map((source: any) => source.id), ...websiteBoundIds]);
+    const eligibleIds = await this.filterVerifiedPdfSources(member.organizationId, connectorEligibleIds);
     const languageRows: Array<{ id: string; type: string; languageHint: string | null; sourceVersion: number; activeIndexGeneration: number | null }> = eligibleIds.length ? await this.db.knowledgeSource.findMany({
       where: { organizationId: member.organizationId, id: { in: eligibleIds }, type: { in: ['FAQ', 'TEXT', 'WEBSITE'] }, status: 'REGISTERED', processingStatus: 'READY', visibility: 'PUBLIC_REFERENCE', deletedAt: null },
       select: { id: true, type: true, languageHint: true, sourceVersion: true, activeIndexGeneration: true },
@@ -532,11 +421,14 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
   async effectivePublicKnowledge(userId: string, slug: string, assistantId: string) {
     const member = await this.workspaces.requireAccess(userId, slug);
     const scope = await this.bases.resolveEffectiveSources(member.organizationId, assistantId, { publicOnly: true, includeDiagnostics: true });
-    const publicSources = sourcesForAudience(scope.sources, 'PUBLIC_VISITOR').filter((source: any) => ['FAQ', 'TEXT', 'WEBSITE'].includes(source.type));
+    const allPublicSources = sourcesForAudience(scope.sources, 'PUBLIC_VISITOR').filter((source: any) => ['FAQ', 'TEXT', 'WEBSITE'].includes(source.type));
+    const pdfSourceIds = new Set(await this.filterVerifiedPdfSources(member.organizationId, allPublicSources.map((source: any) => source.id)));
+    const publicSources = allPublicSources.filter((source: any) => pdfSourceIds.has(source.id));
     const websiteIds = publicSources.filter((source: any) => source.type === 'WEBSITE').map((source: any) => source.id);
     const safeWebsiteIds = await this.filterEligiblePublicWebsiteSources(member.organizationId, websiteIds);
     const candidateIds = [...publicSources.filter((source: any) => source.type !== 'WEBSITE').map((source: any) => source.id), ...safeWebsiteIds];
-    const authorizedIds = new Set(await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, candidateIds));
+    const connectorAuthorizedIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, candidateIds);
+    const authorizedIds = new Set(await this.filterVerifiedPdfSources(member.organizationId, connectorAuthorizedIds));
     const blockedReasonCounts = { ...(scope.blockedReasonCounts ?? {}) } as Record<string, number>;
     const websiteAuthorizationBlocked = websiteIds.length - safeWebsiteIds.length;
     const connectorAuthorizationBlocked = candidateIds.length - authorizedIds.size;
@@ -572,7 +464,8 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
       .map((source: any) => source.id);
     const websiteIds = scope.sources.filter((source: any) => ids.includes(source.id) && source.type === 'WEBSITE').map((source: any) => source.id);
     const websiteBoundIds = await this.filterEligiblePublicWebsiteSources(member.organizationId, websiteIds);
-    const eligibleIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, [...ids.filter((id) => !websiteIds.includes(id)), ...websiteBoundIds]);
+    const connectorEligibleIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, [...ids.filter((id) => !websiteIds.includes(id)), ...websiteBoundIds]);
+    const eligibleIds = await this.filterVerifiedPdfSources(member.organizationId, connectorEligibleIds);
     if (!eligibleIds.length) return 0;
     return this.db.knowledgeSource.count({ where: { organizationId: member.organizationId, id: { in: eligibleIds }, status: 'REGISTERED', processingStatus: 'READY', visibility: 'PUBLIC_REFERENCE', deletedAt: null } });
   }
@@ -588,7 +481,8 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
       .map((source: any) => source.id);
     const websiteIds = scope.sources.filter((source: any) => ids.includes(source.id) && source.type === 'WEBSITE').map((source: any) => source.id);
     const websiteBoundIds = await this.filterEligiblePublicWebsiteSources(member.organizationId, websiteIds);
-    const eligibleIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, [...ids.filter((id) => !websiteIds.includes(id)), ...websiteBoundIds]);
+    const connectorEligibleIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, [...ids.filter((id) => !websiteIds.includes(id)), ...websiteBoundIds]);
+    const eligibleIds = await this.filterVerifiedPdfSources(member.organizationId, connectorEligibleIds);
     if (!eligibleIds.length) return [];
     const rows = await this.db.knowledgeSource.groupBy({
       by: ['type'],
@@ -636,7 +530,8 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     const authorizedSourceIds = audience === 'PUBLIC_VISITOR'
       ? [...assignedSourceIds.filter((id) => !websiteIds.includes(id)), ...eligibleWebsiteIds]
       : assignedSourceIds;
-    const sourceIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, authorizedSourceIds);
+    const connectorAuthorizedSourceIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, authorizedSourceIds);
+    let sourceIds = connectorAuthorizedSourceIds;
     this.logger.debug(JSON.stringify({ event: 'knowledge_retrieval_authorization', organizationId: member.organizationId, assistantId, audience, assignedCandidateCount: authorizedSourceIds.length, eligibleSourceCount: sourceIds.length, permissionFilteredCount: authorizedSourceIds.length - sourceIds.length }));
     const context = audience === 'PUBLIC_VISITOR' ? 'public_safe_playground_preview' : 'authenticated_workspace_preview';
     const rejectionReasons = [
@@ -648,8 +543,15 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     if (!queryCandidates.length) return { results: [], mode: 'lexical_only', context, audience, eligibleSourceCount: sourceIds.length, semanticUnavailableCode: 'EMPTY_QUERY', diagnostics: { assignedSourceCount, rejectedSourceCount: Math.max(0, assignedSourceCount - sourceIds.length), indexReadySourceCount: 0, activeIndexChunkCount: 0, indexReadinessDurationMs: 0, queryVariantCount: 0, lexicalCandidateCount: 0, semanticCandidateCount: 0, rankedCandidateCount: 0, selectedEvidenceCount: 0, lexicalDurationMs: 0, semanticDurationMs: 0, rankingDurationMs: 0, methodsAttempted: [], rejectionReasons, sourceIndexStates: [], retrievalReason: 'EMPTY_QUERY' } };
     if (!sourceIds.length) return { results: [], mode: 'lexical_only', context, audience, eligibleSourceCount: 0, semanticUnavailableCode: this.embeddings ? 'NO_AUTHORIZED_SOURCES' : semanticConfigurationError() ?? 'SEMANTIC_NOT_CONFIGURED', diagnostics: { assignedSourceCount, rejectedSourceCount: assignedSourceCount, indexReadySourceCount: 0, activeIndexChunkCount: 0, indexReadinessDurationMs: 0, queryVariantCount: queryCandidates.length, lexicalCandidateCount: 0, semanticCandidateCount: 0, rankedCandidateCount: 0, selectedEvidenceCount: 0, lexicalDurationMs: 0, semanticDurationMs: 0, rankingDurationMs: 0, methodsAttempted: [], rejectionReasons, sourceIndexStates: [], retrievalReason: 'NO_ELIGIBLE_SOURCES' } };
     const indexReadinessStartedAt = Date.now();
-    const sourceReadiness = await this.db.knowledgeSource.findMany({ where: { organizationId: member.organizationId, id: { in: sourceIds } }, select: { id: true, status: true, processingStatus: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, deletedAt: true } });
-    const readySources = sourceReadiness.filter((source: any) => source.status === 'REGISTERED' && source.processingStatus === 'READY' && (audience !== 'PUBLIC_VISITOR' || (source.visibility === 'PUBLIC_REFERENCE' && source.deletedAt === null)));
+    const sourceReadiness = await this.db.knowledgeSource.findMany({ where: { organizationId: member.organizationId, id: { in: sourceIds } }, select: { id: true, type: true, document: true, status: true, processingStatus: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, deletedAt: true } });
+    {
+      const pdfSourceIds = new Set(sourceReadiness.filter((source: any) => isVerifiedPdfDocumentSource(source)).map((source: any) => source.id));
+      const beforePdfEligibility = sourceIds.length;
+      sourceIds = sourceIds.filter((id) => pdfSourceIds.has(id));
+      if (beforePdfEligibility > sourceIds.length) rejectionReasons.push({ reason: 'PDF_DOCUMENT_PROVENANCE_REQUIRED', count: beforePdfEligibility - sourceIds.length });
+    }
+    const readySources = sourceReadiness.filter((source: any) => sourceIds.includes(source.id) && source.status === 'REGISTERED' && source.processingStatus === 'READY' && (audience !== 'PUBLIC_VISITOR' || (source.visibility === 'PUBLIC_REFERENCE' && source.deletedAt === null)));
+    if (!sourceIds.length) return { results: [], mode: 'lexical_only', context, audience, eligibleSourceCount: 0, semanticUnavailableCode: this.embeddings ? 'NO_AUTHORIZED_SOURCES' : semanticConfigurationError() ?? 'SEMANTIC_NOT_CONFIGURED', diagnostics: { assignedSourceCount, rejectedSourceCount: assignedSourceCount, indexReadySourceCount: 0, activeIndexChunkCount: 0, indexReadinessDurationMs: Date.now() - indexReadinessStartedAt, queryVariantCount: queryCandidates.length, lexicalCandidateCount: 0, semanticCandidateCount: 0, rankedCandidateCount: 0, selectedEvidenceCount: 0, lexicalDurationMs: 0, semanticDurationMs: 0, rankingDurationMs: 0, methodsAttempted: [], rejectionReasons, sourceIndexStates: [], retrievalReason: 'NO_ELIGIBLE_SOURCES' } };
     const activeIndexSources = readySources.filter((source: any) => Number.isSafeInteger(source.activeIndexGeneration) && Number.isSafeInteger(source.sourceVersion));
     const activeIndexChunkCount = activeIndexSources.length ? await this.db.knowledgeChunk.count({ where: { organizationId: member.organizationId, OR: activeIndexSources.map((source: any) => ({ sourceId: source.id, sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration })) } }) : 0;
     const readySourceIds = readySources.map((source: any) => source.id);
@@ -693,6 +595,12 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
         SELECT s.id FROM "KnowledgeSource" s
         WHERE s."organizationId"=${member.organizationId}::uuid AND s.id=ANY(${sourceIds}::uuid[])
           AND s.status='REGISTERED' AND s."processingStatus"='READY'
+          AND s.document->>'provenance'='AUTHENTICATED_PDF_EXTRACTION_V1'
+          AND (NOT ${publicOnly}::boolean OR (s.type='TEXT' AND s.document->>'extracted'='true' AND s.document->>'sourceLanguage'='en'
+            AND COALESCE(s.document->>'filename','') ~* '\\.pdf$' AND COALESCE(s.document->>'bytes','') ~ '^[1-9][0-9]*$'
+            AND COALESCE(s.document->>'hash','') ~* '^[a-f0-9]{64}$' AND COALESCE(s.document->>'contentHash','') ~* '^[a-f0-9]{64}$'
+            AND jsonb_typeof(s.document->'pages')='array' AND jsonb_array_length(s.document->'pages') > 0
+            AND s.document->>'pageCount'=jsonb_array_length(s.document->'pages')::text))
           AND (NOT ${publicOnly}::boolean OR (s.visibility='PUBLIC_REFERENCE' AND s."deletedAt" IS NULL))
           AND (s."connectorInstanceId" IS NULL OR EXISTS (SELECT 1 FROM "ConnectorInstance" ci WHERE ci.id=s."connectorInstanceId" AND ci."organizationId"=s."organizationId" AND ci.state='CONNECTED' AND ci."verifiedCapabilities" @> '["WEBSITE_CONTENT"]'::jsonb AND (s."connectorDataCategory" NOT IN ('SHOPIFY_LOCATIONS','SHOPIFY_SHIPPING','SHOPIFY_LEGAL_POLICIES','SHOPIFY_ONLINE_STORE_PAGES','SHOPIFY_MARKETS','SHOPIFY_DISCOUNTS','SHOPIFY_METAOBJECT_DEFINITIONS','SHOPIFY_METAOBJECTS') OR (s."connectorDataCategory"='SHOPIFY_LOCATIONS' AND ci."verifiedCapabilities" @> '["SHOPIFY_LOCATIONS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_SHIPPING' AND ci."verifiedCapabilities" @> '["SHOPIFY_SHIPPING"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_LEGAL_POLICIES' AND ci."verifiedCapabilities" @> '["SHOPIFY_LEGAL_POLICIES"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_ONLINE_STORE_PAGES' AND ci."verifiedCapabilities" @> '["SHOPIFY_ONLINE_STORE_PAGES"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_MARKETS' AND ci."verifiedCapabilities" @> '["SHOPIFY_MARKETS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_DISCOUNTS' AND ci."verifiedCapabilities" @> '["SHOPIFY_DISCOUNTS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_METAOBJECT_DEFINITIONS' AND ci."verifiedCapabilities" @> '["SHOPIFY_METAOBJECT_DEFINITIONS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_METAOBJECTS' AND ci."verifiedCapabilities" @> '["SHOPIFY_METAOBJECTS"]'::jsonb)) AND EXISTS (SELECT 1 FROM "ConnectorDataPermission" dp WHERE dp."organizationId"=s."organizationId" AND dp."connectorInstanceId"=ci.id AND dp.category=s."connectorDataCategory" AND dp.enabled=true) AND EXISTS (SELECT 1 FROM "AssistantConnectorDataPermission" ap WHERE ap."organizationId"=s."organizationId" AND ap."connectorInstanceId"=ci.id AND ap."assistantId"=${assistantId}::uuid AND ap.category=s."connectorDataCategory" AND ap.enabled=true)))
           AND EXISTS (SELECT 1 FROM "Chatbot" a WHERE a.id=${assistantId}::uuid AND a."organizationId"=s."organizationId" AND a.status='ACTIVE')
@@ -729,6 +637,7 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
       JOIN "KnowledgeSource" s ON s.id=c."sourceId" AND s."organizationId"=c."organizationId"
       LEFT JOIN "KnowledgePage" p ON p.id=c."pageId" AND p."organizationId"=c."organizationId"
       WHERE s."organizationId"=${member.organizationId}::uuid AND s.status='REGISTERED' AND s."processingStatus"='READY'
+          AND s.document->>'provenance'='AUTHENTICATED_PDF_EXTRACTION_V1'
         AND (NOT ${publicOnly}::boolean OR (s.visibility='PUBLIC_REFERENCE' AND s."deletedAt" IS NULL))
       ORDER BY candidates.phrase_match DESC, candidates.score DESC, c."sequence" ASC LIMIT ${candidateLimit}`;
     const lexicalDurationMs = Date.now() - lexicalStartedAt;
@@ -753,6 +662,11 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
         SELECT s.id FROM "KnowledgeSource" s
         WHERE s."organizationId"=${member.organizationId}::uuid AND s.id=ANY(${sourceIds}::uuid[])
           AND s.status='REGISTERED' AND s."processingStatus"='READY'
+          AND (NOT ${publicOnly}::boolean OR (s.type='TEXT' AND s.document->>'extracted'='true' AND s.document->>'sourceLanguage'='en'
+            AND COALESCE(s.document->>'filename','') ~* '\\.pdf$' AND COALESCE(s.document->>'bytes','') ~ '^[1-9][0-9]*$'
+            AND COALESCE(s.document->>'hash','') ~* '^[a-f0-9]{64}$' AND COALESCE(s.document->>'contentHash','') ~* '^[a-f0-9]{64}$'
+            AND jsonb_typeof(s.document->'pages')='array' AND jsonb_array_length(s.document->'pages') > 0
+            AND s.document->>'pageCount'=jsonb_array_length(s.document->'pages')::text))
           AND (NOT ${publicOnly}::boolean OR (s.visibility='PUBLIC_REFERENCE' AND s."deletedAt" IS NULL))
           AND (s."connectorInstanceId" IS NULL OR EXISTS (SELECT 1 FROM "ConnectorInstance" ci WHERE ci.id=s."connectorInstanceId" AND ci."organizationId"=s."organizationId" AND ci.state='CONNECTED' AND ci."verifiedCapabilities" @> '["WEBSITE_CONTENT"]'::jsonb AND (s."connectorDataCategory" NOT IN ('SHOPIFY_LOCATIONS','SHOPIFY_SHIPPING','SHOPIFY_LEGAL_POLICIES','SHOPIFY_ONLINE_STORE_PAGES','SHOPIFY_MARKETS','SHOPIFY_DISCOUNTS','SHOPIFY_METAOBJECT_DEFINITIONS','SHOPIFY_METAOBJECTS') OR (s."connectorDataCategory"='SHOPIFY_LOCATIONS' AND ci."verifiedCapabilities" @> '["SHOPIFY_LOCATIONS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_SHIPPING' AND ci."verifiedCapabilities" @> '["SHOPIFY_SHIPPING"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_LEGAL_POLICIES' AND ci."verifiedCapabilities" @> '["SHOPIFY_LEGAL_POLICIES"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_ONLINE_STORE_PAGES' AND ci."verifiedCapabilities" @> '["SHOPIFY_ONLINE_STORE_PAGES"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_MARKETS' AND ci."verifiedCapabilities" @> '["SHOPIFY_MARKETS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_DISCOUNTS' AND ci."verifiedCapabilities" @> '["SHOPIFY_DISCOUNTS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_METAOBJECT_DEFINITIONS' AND ci."verifiedCapabilities" @> '["SHOPIFY_METAOBJECT_DEFINITIONS"]'::jsonb) OR (s."connectorDataCategory"='SHOPIFY_METAOBJECTS' AND ci."verifiedCapabilities" @> '["SHOPIFY_METAOBJECTS"]'::jsonb)) AND EXISTS (SELECT 1 FROM "ConnectorDataPermission" dp WHERE dp."organizationId"=s."organizationId" AND dp."connectorInstanceId"=ci.id AND dp.category=s."connectorDataCategory" AND dp.enabled=true) AND EXISTS (SELECT 1 FROM "AssistantConnectorDataPermission" ap WHERE ap."organizationId"=s."organizationId" AND ap."connectorInstanceId"=ci.id AND ap."assistantId"=${assistantId}::uuid AND ap.category=s."connectorDataCategory" AND ap.enabled=true)))
           AND EXISTS (SELECT 1 FROM "Chatbot" a WHERE a.id=${assistantId}::uuid AND a."organizationId"=s."organizationId" AND a.status='ACTIVE')
@@ -872,6 +786,18 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     });
   }
 
+  /** Static AI evidence is limited to complete PDF extraction records from the approved upload path. */
+  private async filterVerifiedPdfSources(organizationId: string, sourceIds: readonly string[]): Promise<string[]> {
+    const ids = [...new Set(sourceIds)];
+    if (!ids.length) return [];
+    const rows = await this.db.knowledgeSource.findMany({
+      where: { organizationId, id: { in: ids } },
+      select: { id: true, type: true, document: true },
+    });
+    const eligible = new Set(rows.filter((row: any) => isVerifiedPdfDocumentSource(row)).map((row: any) => row.id));
+    return ids.filter((id) => eligible.has(id));
+  }
+
   /** Public website evidence is not tied to widget origin; Shopify storefront ownership remains verified. */
   private async filterEligiblePublicWebsiteSources(organizationId: string, sourceIds: string[]) {
     if (!sourceIds.length) return [];
@@ -902,7 +828,8 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     const websiteIds = scope.sources.filter((source: any) => source.type === 'WEBSITE').map((source: any) => source.id);
     const safeWebsiteIds = await this.filterEligiblePublicWebsiteSources(member.organizationId, websiteIds);
     const candidateSourceIds = scope.sources.filter((source: any) => source.type !== 'WEBSITE').map((source: any) => source.id).concat(safeWebsiteIds);
-    const authorizedSourceIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, candidateSourceIds);
+    const connectorAuthorizedSourceIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, candidateSourceIds);
+    const authorizedSourceIds = await this.filterVerifiedPdfSources(member.organizationId, connectorAuthorizedSourceIds);
     if (!authorizedSourceIds.length) return [];
     const rows: KnowledgePreviewResult[] = await this.db.$queryRaw<KnowledgePreviewResult[]>`
       SELECT c.id AS "chunkId", c."pageId" AS "pageId", c.generation AS "generation", c.content, c.locator, c."sourceVersion", c."contentHash", c."indexedAt",
@@ -914,7 +841,13 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
       WHERE c."organizationId"=${member.organizationId}::uuid AND c.id=ANY(${ids}::uuid[]) AND s.id=ANY(${authorizedSourceIds}::uuid[])
         AND c."sourceVersion"=s."sourceVersion" AND c.generation=s."activeIndexGeneration"
         AND s.type IN ('FAQ','TEXT','WEBSITE') AND s.status='REGISTERED' AND s."processingStatus"='READY'
+          AND s.document->>'provenance'='AUTHENTICATED_PDF_EXTRACTION_V1'
         AND s.visibility='PUBLIC_REFERENCE' AND s."deletedAt" IS NULL
+        AND s.type='TEXT' AND s.document->>'extracted'='true' AND s.document->>'sourceLanguage'='en'
+        AND COALESCE(s.document->>'filename','') ~* '\\.pdf$' AND COALESCE(s.document->>'bytes','') ~ '^[1-9][0-9]*$'
+        AND COALESCE(s.document->>'hash','') ~* '^[a-f0-9]{64}$' AND COALESCE(s.document->>'contentHash','') ~* '^[a-f0-9]{64}$'
+        AND jsonb_typeof(s.document->'pages')='array' AND jsonb_array_length(s.document->'pages') > 0
+        AND s.document->>'pageCount'=jsonb_array_length(s.document->'pages')::text
         AND (s.type <> 'WEBSITE' OR NOT COALESCE(s.category='SHOPIFY_STOREFRONT' OR s.description LIKE 'Public storefront discovered from the connected Shopify shop.%', false) OR (s."verificationStatus"='VERIFIED' AND s."verifiedAt" IS NOT NULL))
         AND EXISTS (SELECT 1 FROM "Chatbot" a WHERE a.id=${assistantId}::uuid AND a."organizationId"=s."organizationId" AND a.status='ACTIVE')
         AND (s."connectorInstanceId" IS NULL OR EXISTS (
@@ -939,10 +872,9 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     if (!assistant?.website || assistant.website.verificationStatus !== 'VERIFIED' || !originMatchesVerifiedDomain(verifiedOrigin, assistant.website.domain)) throw new ForbiddenException({ code: 'PUBLIC_ASSISTANT_ORIGIN_DENIED', message: 'This assistant is not authorized for the requesting website origin.' });
     const scope = await this.bases.resolveEffectiveSources(organizationId, assistantId, { publicOnly: true });
     const assignedSources = sourcesForAudience(scope.sources, 'PUBLIC_VISITOR');
-    const websiteIds = assignedSources.filter((source: any) => source.type === 'WEBSITE').map((source: any) => source.id);
-    const eligibleWebsiteIds = new Set(await this.filterEligiblePublicWebsiteSources(organizationId, websiteIds));
-    const publicSources = assignedSources.filter((source: any) => source.type !== 'WEBSITE' || eligibleWebsiteIds.has(source.id));
-    return { organizationId, assistantId, audience: 'PUBLIC_VISITOR' as const, sources: publicSources.map((source: any) => ({ ...source, sourceOrigin: source.type === 'WEBSITE' ? 'PUBLIC_WEBSITE' : 'WORKSPACE_AUTHORED' })) };
+    const eligiblePdfIds = new Set(await this.filterVerifiedPdfSources(organizationId, assignedSources.map((source: any) => source.id)));
+    const publicSources = assignedSources.filter((source: any) => eligiblePdfIds.has(source.id));
+    return { organizationId, assistantId, audience: 'PUBLIC_VISITOR' as const, sources: publicSources.map((source: any) => ({ ...source, sourceOrigin: 'PDF_DOCUMENT' })) };
   }
 
   private async tick() {
@@ -1066,14 +998,14 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
         return;
       }
       if (source.type === 'WEBSITE' || job.kind === 'CRAWL') throw Object.assign(new Error('Crawl job does not match a website source.'), { code: 'SOURCE_TYPE_NOT_SUPPORTED', terminal: true });
-      if (!['FAQ', 'TEXT'].includes(source.type)) throw Object.assign(new Error('No processor for source type'), { code: 'SOURCE_TYPE_NOT_SUPPORTED', terminal: true });
+      if (!isVerifiedPdfDocumentSource(source)) throw Object.assign(new Error('Only authenticated PDF documents can be indexed as static knowledge.'), { code: 'PDF_DOCUMENT_PROVENANCE_REQUIRED', terminal: true });
       const original = source.type === 'FAQ' ? `Question: ${source.name}\nAnswer: ${source.contentBody ?? ''}` : `${source.name}\n\n${source.contentBody ?? ''}`;
       let extracted: PdfExtraction | null = null;
       if (source.document) {
-        if (!this.documentStorage?.isConfigured()) throw Object.assign(new Error('PDF storage unavailable'), { code: 'PRIVATE_STORAGE_UNAVAILABLE', terminal: true });
         if (source.document.extracted && source.contentBody && source.document.pages?.length) {
-          extracted = { content: source.contentBody, pages: source.document.pages, warnings: source.document.warnings ?? [] };
+          extracted = { content: source.contentBody, pages: source.document.pages, warnings: source.document.warnings ?? [], characterCount: source.document.characterCount ?? source.contentBody.length, wordCount: source.document.wordCount ?? (source.contentBody.match(/[\p{L}\p{N}]+/gu) ?? []).length };
         } else {
+          if (!this.documentStorage?.isConfigured() || !source.document.storageKey) throw Object.assign(new Error('PDF storage unavailable'), { code: 'PRIVATE_STORAGE_UNAVAILABLE', terminal: true });
           setFailureOperation('pdf_extraction', 'EXTRACTING');
           await this.db.knowledgeProcessingJob.updateMany({ where: { id: job.id, status: 'PROCESSING', leaseOwner: this.workerId }, data: { stage: 'EXTRACTING' } });
           const bytes = await this.documentStorage.read(source.organizationId, source.document.storageKey);
@@ -1084,6 +1016,17 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
             const saved = await tx.knowledgeSource.updateMany({ where: { id: source.id, organizationId: source.organizationId, sourceVersion: job.sourceVersion, status: 'REGISTERED' },
               data: { contentBody: extracted!.content, document: { ...source.document, pages: extracted!.pages, warnings: extracted!.warnings, extracted: true } } });
             if (!saved.count) throw Object.assign(new Error('Source changed'), { code: 'STALE_SOURCE_VERSION', terminal: true });
+          });
+        }
+        if (source.document.storageKey) {
+          if (!this.documentStorage?.isConfigured()) throw Object.assign(new Error('Temporary PDF cleanup is unavailable.'), { code: 'PRIVATE_STORAGE_UNAVAILABLE', retryable: true });
+          setFailureOperation('original_pdf_discard', 'SAVING');
+          try { await this.documentStorage.delete(source.document.storageKey); }
+          catch { throw Object.assign(new Error('The extracted text is saved, but original PDF cleanup failed.'), { code: 'PDF_CLEANUP_FAILED', retryable: true }); }
+          const { storageKey: _storageKey, retiredStorageKeys: _retiredStorageKeys, ...durableDocument } = source.document;
+          await this.db.$transaction(async (tx: any) => {
+            await this.requireLease(tx, job);
+            await tx.knowledgeSource.updateMany({ where: { id: source.id, organizationId: source.organizationId, sourceVersion: job.sourceVersion, status: 'REGISTERED' }, data: { document: durableDocument } });
           });
         }
         await this.db.knowledgeProcessingJob.updateMany({ where: { id: job.id, status: 'PROCESSING', leaseOwner: this.workerId }, data: { stage: 'INDEXING' } });
@@ -1137,7 +1080,7 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
       }));
     } catch (error: any) {
       const retryable = ['EMBEDDING_PROVIDER_RETRYABLE', 'EMBEDDING_PROVIDER_UNAVAILABLE'].includes(error?.response?.code) || error?.code === 'EMBEDDING_PROVIDER_UNAVAILABLE' || Boolean(error?.retryable);
-      const terminal = Boolean(error?.terminal) || ['EMBEDDING_PROVIDER_AUTH_FAILED', 'EMBEDDING_PROVIDER_NOT_CONFIGURED'].includes(error?.response?.code);
+      const terminal = Boolean(error?.terminal) || ['EMBEDDING_PROVIDER_AUTH_FAILED', 'EMBEDDING_PROVIDER_FORBIDDEN', 'EMBEDDING_PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND', 'EMBEDDING_PROVIDER_NOT_CONFIGURED', 'EMBEDDING_PROVIDER_PAYMENT_REQUIRED', 'EMBEDDING_PROVIDER_REQUEST_FAILED', 'EMBEDDING_PROVIDER_INVALID_RESPONSE'].includes(error?.response?.code);
       const canRetry = retryable && Number(job.attempts) < 5;
       const delay = Math.min(3600, 15 * (2 ** Math.max(0, Number(job.attempts) - 1)));
       // Record the original processing failure before attempting to persist its

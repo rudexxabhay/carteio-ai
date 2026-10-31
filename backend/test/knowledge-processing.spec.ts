@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { KnowledgeProcessingService } from '../src/modules/workspaces/knowledge-processing.service';
 
 const vector = Array.from({ length: 1536 }, (_, index) => index === 0 ? 1 : 0);
+const pdfDocument = { filename: 'fixture.pdf', bytes: 1000, hash: 'a'.repeat(64), contentHash: 'b'.repeat(64), sourceLanguage: 'en', extracted: true, pageCount: 1, pages: [{ page: 1, start: 0, end: 30, contentHash: 'c'.repeat(64), wordCount: 5 }] };
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every((part: unknown) => typeof part === 'string');
 const rawQuerySql = (call: unknown): string => {
   if (!Array.isArray(call)) return '';
@@ -41,6 +42,57 @@ const source = (type: 'FAQ' | 'TEXT' | 'WEBSITE' = 'FAQ', overrides = {}) => ({ 
 const job = { id: 'job-a', organizationId: 'org-a', sourceId: 'source-a', sourceVersion: 2, attempts: 1 };
 
 describe('KnowledgeProcessingService', () => {
+  it('returns current-version, tenant-scoped PDF processing progress from persisted records', async () => {
+    const test = setup(source('TEXT', { sourceVersion: 3, document: { extracted: true, pageCount: 2, pages: [{ page: 1 }, { page: 2 }] }, processingStatus: 'PROCESSING' }));
+    const updatedAt = new Date('2026-01-02T03:04:05.000Z');
+    test.db.knowledgeProcessingJob.findMany.mockResolvedValueOnce([{ id: 'job-current', kind: 'INDEX', status: 'PROCESSING', stage: 'INDEXING', attempts: 1, errorCode: null, createdAt: updatedAt, updatedAt }]);
+    test.db.knowledgeChunk.count.mockResolvedValueOnce(0);
+    const result = await test.service.status('user-a', 'alpha', 'source-a');
+    expect(test.db.knowledgeSource.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'source-a', organizationId: 'org-a' }, select: expect.objectContaining({ document: true, sourceVersion: true }) }));
+    expect(test.db.knowledgeProcessingJob.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', sourceId: 'source-a', sourceVersion: 3 }, take: 5 }));
+    expect(result.documentProgress).toEqual(expect.objectContaining({ processingId: 'job-current', stage: 'INDEXING', totalPages: 2, pagesExtracted: 2, pagesPersisted: 2, chunksIndexed: 0, lastUpdatedAt: updatedAt.toISOString() }));
+  });
+
+  it('reports configured semantic indexing as pending until current-generation vectors are persisted', async () => {
+    const keys = ['KNOWLEDGE_SEMANTIC_ENABLED', 'KNOWLEDGE_EMBEDDING_PROVIDER', 'KNOWLEDGE_EMBEDDING_MODEL', 'KNOWLEDGE_EMBEDDING_BASE_URL', 'OPENROUTER_API_KEY'];
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    try {
+      Object.assign(process.env, { KNOWLEDGE_SEMANTIC_ENABLED: 'true', KNOWLEDGE_EMBEDDING_PROVIDER: 'openrouter', KNOWLEDGE_EMBEDDING_MODEL: 'openai/text-embedding-3-small', KNOWLEDGE_EMBEDDING_BASE_URL: 'https://openrouter.ai/api/v1', OPENROUTER_API_KEY: 'offline-placeholder' });
+      const test = setup(source('TEXT', { sourceVersion: 3, activeIndexGeneration: 4, processingStatus: 'READY', semanticIndexStatus: 'NOT_CONFIGURED' }));
+      test.service.embeddings = { provider: 'openrouter', model: 'openai/text-embedding-3-small', dimensions: 1536, embed: jest.fn() };
+      test.db.knowledgeChunk.count.mockResolvedValueOnce(2);
+      test.db.$queryRaw.mockResolvedValueOnce([]);
+      const result = await test.service.status('user-a', 'alpha', 'source-a');
+      expect(result).toMatchObject({ semanticIndexStatus: 'PENDING', semanticIndexErrorCode: null, semanticVectorCount: 0, sourceVersion: 3, activeIndexGeneration: 4, chunkCount: 2 });
+    } finally {
+      for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    }
+  });
+
+  it('reports semantic READY only when every current chunk has the configured persisted vector profile', async () => {
+    const keys = ['KNOWLEDGE_SEMANTIC_ENABLED', 'KNOWLEDGE_EMBEDDING_PROVIDER', 'KNOWLEDGE_EMBEDDING_MODEL', 'KNOWLEDGE_EMBEDDING_BASE_URL', 'OPENROUTER_API_KEY'];
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    try {
+      Object.assign(process.env, { KNOWLEDGE_SEMANTIC_ENABLED: 'true', KNOWLEDGE_EMBEDDING_PROVIDER: 'openrouter', KNOWLEDGE_EMBEDDING_MODEL: 'openai/text-embedding-3-small', KNOWLEDGE_EMBEDDING_BASE_URL: 'https://openrouter.ai/api/v1', OPENROUTER_API_KEY: 'offline-placeholder' });
+      const test = setup(source('TEXT', { sourceVersion: 3, activeIndexGeneration: 4, processingStatus: 'READY' }));
+      test.service.embeddings = { provider: 'openrouter', model: 'openai/text-embedding-3-small', dimensions: 1536, embed: jest.fn() };
+      test.db.knowledgeChunk.count.mockResolvedValueOnce(2);
+      test.db.$queryRaw.mockResolvedValueOnce([{ embeddingProvider: 'openrouter', embeddingModel: 'openai/text-embedding-3-small', embeddingDimensions: 1536, vectorCount: 2 }]);
+      const result = await test.service.status('user-a', 'alpha', 'source-a');
+      expect(result).toMatchObject({ semanticIndexStatus: 'READY', semanticVectorCount: 2, semanticEmbeddingProvider: 'openrouter', semanticEmbeddingModel: 'openai/text-embedding-3-small', semanticEmbeddingDimensions: 1536, sourceVersion: 3, activeIndexGeneration: 4 });
+    } finally {
+      for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    }
+  });
+
+  it('does not query progress records for a source outside the authorized workspace', async () => {
+    const test = setup(source('TEXT', { document: { extracted: true, pageCount: 1 } }));
+    test.db.knowledgeSource.findFirst.mockResolvedValueOnce(null);
+    await expect(test.service.status('user-a', 'alpha', 'source-org-b')).rejects.toBeInstanceOf(NotFoundException);
+    expect(test.db.knowledgeProcessingJob.findMany).not.toHaveBeenCalled();
+    expect(test.db.knowledgeChunk.count).not.toHaveBeenCalled();
+  });
+
   it('returns bounded tenant-scoped chunk previews and marks active versus stale generations', async () => {
     const test = setup(source('WEBSITE', { sourceVersion: 3, activeIndexGeneration: 7, processingStatus: 'READY' }));
     const active = { id: 'chunk-active', pageId: 'page-a', sourceVersion: 3, generation: 7, sequence: 0, content: 'Shipping details '.repeat(100), locator: 'https://example.test/policy', indexedAt: new Date(), page: { title: 'Shipping', canonicalUrl: 'https://example.test/policy', status: 'READY' } };
@@ -67,6 +119,19 @@ describe('KnowledgeProcessingService', () => {
     expect(test.tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(test.tx.knowledgeSource.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ activeIndexGeneration: 1, processingStatus: 'READY' }) }));
     expect(test.tx.knowledgeProcessingJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: job.id, status: 'PROCESSING', leaseOwner: expect.any(String) }), data: expect.objectContaining({ status: 'SUCCEEDED', stage: 'INDEX_PUBLISHED', leaseOwner: null }) }));
+  });
+
+  it('sends persisted PDF page text through the existing chunk index and publishes READY only after the index transaction', async () => {
+    const pageText = 'Dispatch within 2 business days.';
+    const test = setup(source('TEXT', { name: 'shipping.pdf', contentBody: pageText, document: { extracted: true, pageCount: 1, pages: [{ page: 1, start: 0, end: pageText.length, heading: null, contentHash: 'a'.repeat(64), wordCount: 5 }] } }));
+    test.service.embeddings = null;
+    await test.service.process(job);
+    const insert = test.tx.$executeRaw.mock.calls[0] as unknown[];
+    expect(insert).toContain(pageText);
+    expect(insert).toContain('shipping.pdf · page 1');
+    expect(test.tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(test.tx.knowledgeSource.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ processingStatus: 'READY', activeIndexGeneration: 1 }) }));
+    expect(test.tx.knowledgeProcessingJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED', stage: 'INDEX_PUBLISHED' }) }));
   });
 
   it('indexes a FAQ lexically without embedding credentials or outbound model calls', async () => {
@@ -263,7 +328,7 @@ describe('KnowledgeProcessingService', () => {
   it('reports eligible source records separately from an empty active index', async () => {
     const test = setup(source('TEXT', { activeIndexGeneration: 4 }));
     test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'source-a', type: 'TEXT', visibility: 'PUBLIC_REFERENCE' }] });
-    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'source-a', status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 2, activeIndexGeneration: 4, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'source-a', type: 'TEXT', document: pdfDocument, status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 2, activeIndexGeneration: 4, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
     test.db.knowledgeChunk.count.mockResolvedValue(0);
     test.db.$queryRaw.mockResolvedValue([]);
     const result = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'shipping policy', 5, 'PUBLIC_VISITOR');
@@ -276,7 +341,7 @@ describe('KnowledgeProcessingService', () => {
     const test = setup(source('TEXT', { activeIndexGeneration: 4 }));
     test.service.embeddings = null;
     test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'source-a', type: 'TEXT', visibility: 'PUBLIC_REFERENCE' }] });
-    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'source-a', status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 2, activeIndexGeneration: 4, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'source-a', type: 'TEXT', document: pdfDocument, status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 2, activeIndexGeneration: 4, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
     test.db.knowledgeChunk.count.mockResolvedValue(7);
     test.db.$queryRaw.mockResolvedValue([]);
 
@@ -301,25 +366,27 @@ describe('KnowledgeProcessingService', () => {
       organizationId: 'org-a', assistantId: 'assistant-a', resolution: 'SINGLE_ACTIVE_BASE_DEFAULT', defaultKnowledgeBaseId: 'base-a',
       knowledgeBases: [{ id: 'base-a', name: 'Company Information', status: 'active', assignment: 'WORKSPACE_DEFAULT', eligibleSourceCount: 1, retrievalEnabled: true }],
       sources: [
-        { id: 'public-faq', type: 'FAQ', visibility: 'PUBLIC_REFERENCE', sourceVersion: 2, activeIndexGeneration: 4, semanticIndexStatus: 'READY', sourceOrigin: 'WORKSPACE_AUTHORED', knowledgeBaseIds: ['base-a'] },
+        { id: 'public-pdf', type: 'TEXT', visibility: 'PUBLIC_REFERENCE', sourceVersion: 2, activeIndexGeneration: 4, semanticIndexStatus: 'READY', sourceOrigin: 'WORKSPACE_AUTHORED', knowledgeBaseIds: ['base-a'] },
         { id: 'restricted-text', type: 'TEXT', visibility: 'INTERNAL_RESTRICTED', sourceVersion: 1, semanticIndexStatus: 'NOT_CONFIGURED', sourceOrigin: 'WORKSPACE_AUTHORED', knowledgeBaseIds: ['base-a'] },
       ],
     });
-    test.db.knowledgeChunk.groupBy.mockResolvedValueOnce([{ sourceId: 'public-faq', sourceVersion: 2, generation: 4, _count: { _all: 3 } }]);
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'public-pdf', type: 'TEXT', document: pdfDocument }]);
+    test.db.knowledgeChunk.groupBy.mockResolvedValueOnce([{ sourceId: 'public-pdf', sourceVersion: 2, generation: 4, _count: { _all: 3 } }]);
     const result = await test.service.effectivePublicKnowledge('user-a', 'alpha', 'assistant-a');
     expect(test.bases.resolveEffectiveSources).toHaveBeenCalledWith('org-a', 'assistant-a', { publicOnly: true, includeDiagnostics: true });
     expect(result).toMatchObject({ defaultKnowledgeBaseId: 'base-a', searchableSourceCount: 1, retrievalEnabled: true, knowledgeBases: [{ id: 'base-a', eligibleSourceCount: 1, retrievalEnabled: true }] });
     expect(result.sources[0]).toMatchObject({ activeChunkCount: 3, activeIndexGeneration: 4 });
-    expect(result.sources.map((item: any) => item.id)).toEqual(['public-faq']);
+    expect(result.sources.map((item: any) => item.id)).toEqual(['public-pdf']);
     expect(result.sources[0]).toMatchObject({ semanticIndexStatus: 'READY', sourceOrigin: 'WORKSPACE_AUTHORED' });
   });
 
   it('constrains public retrieval to resolver-authorized tenant sources without coupling website hostname to widget domain', async () => {
-    const test = setup(source());
+    const test = setup(source('TEXT', { document: pdfDocument }));
     test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [
-      { id: 'public-source', type: 'FAQ', visibility: 'PUBLIC_REFERENCE' },
+      { id: 'public-source', type: 'TEXT', visibility: 'PUBLIC_REFERENCE' },
       { id: 'private-source', type: 'FAQ', visibility: 'INTERNAL_RESTRICTED' },
     ] });
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'public-source', type: 'TEXT', document: pdfDocument, status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 2, activeIndexGeneration: 4, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
     test.db.$queryRaw.mockResolvedValue([]);
     const retrieval = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'delivery?', 5, 'PUBLIC_VISITOR');
     expect(retrieval.audience).toBe('PUBLIC_VISITOR');
@@ -340,7 +407,42 @@ describe('KnowledgeProcessingService', () => {
     expect(test.db.$queryRaw.mock.calls[0]).not.toContainEqual(['private-source']);
   });
 
-  it('allows a tenant-owned public website source on a different host from the widget domain', async () => {
+  it.each([
+    ['legacy FAQ', 'FAQ'],
+    ['legacy manual text', 'TEXT'],
+    ['legacy website', 'WEBSITE'],
+  ] as const)('fails closed for %s in customer retrieval', async (_label, type) => {
+    const test = setup(source(type as 'FAQ' | 'TEXT' | 'WEBSITE', { document: null }));
+    test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'legacy-source', type, visibility: 'PUBLIC_REFERENCE' }] });
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'legacy-source', type, document: null, status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 8, activeIndexGeneration: 9, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
+
+    const result = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'English legacy fact', 5, 'PUBLIC_VISITOR');
+
+    expect(result.results).toEqual([]);
+    expect(result.eligibleSourceCount).toBe(0);
+    expect(result.diagnostics.rejectionReasons).toContainEqual({ reason: 'PDF_DOCUMENT_PROVENANCE_REQUIRED', count: 1 });
+    expect(test.db.$queryRaw).not.toHaveBeenCalled();
+    expect(test.embed).not.toHaveBeenCalled();
+  });
+
+  it('retrieves only a current, public PDF-derived TEXT chunk through lexical search', async () => {
+    const currentPdf = source('TEXT', { visibility: 'PUBLIC_REFERENCE', sourceVersion: 3, activeIndexGeneration: 7, document: pdfDocument });
+    const test = setup(currentPdf);
+    test.service.embeddings = null;
+    test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: currentPdf.id, type: 'TEXT', visibility: 'PUBLIC_REFERENCE' }] });
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: currentPdf.id, type: 'TEXT', document: pdfDocument, status: 'REGISTERED', processingStatus: 'READY', sourceVersion: 3, activeIndexGeneration: 7, visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
+    test.db.knowledgeChunk.count.mockResolvedValue(3);
+    const hit = { chunkId: 'pdf-chunk-current', pageId: null, generation: 7, content: 'Fixture English PDF fact.', locator: 'fixture.pdf · page 1', sourceVersion: 3, contentHash: 'd'.repeat(64), indexedAt: new Date(), sourceId: currentPdf.id, sourceTitle: currentPdf.name, sourceType: 'TEXT', visibility: 'PUBLIC_REFERENCE', pageUrl: null, pageTitle: null, sourceAuthority: 'MERCHANT_KNOWLEDGE', score: 0.7, method: 'lexical', dataCompleteness: 'COMPLETE' };
+    test.db.$queryRaw.mockResolvedValue([hit]);
+
+    const result = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'fixture English fact', 5, 'PUBLIC_VISITOR');
+
+    expect(result).toMatchObject({ eligibleSourceCount: 1, mode: 'lexical_only', results: [{ chunkId: 'pdf-chunk-current', sourceId: currentPdf.id, sourceVersion: 3, generation: 7, content: hit.content, method: 'lexical' }] });
+    expect(rawQuerySql(test.db.$queryRaw.mock.calls[0])).toContain("s.document->>'extracted'='true'");
+    expect(test.db.$queryRaw.mock.calls[0]).toContainEqual(['source-a']);
+  });
+
+  it('excludes legacy public website chunks from customer static Knowledge retrieval', async () => {
     const test = setup(source('FAQ'));
     test.db.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a', website: { domain: 'widget.example', status: 'ACTIVE', verificationStatus: 'VERIFIED' } });
     test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'public-site', type: 'WEBSITE', visibility: 'PUBLIC_REFERENCE' }] });
@@ -348,12 +450,10 @@ describe('KnowledgeProcessingService', () => {
       .mockResolvedValueOnce([{ id: 'public-site', type: 'WEBSITE', sourceUrl: 'https://carteio.in', category: null, description: null, verificationStatus: 'UNVERIFIED', verifiedAt: null, status: 'REGISTERED', processingStatus: 'READY', visibility: 'PUBLIC_REFERENCE', deletedAt: null }])
       .mockResolvedValueOnce([]);
     test.db.$queryRaw.mockResolvedValue([]);
-    await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'shipping policy', 5, 'PUBLIC_VISITOR');
-    expect(test.db.$queryRaw.mock.calls[0]).toContainEqual(['public-site']);
-    const sql = test.db.$queryRaw.mock.calls.map(rawQuerySql).join('\n');
-    expect(sql).not.toContain('JOIN "Website"');
-    expect(sql).not.toContain('sourceUrl');
-    expect(sql).toContain('s.id=ANY(');
+    const result = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'shipping policy', 5, 'PUBLIC_VISITOR');
+    expect(result.results).toEqual([]);
+    expect(result.eligibleSourceCount).toBe(0);
+    expect(test.db.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('keeps Shopify-discovered storefront ownership verification for public website knowledge', async () => {
@@ -366,7 +466,10 @@ describe('KnowledgeProcessingService', () => {
   });
 
   it('batch revalidates chunk tenant, public visibility, lifecycle, generation, and assistant authorization', async () => {
-    const test = setup(source());
+    const test = setup(source('TEXT', { visibility: 'PUBLIC_REFERENCE', document: pdfDocument }));
+    test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'source-a', type: 'TEXT', visibility: 'PUBLIC_REFERENCE' }] });
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'source-a', type: 'TEXT', document: pdfDocument }]);
+    test.db.$queryRaw.mockResolvedValue([]);
     await test.service.revalidatePublicEvidence('user-a', 'alpha', 'assistant-a', ['chunk-a', 'chunk-b']);
     expect(test.workspace.requireAccess).toHaveBeenCalledWith('user-a', 'alpha', ['OWNER', 'ADMIN']);
     expect(test.db.chatbot.findFirst).toHaveBeenCalledWith({ where: { id: 'assistant-a', organizationId: 'org-a', status: 'ACTIVE' }, select: { id: true } });
@@ -379,7 +482,17 @@ describe('KnowledgeProcessingService', () => {
     expect(sql).toContain('s."deletedAt" IS NULL');
     expect(sql).not.toContain('"AssistantKnowledgeBase"');
     expect(sql).toContain('s.id=ANY(');
+    expect(sql).toContain("s.document->>'extracted'='true'");
     expect(sql).not.toContain('"AssistantKnowledgeSource"');
+  });
+
+  it('does not revalidate previously selected legacy chunks after current source authorization', async () => {
+    const test = setup(source('FAQ', { document: null }));
+    test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'legacy-faq', type: 'FAQ', visibility: 'PUBLIC_REFERENCE' }] });
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'legacy-faq', type: 'FAQ', document: null }]);
+
+    await expect(test.service.revalidatePublicEvidence('user-a', 'alpha', 'assistant-a', ['legacy-chunk'])).resolves.toEqual([]);
+    expect(test.db.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('shares only public eligible source language hints with query interpretation', async () => {
@@ -390,26 +503,21 @@ describe('KnowledgeProcessingService', () => {
       { id: 'restricted-de', type: 'FAQ', visibility: 'INTERNAL_RESTRICTED', languageHint: 'de' },
       { id: 'other-type', type: 'WEBSITE', visibility: 'PUBLIC_REFERENCE', languageHint: 'es' },
     ] });
-    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ languageHint: 'fr' }, { languageHint: 'ar' }]);
-    await expect(test.service.publicSourceLanguageHints('user-a', 'alpha', 'assistant-a')).resolves.toEqual(['fr', 'ar']);
-    expect(test.db.knowledgeSource.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', id: { in: ['public-fr', 'public-ar'] }, visibility: 'PUBLIC_REFERENCE', processingStatus: 'READY' }) }));
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: 'public-fr', type: 'FAQ', document: null }, { id: 'public-ar', type: 'TEXT', document: null },
+    ]);
+    await expect(test.service.publicSourceLanguageHints('user-a', 'alpha', 'assistant-a')).resolves.toEqual([]);
     expect(test.workspace.requireAccess).toHaveBeenCalledWith('user-a', 'alpha', ['OWNER', 'ADMIN']);
   });
 
   it('uses language hints from current authorized website pages when the source-level hint is empty', async () => {
     const test = setup(source('WEBSITE'));
-    test.db.knowledgePage = { findMany: jest.fn().mockResolvedValue([{ languageHint: 'en' }, { languageHint: 'hi' }]) };
+    test.db.knowledgePage = { findMany: jest.fn() };
     test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [{ id: 'website-a', type: 'WEBSITE', visibility: 'PUBLIC_REFERENCE' }] });
-    test.db.knowledgeSource.findMany
-      .mockResolvedValueOnce([{ id: 'website-a', type: 'WEBSITE', category: null, description: null, verificationStatus: 'UNVERIFIED', verifiedAt: null, status: 'REGISTERED', processingStatus: 'READY', visibility: 'PUBLIC_REFERENCE', deletedAt: null }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: 'website-a', type: 'WEBSITE', languageHint: null, sourceVersion: 4, activeIndexGeneration: 7 }]);
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([{ id: 'website-a', type: 'WEBSITE', category: null, description: null, verificationStatus: 'UNVERIFIED', verifiedAt: null, status: 'REGISTERED', processingStatus: 'READY', visibility: 'PUBLIC_REFERENCE', deletedAt: null }]);
 
-    await expect(test.service.publicSourceLanguageHints('user-a', 'alpha', 'assistant-a')).resolves.toEqual(['en', 'hi']);
-    expect(test.db.knowledgePage.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { organizationId: 'org-a', status: 'READY', OR: [{ sourceId: 'website-a', sourceVersion: 4, generation: 7 }] },
-      select: { languageHint: true },
-    }));
+    await expect(test.service.publicSourceLanguageHints('user-a', 'alpha', 'assistant-a')).resolves.toEqual([]);
+    expect(test.db.knowledgePage.findMany).not.toHaveBeenCalled();
   });
 
   it('performs lexical preview without an embedding provider or embedding query', async () => {
@@ -444,9 +552,10 @@ describe('KnowledgeProcessingService', () => {
     const test = setup(source());
     test.db.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a', organizationId: 'org-a', website: { domain: 'example.com', status: 'ACTIVE', verificationStatus: 'VERIFIED' } });
     test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [
-      { id: 'public', visibility: 'PUBLIC_REFERENCE' },
+      { id: 'public', type: 'TEXT', visibility: 'PUBLIC_REFERENCE' },
       { id: 'internal', visibility: 'INTERNAL_RESTRICTED' },
     ] });
+    test.db.knowledgeSource.findMany.mockResolvedValueOnce([{ id: 'public', type: 'TEXT', document: pdfDocument }]);
     const result = await test.service.resolvePublicVisitorSources('org-a', 'assistant-a', 'https://www.example.com/');
     expect(result.sources.map((item: any) => item.id)).toEqual(['public']);
     await expect(test.service.resolvePublicVisitorSources('org-a', 'assistant-a', 'https://attacker.example/')).rejects.toThrow();
