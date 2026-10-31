@@ -1,5 +1,9 @@
 # Carteio AI — current handoff notes
 
+## Frontend CI type error — widget runtime test selector — 2026-10-31
+
+Owner-reported frontend typecheck fails at `frontend/src/tests/widget-runtime.test.ts:159` because the unparameterized `document.querySelector()` returns `Element | null`, whose type has no `.style`. Changed only that selector to `document.querySelector<HTMLElement>(...)`, matching the actual widget host element and preserving the visibility wait/assertion. No runtime widget behavior changed. Local typecheck/tests NOT RUN; owner-reported CI remains the only execution evidence until rerun. Initial `git status --short` inspection timed out twice on the mounted repository; no unrelated files were edited or reverted. Phase 00 status/evidence unchanged.
+
 ## SPH-006 — multi-tenant security verification and regression remediation — 2026-10-31
 
 Added a two-workspace `AssistantService` regression in `backend/test/assistant.service.spec.ts`. The service reads each tenant's independent business purpose, system instructions and assistant business rules; a workspace-A request for workspace-B's assistant returns not-found. This fills a test gap while retaining the actual service's membership resolution and organization/assistant query predicates; Prisma is synthetic and the test is **NOT RUN**.
