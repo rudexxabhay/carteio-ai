@@ -128,6 +128,7 @@ export class CommerceReadContracts {
 
   /** Bounded candidate search; token matching covers names, categories, descriptions, SKUs and variants. */
   async searchCatalog(organizationId: string, assistantId: string, queries: readonly string[], limit = 3, browseAll = false, filters: ProductSearchFilters = {}): Promise<CommerceProductEvidence[]> {
+    const retrievalStartedAt = Date.now();
     await this.assertAssistant(organizationId, assistantId);
     const access = await this.effectiveCommerceAccess(organizationId, assistantId);
     if (!access.size) return [];
@@ -163,6 +164,7 @@ export class CommerceReadContracts {
         : priceFilter
           ? [{ OR: [{ currency: filters.currency, price: { lte: filters.maxPrice } }, { variants: { some: matchingPriceVariant } }] }]
           : [];
+    const productQueryStartedAt = Date.now();
     const candidates = await this.db.commerceProduct.findMany({
       where: {
         organizationId,
@@ -176,10 +178,11 @@ export class CommerceReadContracts {
         ]) }] : [])],
       },
       orderBy: [{ syncedAt: 'desc' }, { name: 'asc' }, { id: 'asc' }], take: 60,
-      select: { id: true, connectionId: true, externalId: true, name: true, description: true, category: true, productType: true, taxonomyCategoryId: true, taxonomyCategory: true, collections: true, collectionSearchTerms: true, vendor: true, handle: true, compareAtPrice: true, imageUrl: true, imageAltText: true, imageWidth: true, imageHeight: true, imageEvidence: true, sku: true, currency: true, price: true, inventory: true, availabilityStatus: true, rawStatus: true, productUrl: true, externalUpdatedAt: true, syncedAt: true, variants: { orderBy: [{ title: 'asc' }, { id: 'asc' }], take: priceFilter ? 1000 : 20, select: { title: true, sku: true, currency: true, price: true, compareAtPrice: true, selectedOptions: true, inventory: true, availabilityStatus: true, rawStatus: true } } },
+      select: { id: true, connectionId: true, externalId: true, name: true, description: true, category: true, productType: true, taxonomyCategoryId: true, taxonomyCategory: true, collections: true, vendor: true, handle: true, compareAtPrice: true, imageUrl: true, imageAltText: true, imageWidth: true, imageHeight: true, imageEvidence: true, sku: true, currency: true, price: true, inventory: true, availabilityStatus: true, rawStatus: true, productUrl: true, externalUpdatedAt: true, syncedAt: true, variants: { orderBy: [{ title: 'asc' }, { id: 'asc' }], take: priceFilter ? 1000 : 20, select: { title: true, sku: true, currency: true, price: true, compareAtPrice: true, selectedOptions: true, inventory: true, availabilityStatus: true, rawStatus: true } } },
     });
+    const productQueryDurationMs = Date.now() - productQueryStartedAt;
     const products = this.rankAndFormat(candidates, terms, limit, access, priceFilter || filters.color ? filters : undefined);
-    this.logger.debug(JSON.stringify({ event: 'commerce_product_retrieval', organizationId, assistantId, eligibleConnectionCount: access.size, catalogBrowseMode: browseAll, searchTermCount: terms.length, candidateProductCount: candidates.length, productEvidenceCount: products.length, staleEvidenceCount: products.filter((product) => product.stale).length, filteringOutcome: products.length ? 'PRODUCT_EVIDENCE_SELECTED' : candidates.length ? 'NO_QUERY_MATCH' : 'NO_QUERY_READY_PRODUCT_ROWS' }));
+    this.logger.debug(JSON.stringify({ event: 'commerce_product_retrieval', organizationId, assistantId, eligibleConnectionCount: access.size, catalogBrowseMode: browseAll, searchTermCount: terms.length, candidateProductCount: candidates.length, productEvidenceCount: products.length, returnedVariantCount: products.reduce((count, product) => count + product.variants.length, 0), staleEvidenceCount: products.filter((product) => product.stale).length, productQueryDurationMs, durationMs: Date.now() - retrievalStartedAt, filteringOutcome: products.length ? 'PRODUCT_EVIDENCE_SELECTED' : candidates.length ? 'NO_QUERY_MATCH' : 'NO_QUERY_READY_PRODUCT_ROWS' }));
     return products;
   }
 
@@ -189,7 +192,7 @@ export class CommerceReadContracts {
     if (!access.size) return null;
     const row = await this.db.commerceProduct.findFirst({
       where: { organizationId, externalId, connectionId: { in: [...access.keys()] }, OR: [{ rawStatus: null }, { rawStatus: { not: 'DELETED' } }], connection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } },
-      select: { id: true, connectionId: true, externalId: true, name: true, description: true, category: true, productType: true, taxonomyCategoryId: true, taxonomyCategory: true, collections: true, collectionSearchTerms: true, vendor: true, handle: true, compareAtPrice: true, imageUrl: true, imageAltText: true, imageWidth: true, imageHeight: true, imageEvidence: true, sku: true, currency: true, price: true, inventory: true, availabilityStatus: true, rawStatus: true, productUrl: true, externalUpdatedAt: true, syncedAt: true, variants: { orderBy: [{ title: 'asc' }, { id: 'asc' }], take: 20, select: { title: true, sku: true, currency: true, price: true, compareAtPrice: true, selectedOptions: true, inventory: true, availabilityStatus: true, rawStatus: true } } },
+      select: { id: true, connectionId: true, externalId: true, name: true, description: true, category: true, productType: true, taxonomyCategoryId: true, taxonomyCategory: true, collections: true, vendor: true, handle: true, compareAtPrice: true, imageUrl: true, imageAltText: true, imageWidth: true, imageHeight: true, imageEvidence: true, sku: true, currency: true, price: true, inventory: true, availabilityStatus: true, rawStatus: true, productUrl: true, externalUpdatedAt: true, syncedAt: true, variants: { orderBy: [{ title: 'asc' }, { id: 'asc' }], take: 20, select: { title: true, sku: true, currency: true, price: true, compareAtPrice: true, selectedOptions: true, inventory: true, availabilityStatus: true, rawStatus: true } } },
     });
     return row ? this.rankAndFormat([row], [], 1, access)[0] ?? null : null;
   }
@@ -202,7 +205,7 @@ export class CommerceReadContracts {
     if (!access.size) return [];
     const rows = await this.db.commerceProduct.findMany({
       where: { organizationId, id: { in: identities.map((item) => item.id) }, connectionId: { in: [...access.keys()] }, OR: [{ rawStatus: null }, { rawStatus: { not: 'DELETED' } }], connection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } },
-      select: { id: true, connectionId: true, externalId: true, name: true, description: true, category: true, productType: true, taxonomyCategoryId: true, taxonomyCategory: true, collections: true, collectionSearchTerms: true, vendor: true, handle: true, compareAtPrice: true, imageUrl: true, imageAltText: true, imageWidth: true, imageHeight: true, imageEvidence: true, sku: true, currency: true, price: true, inventory: true, availabilityStatus: true, rawStatus: true, productUrl: true, externalUpdatedAt: true, syncedAt: true, variants: { orderBy: [{ title: 'asc' }, { id: 'asc' }], take: 20, select: { title: true, sku: true, currency: true, price: true, compareAtPrice: true, selectedOptions: true, inventory: true, availabilityStatus: true, rawStatus: true } } },
+      select: { id: true, connectionId: true, externalId: true, name: true, description: true, category: true, productType: true, taxonomyCategoryId: true, taxonomyCategory: true, collections: true, vendor: true, handle: true, compareAtPrice: true, imageUrl: true, imageAltText: true, imageWidth: true, imageHeight: true, imageEvidence: true, sku: true, currency: true, price: true, inventory: true, availabilityStatus: true, rawStatus: true, productUrl: true, externalUpdatedAt: true, syncedAt: true, variants: { orderBy: [{ title: 'asc' }, { id: 'asc' }], take: 20, select: { title: true, sku: true, currency: true, price: true, compareAtPrice: true, selectedOptions: true, inventory: true, availabilityStatus: true, rawStatus: true } } },
     });
     const byId = new Map(rows.map((row: any) => [row.id, row]));
     const current = this.rankAndFormat(rows, [], rows.length, access);
@@ -257,10 +260,11 @@ export class CommerceReadContracts {
   }
 
   private async effectiveCommerceAccess(organizationId: string, assistantId: string) {
+    const accessResolutionStartedAt = Date.now();
     const connectorRows = await this.db.connectorInstance.findMany({ where: { organizationId, connectorId: 'shopify_v1', state: 'CONNECTED', integrationConnectionId: { not: null }, commerceConnection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } }, select: { id: true, connectorId: true, verifiedCapabilities: true, lastVerifiedAt: true, commerceConnection: { select: { id: true, grantedScopes: true, grantedScopesVerifiedAt: true } } } });
     const ids = connectorRows.map((row: any) => row.id);
     if (!ids.length) {
-      this.logger.debug(JSON.stringify({ event: 'commerce_product_access_evaluated', organizationId, assistantId, connectedConnectionCount: 0, eligibleConnectionCount: 0, permissionDeniedCount: 0, staleGrantCount: 0, missingGrantCount: 0, missingCapabilityCount: 0 }));
+      this.logger.debug(JSON.stringify({ event: 'commerce_product_access_evaluated', organizationId, assistantId, connectedConnectionCount: 0, eligibleConnectionCount: 0, permissionDeniedCount: 0, staleGrantCount: 0, missingGrantCount: 0, missingCapabilityCount: 0, durationMs: Date.now() - accessResolutionStartedAt }));
       return new Map<string, { prices: boolean; inventory: boolean; categories: boolean }>();
     }
     const [business, assistant] = await Promise.all([
@@ -285,26 +289,26 @@ export class CommerceReadContracts {
       if (!provider('PRODUCTS')) { missingCapabilityCount += 1; continue; }
       result.set(row.commerceConnection.id, { prices: enabled('PRICES') && provider('PRICES'), inventory: enabled('INVENTORY') && provider('INVENTORY'), categories: enabled('CATEGORIES') && provider('CATEGORIES') });
     }
-    this.logger.debug(JSON.stringify({ event: 'commerce_product_access_evaluated', organizationId, assistantId, connectedConnectionCount: connectorRows.length, eligibleConnectionCount: result.size, permissionDeniedCount, staleGrantCount, missingGrantCount, missingCapabilityCount }));
+    this.logger.debug(JSON.stringify({ event: 'commerce_product_access_evaluated', organizationId, assistantId, connectedConnectionCount: connectorRows.length, eligibleConnectionCount: result.size, permissionDeniedCount, staleGrantCount, missingGrantCount, missingCapabilityCount, durationMs: Date.now() - accessResolutionStartedAt }));
     return result;
   }
 
   private async effectiveConnections(organizationId: string, assistantId: string, category: string) {
-    const rows = await this.effectiveCommerceAccess(organizationId, assistantId);
     if (category === 'ORDERS') {
-      const connectors = await this.db.connectorInstance.findMany({ where: { organizationId, state: 'CONNECTED', integrationConnectionId: { not: null }, commerceConnection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } }, select: { id: true, lastVerifiedAt: true, commerceConnection: { select: { id: true, grantedScopesVerifiedAt: true } } } });
+      const connectors = await this.db.connectorInstance.findMany({ where: { organizationId, state: 'CONNECTED', integrationConnectionId: { not: null }, commerceConnection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } }, select: { id: true, commerceConnection: { select: { id: true } } } });
       const allowed = await Promise.all(connectors.map(async (connector: any) => {
         const [business, assistant] = await Promise.all([
           this.db.connectorDataPermission.findFirst({ where: { organizationId, connectorInstanceId: connector.id, category, enabled: true }, select: { id: true } }),
           this.db.assistantConnectorDataPermission.findFirst({ where: { organizationId, connectorInstanceId: connector.id, assistantId, category, enabled: true }, select: { id: true } }),
         ]);
-        const full = await this.db.connectorInstance.findFirst({ where: { id: connector.id, organizationId }, select: { connectorId: true, verifiedCapabilities: true, lastVerifiedAt: true, commerceConnection: { select: { grantedScopes: true, grantedScopesVerifiedAt: true } } } });
+        const full = await this.db.connectorInstance.findFirst({ where: { id: connector.id, organizationId, state: 'CONNECTED', integrationConnectionId: { not: null }, commerceConnection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } }, select: { connectorId: true, verifiedCapabilities: true, lastVerifiedAt: true, commerceConnection: { select: { grantedScopes: true, grantedScopesVerifiedAt: true } } } });
         const caps: string[] = Array.isArray(full?.verifiedCapabilities) ? full.verifiedCapabilities : [], scopes: string[] = full?.commerceConnection?.grantedScopes ?? [];
         const provider = full?.connectorId === 'shopify_v1' ? isShopifyScopeSnapshotFresh(full.commerceConnection?.grantedScopesVerifiedAt ?? full.lastVerifiedAt) && shopifyScopeAllows(scopes, 'ORDERS') && caps.includes('ORDERS') : caps.includes('ORDERS');
         return business && assistant && provider ? connector.commerceConnection.id : null;
       }));
       return allowed.filter(Boolean);
     }
+    const rows = await this.effectiveCommerceAccess(organizationId, assistantId);
     return [...rows.keys()];
   }
 

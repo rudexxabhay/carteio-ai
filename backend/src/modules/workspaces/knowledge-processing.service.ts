@@ -510,14 +510,14 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
         seenQueries.add(identity);
         return true;
       }).slice(0, 8);
+    const sourceResolutionStartedAt = Date.now();
     const member = await this.workspaces.requireAccess(userId, slug, managers);
     const assistant = await this.db.chatbot.findFirst({ where: { id: assistantId, organizationId: member.organizationId, status: 'ACTIVE' }, select: { id: true, website: { select: { domain: true, status: true, verificationStatus: true } } } });
     if (!assistant) throw new NotFoundException({ code: 'ASSISTANT_NOT_FOUND', message: 'Active assistant not found in this workspace.' });
     const scope = await this.bases.resolveEffectiveSources(member.organizationId, assistantId, { publicOnly: audience === 'PUBLIC_VISITOR', includeDiagnostics: true });
-    const allAssignedScope = audience === 'PUBLIC_VISITOR'
-      ? await this.bases.resolveEffectiveSources(member.organizationId, assistantId)
-      : scope;
-    const assignedSourceCount = sourcesForAudience(allAssignedScope.sources, 'INTERNAL_MANAGER_PREVIEW').filter((source: any) => ['FAQ', 'TEXT', 'WEBSITE'].includes(source.type)).length;
+    const assignedSourceCount = audience === 'PUBLIC_VISITOR'
+      ? await this.bases.countResolvedAssignedSources(member.organizationId, assistantId)
+      : sourcesForAudience(scope.sources, 'INTERNAL_MANAGER_PREVIEW').filter((source: any) => ['FAQ', 'TEXT', 'WEBSITE'].includes(source.type)).length;
     const assignedSourceIds = sourcesForAudience(scope.sources, audience)
       .filter((source: any) => ['FAQ', 'TEXT', 'WEBSITE'].includes(source.type))
       .map((source: any) => source.id);
@@ -532,7 +532,8 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
       : assignedSourceIds;
     const connectorAuthorizedSourceIds = await this.filterConnectorKnowledgeSources(member.organizationId, assistantId, authorizedSourceIds);
     let sourceIds = connectorAuthorizedSourceIds;
-    this.logger.debug(JSON.stringify({ event: 'knowledge_retrieval_authorization', organizationId: member.organizationId, assistantId, audience, assignedCandidateCount: authorizedSourceIds.length, eligibleSourceCount: sourceIds.length, permissionFilteredCount: authorizedSourceIds.length - sourceIds.length }));
+    const sourceResolutionDurationMs = Date.now() - sourceResolutionStartedAt;
+    this.logger.debug(JSON.stringify({ event: 'knowledge_retrieval_authorization', organizationId: member.organizationId, assistantId, audience, assignedCandidateCount: authorizedSourceIds.length, eligibleSourceCount: sourceIds.length, permissionFilteredCount: authorizedSourceIds.length - sourceIds.length, durationMs: sourceResolutionDurationMs }));
     const context = audience === 'PUBLIC_VISITOR' ? 'public_safe_playground_preview' : 'authenticated_workspace_preview';
     const rejectionReasons = [
       ...(audience === 'PUBLIC_VISITOR' ? Object.entries(scope.blockedReasonCounts ?? {}).map(([reason, count]) => ({ reason, count })) : []),
@@ -571,17 +572,20 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
     let semanticUnavailableCode: string | undefined;
     let semanticDurationMs = 0;
     let semanticSearchAttempted = false;
-    if (this.embeddings) {
+    const embeddingProvider = this.embeddings;
+    // Embedding the normalized query variants and lexical SQL over authorized source IDs are independent.
+    // Start embedding now; semantic vector search and fusion still wait for both results below.
+    const semanticProfilePromise = (async () => {
+      if (!embeddingProvider) return { profile: null, unavailableCode: semanticConfigurationError() ?? 'SEMANTIC_NOT_CONFIGURED', durationMs: 0 };
+      const semanticStartedAt = Date.now();
       try {
-        const semanticStartedAt = Date.now();
-        const vectors = await this.embeddings.embed(queryCandidates);
-        semanticDurationMs = Date.now() - semanticStartedAt;
-        if (vectors.length !== queryCandidates.length || vectors.some((vector) => vector.length !== this.embeddings!.dimensions || vector.some((value) => !Number.isFinite(value)))) throw Object.assign(new Error('Invalid query vector dimensions'), { code: 'EMBEDDING_DIMENSION_MISMATCH' });
-        semanticProfile = { provider: this.embeddings.provider, model: this.embeddings.model, dimensions: this.embeddings.dimensions, vectorTexts: vectors.map((vector) => `[${vector.join(',')}]`) };
+        const vectors = await embeddingProvider.embed(queryCandidates);
+        if (vectors.length !== queryCandidates.length || vectors.some((vector) => vector.length !== embeddingProvider.dimensions || vector.some((value) => !Number.isFinite(value)))) throw Object.assign(new Error('Invalid query vector dimensions'), { code: 'EMBEDDING_DIMENSION_MISMATCH' });
+        return { profile: { provider: embeddingProvider.provider, model: embeddingProvider.model, dimensions: embeddingProvider.dimensions, vectorTexts: vectors.map((vector) => `[${vector.join(',')}]`) }, unavailableCode: undefined, durationMs: Date.now() - semanticStartedAt };
       } catch (error: any) {
-        semanticUnavailableCode = String(error?.response?.code ?? error?.code ?? 'EMBEDDING_PROVIDER_UNAVAILABLE');
+        return { profile: null, unavailableCode: String(error?.response?.code ?? error?.code ?? 'EMBEDDING_PROVIDER_UNAVAILABLE'), durationMs: Date.now() - semanticStartedAt };
       }
-    } else semanticUnavailableCode = semanticConfigurationError() ?? 'SEMANTIC_NOT_CONFIGURED';
+    })();
     const lexicalStartedAt = Date.now();
     const lexicalRows: Array<KnowledgePreviewResult & { __candidateCount?: bigint | number }> = await this.db.$queryRaw`
       WITH q AS (
@@ -641,6 +645,10 @@ export class KnowledgeProcessingService implements OnModuleInit, OnModuleDestroy
         AND (NOT ${publicOnly}::boolean OR (s.visibility='PUBLIC_REFERENCE' AND s."deletedAt" IS NULL))
       ORDER BY candidates.phrase_match DESC, candidates.score DESC, c."sequence" ASC LIMIT ${candidateLimit}`;
     const lexicalDurationMs = Date.now() - lexicalStartedAt;
+    const semanticProfileResult = await semanticProfilePromise;
+    semanticProfile = semanticProfileResult.profile;
+    semanticUnavailableCode = semanticProfileResult.unavailableCode;
+    semanticDurationMs = semanticProfileResult.durationMs;
     const lexicalCandidateCount = Number(lexicalRows[0]?.__candidateCount ?? 0);
     const lexical: KnowledgePreviewResult[] = lexicalRows.map(({ __candidateCount: _candidateCount, ...row }) => row);
     const lexicalResponse = (): KnowledgePreviewResponse => {

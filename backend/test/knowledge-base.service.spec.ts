@@ -7,6 +7,8 @@ import type { WorkspaceService } from '../src/modules/workspaces/workspace.servi
 
 const base = (overrides: Record<string, unknown> = {}) => ({ id: 'base-a', organizationId: 'org-a', name: 'Company Information', nameKey: 'company information', description: null, status: 'ACTIVE', createdAt: new Date(), updatedAt: new Date(), archivedAt: null, _count: { sources: 0, assistantLinks: 0 }, ...overrides });
 const source = (id: string, overrides: Record<string, unknown> = {}) => ({ id, type: 'TEXT', status: 'REGISTERED', deletedAt: null, processingStatus: 'READY', sourceVersion: 2, visibility: 'INTERNAL_RESTRICTED', ...overrides });
+const verifiedPdfDocument = { provenance: 'AUTHENTICATED_PDF_EXTRACTION_V1', filename: 'policy.pdf', bytes: 20, hash: 'a'.repeat(64), contentHash: 'b'.repeat(64), sourceLanguage: 'en', extracted: true, pageCount: 1, pages: [{ page: 1, start: 0, end: 20, contentHash: 'c'.repeat(64), wordCount: 4 }] };
+const verifiedPdfSource = (id: string, overrides: Record<string, unknown> = {}) => source(id, { document: verifiedPdfDocument, sourceVersion: 2, activeIndexGeneration: 2, visibility: 'PUBLIC_REFERENCE', ...overrides });
 
 describe('KnowledgeBaseService', () => {
   let service: KnowledgeBaseService;
@@ -193,8 +195,8 @@ describe('KnowledgeBaseService', () => {
   it('resolves ready sources from direct and base links once, excluding archived bases', async () => {
     db.knowledgeBase.findMany.mockResolvedValueOnce([base({ status: 'ACTIVE' })]);
     db.assistantKnowledgeBase.findMany.mockResolvedValueOnce([{ knowledgeBaseId: 'base-a', knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } }]);
-    db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([{ source: source('shared', { activeIndexGeneration: 2 }) }]);
-    db.knowledgeBaseSource.findMany.mockResolvedValueOnce([{ source: source('shared', { activeIndexGeneration: 2 }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } }, { source: source('base-only', { activeIndexGeneration: 2 }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } }]);
+    db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([{ source: verifiedPdfSource('shared') }]);
+    db.knowledgeBaseSource.findMany.mockResolvedValueOnce([{ source: verifiedPdfSource('shared'), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } }, { source: verifiedPdfSource('base-only'), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } }]);
     const result = await service.resolveEffectiveSources('org-a', 'assistant-a');
     expect(result.sources.map((item: any) => item.id)).toEqual(['shared', 'base-only']);
     expect(result.sources).toEqual([
@@ -207,16 +209,16 @@ describe('KnowledgeBaseService', () => {
   it('uses a sole active base automatically for public ready sources while keeping its restricted sources private', async () => {
     db.knowledgeBase.findMany.mockResolvedValueOnce([base({ status: 'ACTIVE' })]);
     db.knowledgeBaseSource.findMany.mockResolvedValueOnce([
-      { source: source('public-faq', { activeIndexGeneration: 3, visibility: 'PUBLIC_REFERENCE' }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
-      { source: source('public-site', { type: 'WEBSITE', activeIndexGeneration: 5, visibility: 'PUBLIC_REFERENCE' }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
-      { source: source('restricted-text', { activeIndexGeneration: 4, visibility: 'INTERNAL_RESTRICTED' }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
-      { source: source('not-indexed', { activeIndexGeneration: null, visibility: 'PUBLIC_REFERENCE' }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
+      { source: verifiedPdfSource('public-pdf-a', { activeIndexGeneration: 3 }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
+      { source: verifiedPdfSource('public-pdf-b', { activeIndexGeneration: 5 }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
+      { source: verifiedPdfSource('restricted-pdf', { visibility: 'INTERNAL_RESTRICTED', activeIndexGeneration: 4 }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
+      { source: verifiedPdfSource('not-indexed-pdf', { activeIndexGeneration: null }), knowledgeBase: { id: 'base-a', name: 'Company Information', status: 'ACTIVE' } },
     ]);
     const result = await service.resolveEffectiveSources('org-a', 'assistant-a', { publicOnly: true });
     expect(result.resolution).toBe('SINGLE_ACTIVE_BASE_DEFAULT');
     expect(result.defaultKnowledgeBaseId).toBe('base-a');
     expect(result.knowledgeBases).toEqual([expect.objectContaining({ id: 'base-a', assignment: 'WORKSPACE_DEFAULT', eligibleSourceCount: 2, retrievalEnabled: true })]);
-    expect(result.sources.map((item: any) => item.id)).toEqual(['public-faq', 'public-site']);
+    expect(result.sources.map((item: any) => item.id)).toEqual(['public-pdf-a', 'public-pdf-b']);
     expect(db.knowledgeBase.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', status: 'ACTIVE', archivedAt: null }, take: 2 }));
     expect(db.assistantKnowledgeBase.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', assistantId: 'assistant-a', knowledgeBase: { status: 'ACTIVE', archivedAt: null } } }));
   });
@@ -224,26 +226,115 @@ describe('KnowledgeBaseService', () => {
   it('includes directly assigned public sources in public effective retrieval while keeping the query tenant-scoped', async () => {
     db.knowledgeBase.findMany.mockResolvedValueOnce([]);
     db.assistantKnowledgeBase.findMany.mockResolvedValueOnce([]);
-    db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([{ source: source('direct-public', { visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 3 }) }]);
+    db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([{ source: verifiedPdfSource('direct-public', { activeIndexGeneration: 3 }) }]);
     const result = await service.resolveEffectiveSources('org-a', 'assistant-a', { publicOnly: true });
     expect(result.sources.map((item: any) => item.id)).toEqual(['direct-public']);
-    expect(db.assistantKnowledgeSource.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', assistantId: 'assistant-a', source: expect.objectContaining({ visibility: 'PUBLIC_REFERENCE', status: 'REGISTERED', processingStatus: 'READY' }) }) }));
+    const query = db.assistantKnowledgeSource.findMany.mock.calls[0][0];
+    expect(query).toEqual(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', assistantId: 'assistant-a', source: expect.objectContaining({ organizationId: 'org-a', visibility: 'PUBLIC_REFERENCE', deletedAt: null, status: 'REGISTERED', processingStatus: 'READY' }) }) }));
+    expect(query.include.source.select).toEqual(expect.objectContaining({ id: true, document: true, sourceVersion: true, activeIndexGeneration: true }));
+    expect(query.include.source.select).not.toHaveProperty('contentBody');
+    expect(query.include.source.select).not.toHaveProperty('sourceUrl');
+  });
+
+  it('counts only unique assigned verified PDF sources with current chunks using tenant and active-base scope', async () => {
+    const verifiedDocument = { provenance: 'AUTHENTICATED_PDF_EXTRACTION_V1', filename: 'policy.pdf', bytes: 20, hash: 'a'.repeat(64), contentHash: 'b'.repeat(64), sourceLanguage: 'en', extracted: true, pageCount: 1, pages: [{ page: 1, start: 0, end: 20, contentHash: 'c'.repeat(64), wordCount: 4 }] };
+    db.knowledgeBase.findMany.mockResolvedValueOnce([{ id: 'base-a' }, { id: 'base-b' }]);
+    db.assistantKnowledgeBase.findMany.mockResolvedValueOnce([{ knowledgeBaseId: 'base-a' }, { knowledgeBaseId: 'base-b' }]);
+    db.knowledgeBaseSource.findMany.mockResolvedValueOnce([
+      { source: source('current-pdf', { document: verifiedDocument, sourceVersion: 3, activeIndexGeneration: 8, visibility: 'PUBLIC_REFERENCE' }) },
+      { source: source('current-pdf', { document: verifiedDocument, sourceVersion: 3, activeIndexGeneration: 8, visibility: 'PUBLIC_REFERENCE' }) },
+      { source: source('untrusted-text', { activeIndexGeneration: 2 }) },
+      { source: source('deleted-pdf', { document: verifiedDocument, activeIndexGeneration: 2, deletedAt: new Date() }) },
+    ]);
+    db.knowledgeChunk.groupBy.mockResolvedValueOnce([
+      { sourceId: 'current-pdf', sourceVersion: 3, generation: 8, _count: { _all: 2 } },
+      { sourceId: 'current-pdf', sourceVersion: 2, generation: 7, _count: { _all: 5 } },
+      { sourceId: 'unassigned-source', sourceVersion: 1, generation: 1, _count: { _all: 1 } },
+    ]);
+    await expect(service.countResolvedAssignedSources('org-a', 'assistant-a')).resolves.toBe(1);
+
+    expect(db.knowledgeBaseSource.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId: 'org-a', source: expect.objectContaining({ organizationId: 'org-a', type: { in: ['FAQ', 'TEXT', 'WEBSITE'] }, status: 'REGISTERED', processingStatus: 'READY', activeIndexGeneration: { not: null }, visibility: 'PUBLIC_REFERENCE', deletedAt: null }) }),
+    }));
+    const assignmentQuery = db.knowledgeBaseSource.findMany.mock.calls[0][0];
+    expect(assignmentQuery.where).toMatchObject({ organizationId: 'org-a', knowledgeBase: { status: 'ACTIVE', archivedAt: null }, OR: [{ knowledgeBaseId: { in: ['base-a', 'base-b'] } }] });
+    expect(assignmentQuery.select.source.select).toEqual({ id: true, type: true, document: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, deletedAt: true });
+    expect(db.knowledgeChunk.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'org-a', OR: [{ sourceId: 'current-pdf', sourceVersion: 3, generation: 8 }] } }));
+    expect(db.knowledgeSource.findMany).not.toHaveBeenCalled();
+  });
+
+  it('keeps count-only diagnostics equivalent to the resolver’s current public searchable PDF set', async () => {
+    const bases = [{ id: 'base-a', name: 'Base A', status: 'ACTIVE' }, { id: 'base-b', name: 'Base B', status: 'ACTIVE' }];
+    const links = bases.map((knowledgeBase) => ({ knowledgeBaseId: knowledgeBase.id, knowledgeBase }));
+    const rows = [
+      { source: verifiedPdfSource('current-public-pdf', { sourceVersion: 3, activeIndexGeneration: 8 }), knowledgeBase: bases[0] },
+      { source: verifiedPdfSource('current-public-pdf', { sourceVersion: 3, activeIndexGeneration: 8 }), knowledgeBase: bases[1] },
+      { source: verifiedPdfSource('shared-public-pdf', { sourceVersion: 1, activeIndexGeneration: 2 }), knowledgeBase: bases[0] },
+      { source: verifiedPdfSource('restricted-pdf', { visibility: 'INTERNAL_RESTRICTED', sourceVersion: 3, activeIndexGeneration: 8 }), knowledgeBase: bases[0] },
+      { source: verifiedPdfSource('untrusted-pdf', { document: { ...verifiedPdfDocument, provenance: 'UNVERIFIED' }, sourceVersion: 2, activeIndexGeneration: 4 }), knowledgeBase: bases[0] },
+      { source: verifiedPdfSource('stale-pdf', { sourceVersion: 2, activeIndexGeneration: 4 }), knowledgeBase: bases[1] },
+      { source: verifiedPdfSource('deleted-pdf', { deletedAt: new Date(), activeIndexGeneration: 3 }), knowledgeBase: bases[0] },
+    ];
+    db.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a', status: 'ACTIVE', useAllEligibleWorkspaceKnowledge: true });
+    db.knowledgeBase.findMany.mockResolvedValue(bases);
+    db.assistantKnowledgeBase.findMany.mockResolvedValue(links);
+    db.assistantKnowledgeSource.findMany.mockResolvedValue([{ source: verifiedPdfSource('direct-pdf') }, { source: verifiedPdfSource('shared-public-pdf', { sourceVersion: 1 }) }]);
+    db.knowledgeSource.findMany.mockResolvedValue([verifiedPdfSource('workspace-only', { sourceVersion: 4, activeIndexGeneration: 5 }), source('legacy-faq', { type: 'FAQ', visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 2 }), source('legacy-website', { type: 'WEBSITE', visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 2 })]);
+    db.knowledgeBaseSource.findMany.mockResolvedValue(rows);
+    const searchableIds = new Set(['direct-pdf', 'workspace-only', 'current-public-pdf', 'shared-public-pdf']);
+    db.knowledgeChunk.groupBy.mockImplementation(async ({ where }: any) => (where.OR ?? []).filter((entry: any) => searchableIds.has(entry.sourceId)).map((entry: any) => ({ sourceId: entry.sourceId, sourceVersion: entry.sourceVersion, generation: entry.generation, _count: { _all: 1 } })));
+
+    const resolved = await service.resolveEffectiveSources('org-a', 'assistant-a', { publicOnly: true });
+    const assignedCount = await service.countResolvedAssignedSources('org-a', 'assistant-a');
+
+    expect(resolved.sources.map((item: any) => item.id)).toEqual(['direct-pdf', 'shared-public-pdf', 'workspace-only', 'current-public-pdf']);
+    expect(assignedCount).toBe(resolved.sources.length);
+    expect(db.knowledgeBaseSource.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId: 'org-a', source: expect.objectContaining({ organizationId: 'org-a', visibility: 'PUBLIC_REFERENCE' }) }),
+      select: { source: { select: { id: true, type: true, document: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, deletedAt: true } } },
+    }));
+    expect(db.knowledgeChunk.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', OR: expect.arrayContaining([expect.objectContaining({ sourceId: 'current-public-pdf', sourceVersion: 3, generation: 8 })]) }) }));
+    const directCountQuery = db.assistantKnowledgeSource.findMany.mock.calls.at(-1)?.[0];
+    expect(directCountQuery).toEqual(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', assistantId: 'assistant-a', source: expect.objectContaining({ organizationId: 'org-a' }) }), select: { source: { select: { id: true, type: true, document: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, deletedAt: true } } } }));
+    expect(directCountQuery.select.source.select).not.toHaveProperty('contentBody');
+    expect(db.knowledgeSource.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', visibility: 'PUBLIC_REFERENCE' }), select: expect.objectContaining({ document: true, sourceVersion: true, activeIndexGeneration: true }) }));
+  });
+
+  it('does not count assigned sources for an inactive or foreign assistant', async () => {
+    db.chatbot.findFirst.mockResolvedValueOnce({ id: 'assistant-a', status: 'DRAFT' });
+    await expect(service.countResolvedAssignedSources('org-a', 'assistant-a')).resolves.toBe(0);
+    db.chatbot.findFirst.mockResolvedValueOnce(null);
+    await expect(service.countResolvedAssignedSources('org-a', 'assistant-b')).rejects.toBeInstanceOf(NotFoundException);
+    expect(db.knowledgeBase.findMany).not.toHaveBeenCalled();
+    expect(db.knowledgeBaseSource.findMany).not.toHaveBeenCalled();
+    expect(db.knowledgeChunk.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('counts public sources in a sole active default base but not restricted sources', async () => {
+    const verifiedDocument = { provenance: 'AUTHENTICATED_PDF_EXTRACTION_V1', filename: 'public.pdf', bytes: 20, hash: 'a'.repeat(64), contentHash: 'b'.repeat(64), sourceLanguage: 'en', extracted: true, pageCount: 1, pages: [{ page: 1, start: 0, end: 20, contentHash: 'c'.repeat(64), wordCount: 4 }] };
+    db.knowledgeBase.findMany.mockResolvedValueOnce([{ id: 'default-base' }]);
+    db.assistantKnowledgeBase.findMany.mockResolvedValueOnce([]);
+    db.knowledgeBaseSource.findMany.mockResolvedValueOnce([{ source: source('public-pdf', { document: verifiedDocument, sourceVersion: 1, activeIndexGeneration: 2, visibility: 'PUBLIC_REFERENCE' }) }, { source: source('restricted-pdf', { document: verifiedDocument, sourceVersion: 1, activeIndexGeneration: 2 }) }]);
+    db.knowledgeChunk.groupBy.mockResolvedValueOnce([{ sourceId: 'public-pdf', sourceVersion: 1, generation: 2, _count: { _all: 1 } }]);
+
+    await expect(service.countResolvedAssignedSources('org-a', 'assistant-a')).resolves.toBe(1);
+    expect(db.knowledgeBaseSource.findMany.mock.calls[0][0].where.OR).toEqual([{ knowledgeBaseId: 'default-base', source: { visibility: 'PUBLIC_REFERENCE' } }]);
   });
 
   it('resolves all existing public indexed workspace sources under the assistant-level policy without duplicate paths', async () => {
     db.chatbot.findFirst.mockResolvedValueOnce({ id: 'assistant-a', status: 'ACTIVE', useAllEligibleWorkspaceKnowledge: true });
     db.knowledgeBase.findMany.mockResolvedValueOnce([]);
     db.assistantKnowledgeBase.findMany.mockResolvedValueOnce([]);
-    db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([{ source: source('faq-existing', { visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 4 }) }]);
+    db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([{ source: verifiedPdfSource('workspace-pdf-existing', { activeIndexGeneration: 4 }) }]);
     db.knowledgeSource.findMany.mockResolvedValueOnce([
-      source('faq-existing', { visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 4 }),
-      source('website-existing', { type: 'WEBSITE', visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 2 }),
+      verifiedPdfSource('workspace-pdf-existing', { activeIndexGeneration: 4 }),
+      verifiedPdfSource('workspace-pdf-second', { activeIndexGeneration: 2 }),
     ]);
     const result = await service.resolveEffectiveSources('org-a', 'assistant-a', { publicOnly: true });
     expect(result).toMatchObject({ useAllEligibleWorkspaceKnowledge: true, resolution: 'ALL_ELIGIBLE_WORKSPACE_KNOWLEDGE', effectiveSourceCount: 2 });
-    expect(result.sources.map((item: any) => item.id)).toEqual(['faq-existing', 'website-existing']);
-    expect(result.sources[0]).toMatchObject({ id: 'faq-existing', accessPath: 'MULTIPLE', accessPaths: ['DIRECT', 'WORKSPACE_POLICY'] });
-    expect(result.sources[1]).toMatchObject({ id: 'website-existing', accessPath: 'WORKSPACE_POLICY', accessPaths: ['WORKSPACE_POLICY'] });
+    expect(result.sources.map((item: any) => item.id)).toEqual(['workspace-pdf-existing', 'workspace-pdf-second']);
+    expect(result.sources[0]).toMatchObject({ id: 'workspace-pdf-existing', accessPath: 'MULTIPLE', accessPaths: ['DIRECT', 'WORKSPACE_POLICY'] });
+    expect(result.sources[1]).toMatchObject({ id: 'workspace-pdf-second', accessPath: 'WORKSPACE_POLICY', accessPaths: ['WORKSPACE_POLICY'] });
     expect(db.knowledgeSource.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', type: { in: ['FAQ', 'TEXT', 'WEBSITE'] }, visibility: 'PUBLIC_REFERENCE' }) }));
   });
 
@@ -263,9 +354,9 @@ describe('KnowledgeBaseService', () => {
     db.knowledgeBase.findMany.mockResolvedValueOnce([]);
     db.assistantKnowledgeBase.findMany.mockResolvedValueOnce([]);
     db.assistantKnowledgeSource.findMany.mockResolvedValueOnce([]);
-    db.knowledgeSource.findMany.mockResolvedValueOnce([source('new-faq', { type: 'FAQ', visibility: 'PUBLIC_REFERENCE', status: 'REGISTERED', processingStatus: 'READY', activeIndexGeneration: 6 })]);
+    db.knowledgeSource.findMany.mockResolvedValueOnce([verifiedPdfSource('new-public-pdf', { activeIndexGeneration: 6 })]);
     const result = await service.resolveEffectiveSources('org-a', 'assistant-a', { publicOnly: true });
-    expect(result.sources).toEqual([expect.objectContaining({ id: 'new-faq', activeIndexGeneration: 6, activeChunkCount: 1, accessPath: 'WORKSPACE_POLICY' })]);
+    expect(result.sources).toEqual([expect.objectContaining({ id: 'new-public-pdf', activeIndexGeneration: 6, activeChunkCount: 1, accessPath: 'WORKSPACE_POLICY' })]);
     expect(db.assistantKnowledgeSource.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'org-a', assistantId: 'assistant-a' }) }));
     expect(db.assistantKnowledgeSource.create).toBeUndefined();
   });

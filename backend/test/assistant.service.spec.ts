@@ -76,6 +76,45 @@ describe('AssistantService', () => {
     expect(db.chatbot.findFirst.mock.calls.at(-1)[0].where).toEqual({ id: 'assistant-a', organizationId: 'org-a' });
   });
 
+  it('keeps Bot Behavior and assistant business rules isolated across two authorized workspaces', async () => {
+    const tenantAssistants = new Map<string, ReturnType<typeof record>>([
+      ['assistant-a', record({ id: 'assistant-a', organizationId: 'org-a', systemInstructions: 'Workspace A instructions', businessPurpose: 'Workspace A purpose' })],
+      ['assistant-b', record({ id: 'assistant-b', organizationId: 'org-b', systemInstructions: 'Workspace B instructions', businessPurpose: 'Workspace B purpose' })],
+    ]);
+    const tenantRules = new Map<string, Array<{ id: string; organizationId: string; assistantId: string; instruction: string }>>([
+      ['org-a:assistant-a', [{ id: 'rule-a', organizationId: 'org-a', assistantId: 'assistant-a', instruction: 'Rule for A' }]],
+      ['org-b:assistant-b', [{ id: 'rule-b', organizationId: 'org-b', assistantId: 'assistant-b', instruction: 'Rule for B' }]],
+    ]);
+    workspaces.requireAccess.mockImplementation(async (_userId: string, slug: string) => ({ organizationId: slug === 'workspace-a' ? 'org-a' : 'org-b', role: 'OWNER' }));
+    db.chatbot.findFirst.mockImplementation(async ({ where }: any) => {
+      const candidate = tenantAssistants.get(where.id);
+      return candidate?.organizationId === where.organizationId ? candidate : null;
+    });
+    db.assistantBusinessRule.findMany.mockImplementation(async ({ where }: any) => tenantRules.get(`${where.organizationId}:${where.assistantId}`) ?? []);
+
+    const assistantA = await service.get('user-a', 'workspace-a', 'assistant-a');
+    const assistantB = await service.get('user-b', 'workspace-b', 'assistant-b');
+    const rulesA = await service.listRules('user-a', 'workspace-a', 'assistant-a');
+    const rulesB = await service.listRules('user-b', 'workspace-b', 'assistant-b');
+
+    expect(assistantA).toMatchObject({ systemInstructions: 'Workspace A instructions', businessPurpose: 'Workspace A purpose' });
+    expect(assistantB).toMatchObject({ systemInstructions: 'Workspace B instructions', businessPurpose: 'Workspace B purpose' });
+    expect(rulesA).toEqual(tenantRules.get('org-a:assistant-a'));
+    expect(rulesB).toEqual(tenantRules.get('org-b:assistant-b'));
+    await expect(service.get('user-a', 'workspace-a', 'assistant-b')).rejects.toBeInstanceOf(NotFoundException);
+    expect(db.chatbot.findFirst.mock.calls.map((call) => call[0].where)).toEqual([
+      { id: 'assistant-a', organizationId: 'org-a' },
+      { id: 'assistant-b', organizationId: 'org-b' },
+      { id: 'assistant-a', organizationId: 'org-a' },
+      { id: 'assistant-b', organizationId: 'org-b' },
+      { id: 'assistant-b', organizationId: 'org-a' },
+    ]);
+    expect(db.assistantBusinessRule.findMany.mock.calls.map((call) => call[0].where)).toEqual([
+      { organizationId: 'org-a', assistantId: 'assistant-a' },
+      { organizationId: 'org-b', assistantId: 'assistant-b' },
+    ]);
+  });
+
   it('uses the effective environment provider for new assistants and ignores stale stored routes without changing records', async () => {
     try {
       initializeEffectiveProviderConfiguration({ AI_DEFAULT_PROVIDER: 'gemini', GEMINI_MODEL: 'gemini-2.5-flash', GEMINI_API_KEY: 'test-only' });

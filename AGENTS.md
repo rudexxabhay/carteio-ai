@@ -22,3 +22,19 @@ The existing 12-phase roadmap remains gated: its Phase 01 and later phases requi
 ## Owner-approved independent Knowledge Base rebuild track — 2026-10-29
 
 The repository owner has authorized a separate **Knowledge Base Rebuild — Phases 01 to 04** track. This track may proceed independently of the existing Phase 00 closure gate, subject to its own explicit phase scope/approval and all safety and regression requirements above. This is an exception for the Knowledge Base rebuild and necessary supporting infrastructure only; it does not close Phase 00, resolve or reclassify any of its 201 recorded failures, or authorize unrelated roadmap work. Keep the historical Phase 00 evidence immutable and its status BLOCKED until its own closure criteria are met. Preserve the existing AI execution, provider, prompt, conversation, Shopify, widget, and RAG retrieval contracts unless a later Knowledge Base phase is separately approved to change a specifically identified integration point.
+
+## Owner-approved independent SaaS Performance & Reliability Hardening Track
+
+This workstream may proceed independently of the original Phase 00–11 roadmap gate.
+
+It does not start, complete, replace or close any original roadmap phase.
+
+Phase 00 remains BLOCKED until its existing acceptance criteria are satisfied.
+
+All existing security, multi-tenant isolation, regression protection, evidence requirements and execution restrictions remain mandatory.
+
+The existing independently authorized Knowledge Base rebuild track remains unchanged.
+
+This exemption permits source inspection, scoped performance instrumentation, source-proven optimizations, focused regression-test authoring and implementation reports.
+
+It does not authorize production deployment, destructive changes, security bypasses or unverified release claims.

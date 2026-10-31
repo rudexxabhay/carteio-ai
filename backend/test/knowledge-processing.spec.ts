@@ -33,7 +33,10 @@ function setup(source: any, embed = jest.fn().mockImplementation((queries: reado
     $transaction: jest.fn(async (callback: (value: any) => unknown) => callback(tx)),
   };
   const workspace: any = { requireAccess: jest.fn().mockResolvedValue({ organizationId: 'org-a', role: 'OWNER' }) };
-  const bases: any = { resolveEffectiveSources: jest.fn().mockResolvedValue({ sources: [{ id: source.id, type: source.type, visibility: 'INTERNAL_RESTRICTED' }] }) };
+  const bases: any = {
+    resolveEffectiveSources: jest.fn().mockResolvedValue({ sources: [{ id: source.id, type: source.type, visibility: 'INTERNAL_RESTRICTED' }] }),
+    countResolvedAssignedSources: jest.fn().mockResolvedValue(['FAQ', 'TEXT', 'WEBSITE'].includes(source.type) ? 1 : 0),
+  };
   const service: any = new KnowledgeProcessingService(db, workspace, bases, { provider: 'openai', model: 'text-embedding-3-small', dimensions: 1536, embed });
   return { service, db, tx, workspace, bases, embed };
 }
@@ -312,6 +315,70 @@ describe('KnowledgeProcessingService', () => {
     expect(test.embed).toHaveBeenCalledWith(['return policy', 'refund conditions', 'returns']);
   });
 
+  it('starts tenant-scoped lexical retrieval while query embedding is still pending', async () => {
+    const test = setup(source());
+    let finishEmbedding!: (vectors: number[][]) => void;
+    const pendingEmbedding = new Promise<number[][]>((resolve) => { finishEmbedding = resolve; });
+    let signalLexicalStart!: () => void;
+    const lexicalStarted = new Promise<void>((resolve) => { signalLexicalStart = resolve; });
+    test.embed.mockImplementation(() => pendingEmbedding);
+    test.db.$queryRaw.mockImplementation(async () => {
+      signalLexicalStart();
+      return [];
+    });
+
+    const search = test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'shipping policy', 5);
+    await lexicalStarted;
+    expect(test.embed).toHaveBeenCalledWith(['shipping policy']);
+    expect(test.db.$queryRaw).toHaveBeenCalledTimes(1);
+    finishEmbedding([vector]);
+    const result = await search;
+
+    expect(result.results).toEqual([]);
+    expect(test.db.$queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps lexical evidence when the overlapping query embedding fails without starting semantic SQL', async () => {
+    const test = setup(source());
+    const lexicalHit = { chunkId: 'chunk-lexical', content: 'The policy is documented here.', locator: null, sourceVersion: 2, contentHash: 'a'.repeat(64), indexedAt: new Date(), sourceId: 'source-a', sourceTitle: 'Policy', sourceType: 'TEXT', visibility: 'PUBLIC_REFERENCE', pageUrl: null, pageTitle: null, score: 0.8, method: 'lexical' };
+    test.embed.mockRejectedValue(new Error('embedding unavailable'));
+    test.db.$queryRaw.mockResolvedValue([lexicalHit]);
+
+    const result = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'policy', 5);
+
+    expect(result.results.map((item: any) => item.chunkId)).toEqual(['chunk-lexical']);
+    expect(result.mode).toBe('lexical_only');
+    expect(result.semanticUnavailableCode).toBe('EMBEDDING_PROVIDER_UNAVAILABLE');
+    expect(test.db.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(test.embed).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles an embedding rejection when lexical retrieval fails before the embedding settles', async () => {
+    const currentPdf = source('TEXT', {
+      document: { ...pdfDocument, provenance: 'AUTHENTICATED_PDF_EXTRACTION_V1' },
+      visibility: 'PUBLIC_REFERENCE', activeIndexGeneration: 4,
+    });
+    const test = setup(currentPdf);
+    test.db.knowledgeSource.findMany.mockResolvedValue([currentPdf]);
+    let rejectEmbedding!: (reason: Error) => void;
+    test.embed.mockImplementation(() => new Promise<number[][]>((_resolve, reject) => { rejectEmbedding = reject; }));
+    test.db.$queryRaw.mockRejectedValueOnce(new Error('lexical query unavailable'));
+    const unhandledRejections: unknown[] = [];
+    const captureUnhandled = (reason: unknown) => unhandledRejections.push(reason);
+    process.on('unhandledRejection', captureUnhandled);
+
+    try {
+      await expect(test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'policy', 5)).rejects.toThrow('lexical query unavailable');
+      rejectEmbedding(new Error('embedding unavailable after lexical failure'));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(test.embed).toHaveBeenCalledTimes(1);
+      expect(test.db.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.removeListener('unhandledRejection', captureUnhandled);
+    }
+  });
+
   it('deduplicates hybrid candidates and labels reciprocal-rank fusion honestly', async () => {
     const test = setup(source());
     const lexicalHit = { chunkId: 'chunk-shared', content: 'Refunds take five days.', locator: null, sourceVersion: 2, contentHash: 'a'.repeat(64), indexedAt: new Date(), sourceId: 'source-a', sourceTitle: 'Refund policy', sourceType: 'FAQ', visibility: 'PUBLIC_REFERENCE', pageUrl: null, pageTitle: null, score: 0.8, method: 'lexical' };
@@ -335,6 +402,19 @@ describe('KnowledgeProcessingService', () => {
     expect(result.eligibleSourceCount).toBe(1);
     expect(result.results).toEqual([]);
     expect(result.diagnostics).toMatchObject({ indexReadySourceCount: 1, activeIndexChunkCount: 0, retrievalReason: 'EMPTY_INDEX' });
+  });
+
+  it('uses the count-only assigned-source resolver for public diagnostics without a second source materialization', async () => {
+    const test = setup(source('TEXT'));
+    test.bases.resolveEffectiveSources.mockResolvedValue({ sources: [], blockedReasonCounts: {} });
+    test.bases.countResolvedAssignedSources.mockResolvedValueOnce(3);
+
+    const result = await test.service.searchPreview('user-a', 'alpha', 'assistant-a', 'shipping policy', 5, 'PUBLIC_VISITOR');
+
+    expect(result.diagnostics.assignedSourceCount).toBe(3);
+    expect(test.bases.resolveEffectiveSources).toHaveBeenCalledTimes(1);
+    expect(test.bases.resolveEffectiveSources).toHaveBeenCalledWith('org-a', 'assistant-a', { publicOnly: true, includeDiagnostics: true });
+    expect(test.bases.countResolvedAssignedSources).toHaveBeenCalledWith('org-a', 'assistant-a');
   });
 
   it('reports a lexical miss distinctly when semantic retrieval is not configured', async () => {

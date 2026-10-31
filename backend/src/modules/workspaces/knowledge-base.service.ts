@@ -20,6 +20,10 @@ const sourceSelect = {
   deletedAt: true, createdAt: true, updatedAt: true,
   _count: { select: { pages: true } },
 };
+const effectiveSourceSelect = {
+  id: true, type: true, status: true, processingStatus: true, visibility: true, document: true,
+  sourceVersion: true, activeIndexGeneration: true, semanticIndexStatus: true, deletedAt: true,
+};
 type EffectiveKnowledgeBase = Prisma.KnowledgeBaseGetPayload<{
   select: { id: true; name: true; status: true };
 }>;
@@ -304,8 +308,8 @@ export class KnowledgeBaseService {
     const [activeBases, explicitBaseLinks, direct, workspaceSources] = await Promise.all([
       this.db.knowledgeBase.findMany({ where: { organizationId, status: 'ACTIVE', archivedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 2, select: { id: true, name: true, status: true } }),
       this.db.assistantKnowledgeBase.findMany({ where: { organizationId, assistantId, knowledgeBase: { status: 'ACTIVE', archivedAt: null } }, select: { knowledgeBaseId: true, knowledgeBase: { select: { id: true, name: true, status: true } } } }),
-      this.db.assistantKnowledgeSource.findMany({ where: { organizationId, assistantId, source: eligibleSource }, include: { source: { select: sourceSelect } } }),
-      useAllEligibleWorkspaceKnowledge ? this.db.knowledgeSource.findMany({ where: { organizationId, type: { in: ['FAQ', 'TEXT', 'WEBSITE'] }, status: 'REGISTERED', deletedAt: null, visibility: 'PUBLIC_REFERENCE' }, select: sourceSelect }) : [],
+      this.db.assistantKnowledgeSource.findMany({ where: { organizationId, assistantId, source: { organizationId, ...eligibleSource } }, include: { source: { select: effectiveSourceSelect } } }),
+      useAllEligibleWorkspaceKnowledge ? this.db.knowledgeSource.findMany({ where: { organizationId, type: { in: ['FAQ', 'TEXT', 'WEBSITE'] }, status: 'REGISTERED', deletedAt: null, visibility: 'PUBLIC_REFERENCE' }, select: effectiveSourceSelect }) : [],
     ]);
     const defaultBase = activeBases.length === 1 ? activeBases[0] : null;
     const linkedBaseIds = [...new Set(explicitBaseLinks.map((row: any) => String(row.knowledgeBaseId)))];
@@ -314,8 +318,8 @@ export class KnowledgeBaseService {
       ...(defaultBase ? [{ knowledgeBaseId: defaultBase.id, source: { visibility: 'PUBLIC_REFERENCE' } }] : []),
     ];
     const viaBases = sourceMemberships.length ? await this.db.knowledgeBaseSource.findMany({
-      where: { organizationId, source: eligibleSource, OR: sourceMemberships, knowledgeBase: { status: 'ACTIVE', archivedAt: null } },
-      include: { source: { select: sourceSelect }, knowledgeBase: { select: { id: true, name: true, status: true } } },
+      where: { organizationId, source: { organizationId, ...eligibleSource }, OR: sourceMemberships, knowledgeBase: { status: 'ACTIVE', archivedAt: null } },
+      include: { source: { select: effectiveSourceSelect }, knowledgeBase: { select: { id: true, name: true, status: true } } },
     }) : [];
     const sources = new Map<string, any>();
     const sourceBaseIds = new Map<string, Set<string>>();
@@ -355,7 +359,7 @@ export class KnowledgeBaseService {
       ids.add(row.source.id);
       readySourceIdsByBase.set(row.knowledgeBase.id, ids);
     }
-    const sourceRows = [...sources.values()].filter((source) => isVerifiedPdfDocumentSource(source) && source.deletedAt === null && (sourceBaseIds.get(source.id)?.size ?? 0) > 0);
+    const sourceRows = [...sources.values()].filter((source) => isVerifiedPdfDocumentSource(source) && source.deletedAt === null);
     const activeChunkGroups = sourceRows.length ? await this.db.knowledgeChunk.groupBy({
       by: ['sourceId', 'sourceVersion', 'generation'],
       where: { organizationId, OR: sourceRows.map((source: any) => ({ sourceId: source.id, sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration })) },
@@ -390,6 +394,50 @@ export class KnowledgeBaseService {
         return { id: source.id, type: source.type, sourceVersion: source.sourceVersion, activeIndexGeneration: source.activeIndexGeneration, activeChunkCount: activeChunksBySource.get(source.id) ?? 0, visibility: source.visibility, semanticIndexStatus: source.semanticIndexStatus, sourceOrigin: source.type === 'WEBSITE' ? 'PUBLIC_WEBSITE' : 'WORKSPACE_AUTHORED', knowledgeBaseIds: [...(sourceBaseIds.get(source.id) ?? [])], accessPaths, accessPath: accessPaths.length > 1 ? 'MULTIPLE' : accessPaths[0] ?? 'UNKNOWN' };
       }),
     };
+  }
+
+  /** Counts the deduplicated source set exposed by resolveEffectiveSources without materializing source metadata. */
+  async countResolvedAssignedSources(organizationId: string, assistantId: string): Promise<number> {
+    const assistant = await this.requireAssistant(organizationId, assistantId);
+    if (assistant.status !== 'ACTIVE') return 0;
+    const eligibleSource = { type: { in: ['FAQ', 'TEXT', 'WEBSITE'] }, status: 'REGISTERED', processingStatus: 'READY', activeIndexGeneration: { not: null }, visibility: 'PUBLIC_REFERENCE', deletedAt: null };
+    const sourceCountSelect = { id: true, type: true, document: true, sourceVersion: true, activeIndexGeneration: true, visibility: true, deletedAt: true };
+    const [activeBases, explicitBaseLinks, directLinks, workspaceSources] = await Promise.all([
+      this.db.knowledgeBase.findMany({ where: { organizationId, status: 'ACTIVE', archivedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 2, select: { id: true } }),
+      this.db.assistantKnowledgeBase.findMany({ where: { organizationId, assistantId, knowledgeBase: { status: 'ACTIVE', archivedAt: null } }, select: { knowledgeBaseId: true } }),
+      this.db.assistantKnowledgeSource.findMany({ where: { organizationId, assistantId, source: { organizationId, ...eligibleSource } }, select: { source: { select: sourceCountSelect } } }),
+      assistant.useAllEligibleWorkspaceKnowledge ? this.db.knowledgeSource.findMany({ where: { organizationId, ...eligibleSource }, select: sourceCountSelect }) : [],
+    ]);
+    const defaultBase = activeBases.length === 1 ? activeBases[0] : null;
+    const linkedBaseIds = [...new Set(explicitBaseLinks.map((row: any) => String(row.knowledgeBaseId)))];
+    const sourceMemberships = [
+      ...(linkedBaseIds.length ? [{ knowledgeBaseId: { in: linkedBaseIds } }] : []),
+      ...(defaultBase ? [{ knowledgeBaseId: defaultBase.id, source: { visibility: 'PUBLIC_REFERENCE' } }] : []),
+    ];
+    const rows = sourceMemberships.length ? await this.db.knowledgeBaseSource.findMany({
+      where: { organizationId, source: { organizationId, ...eligibleSource }, OR: sourceMemberships, knowledgeBase: { status: 'ACTIVE', archivedAt: null } },
+      select: { source: { select: sourceCountSelect } },
+    }) : [];
+    const currentSources = new Map<string, { id: string; sourceVersion: number; activeIndexGeneration: number }>();
+    for (const source of [...directLinks.map((row: any) => row.source), ...workspaceSources, ...rows.map((row: any) => row.source)]) {
+      if (source.deletedAt === null && source.visibility === 'PUBLIC_REFERENCE' && isVerifiedPdfDocumentSource(source)
+        && Number.isSafeInteger(source.sourceVersion) && Number.isSafeInteger(source.activeIndexGeneration)) {
+        currentSources.set(source.id, { id: source.id, sourceVersion: source.sourceVersion, activeIndexGeneration: source.activeIndexGeneration });
+      }
+    }
+    const current = [...currentSources.values()];
+    if (!current.length) return 0;
+    const groups = await this.db.knowledgeChunk.groupBy({
+      by: ['sourceId', 'sourceVersion', 'generation'],
+      where: { organizationId, OR: current.map((source) => ({ sourceId: source.id, sourceVersion: source.sourceVersion, generation: source.activeIndexGeneration })) },
+      _count: { _all: true },
+    });
+    const currentBySourceId = new Map(current.map((source) => [source.id, source]));
+    return new Set(groups.filter((group: any) => {
+      const source = currentBySourceId.get(group.sourceId);
+      return source !== undefined && group.sourceVersion === source.sourceVersion
+        && group.generation === source.activeIndexGeneration && group._count._all > 0;
+    }).map((group: any) => group.sourceId)).size;
   }
 
   async effectiveForMember(userId: string, slug: string, assistantId: string) {

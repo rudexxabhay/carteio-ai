@@ -40,6 +40,40 @@ describe('CommerceReadContracts tenant and privacy boundary', () => {
     expect(query.where.AND).toHaveLength(1);
   });
 
+  it('filters by collection search terms without fetching the filter-only field', async () => {
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', connectorId: 'shopify_v1', state: 'CONNECTED', integrationConnectionId: 'commerce-a', verifiedCapabilities: ['PRODUCT_CATALOG'], commerceConnection: { id: 'commerce-a', state: 'CONNECTED', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } }]);
+    prisma.connectorDataPermission.findMany.mockResolvedValue([{ connectorInstanceId: 'connector-a', category: 'PRODUCTS' }, { connectorInstanceId: 'connector-a', category: 'CATEGORIES' }]);
+    prisma.assistantConnectorDataPermission.findMany.mockResolvedValue([{ connectorInstanceId: 'connector-a', category: 'PRODUCTS' }, { connectorInstanceId: 'connector-a', category: 'CATEGORIES' }]);
+    prisma.commerceProduct.findMany.mockResolvedValue([]);
+
+    await service.searchCatalog('tenant-a', 'assistant-a', ['woven tote'], 5);
+
+    const query = prisma.commerceProduct.findMany.mock.calls[0][0];
+    expect(query.where).toMatchObject({ organizationId: 'tenant-a', connectionId: { in: ['commerce-a'] } });
+    expect(JSON.stringify(query.where)).toContain('collectionSearchTerms');
+    expect(query.select).not.toHaveProperty('collectionSearchTerms');
+  });
+
+  it('does not select collection search terms for product details or evidence revalidation', async () => {
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', connectorId: 'shopify_v1', state: 'CONNECTED', integrationConnectionId: 'commerce-a', verifiedCapabilities: ['PRODUCT_CATALOG'], commerceConnection: { id: 'commerce-a', state: 'CONNECTED', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } }]);
+    prisma.connectorDataPermission.findMany.mockResolvedValue([{ connectorInstanceId: 'connector-a', category: 'PRODUCTS' }]);
+    prisma.assistantConnectorDataPermission.findMany.mockResolvedValue([{ connectorInstanceId: 'connector-a', category: 'PRODUCTS' }]);
+    prisma.commerceProduct.findFirst.mockResolvedValue(null);
+    prisma.commerceProduct.findMany.mockResolvedValue([]);
+
+    await service.getProductDetails('tenant-a', 'assistant-a', 'external-product-a');
+    await service.revalidateProducts('tenant-a', 'assistant-a', [{ id: 'product-a', connectionId: 'commerce-a', contentHash: 'hash-a', sourceVersion: 1 }]);
+
+    const detailQuery = prisma.commerceProduct.findFirst.mock.calls[0][0];
+    const revalidationQuery = prisma.commerceProduct.findMany.mock.calls[0][0];
+    expect(detailQuery.where).toMatchObject({ organizationId: 'tenant-a', connectionId: { in: ['commerce-a'] } });
+    expect(revalidationQuery.where).toMatchObject({ organizationId: 'tenant-a', connectionId: { in: ['commerce-a'] } });
+    expect(detailQuery.select).not.toHaveProperty('collectionSearchTerms');
+    expect(revalidationQuery.select).not.toHaveProperty('collectionSearchTerms');
+  });
+
   it('does not manufacture a product result when an authorized broad catalog query has no synchronized rows', async () => {
     prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
     prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', connectorId: 'shopify_v1', state: 'CONNECTED', integrationConnectionId: 'commerce-a', verifiedCapabilities: ['PRODUCT_CATALOG'], commerceConnection: { id: 'commerce-a', state: 'CONNECTED', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } }]);
@@ -118,6 +152,108 @@ describe('CommerceReadContracts tenant and privacy boundary', () => {
     await service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'provider-order-1', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } });
     expect(workspaces.requireAccess).toHaveBeenCalledWith('user-a', 'workspace-a', ['OWNER', 'ADMIN']);
     expect(prisma.commerceOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('resolves an authorized order without loading unrelated product permissions', async () => {
+    const verifiedAt = new Date();
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    workspaces.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', lastVerifiedAt: verifiedAt, commerceConnection: { id: 'commerce-a', grantedScopesVerifiedAt: verifiedAt } }]);
+    prisma.connectorInstance.findFirst.mockResolvedValue({ connectorId: 'shopify_v1', verifiedCapabilities: ['ORDERS'], lastVerifiedAt: verifiedAt, commerceConnection: { grantedScopes: ['read_orders'], grantedScopesVerifiedAt: verifiedAt } });
+    prisma.connectorDataPermission.findFirst.mockResolvedValue({ id: 'workspace-order-permission' });
+    prisma.assistantConnectorDataPermission.findFirst.mockResolvedValue({ id: 'assistant-order-permission' });
+    prisma.commerceOrder.findFirst.mockResolvedValue({ externalId: 'order-a' });
+
+    const result = await service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'order-a', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } });
+
+    expect(result).toEqual({ externalId: 'order-a' });
+    expect(prisma.connectorInstance.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: 'tenant-a' }) }));
+    expect(prisma.connectorDataPermission.findMany).not.toHaveBeenCalled();
+    expect(prisma.assistantConnectorDataPermission.findMany).not.toHaveBeenCalled();
+    expect(prisma.commerceOrder.findFirst.mock.calls[0]?.[0].where).toMatchObject({ organizationId: 'tenant-a', connectionId: { in: ['commerce-a'] } });
+  });
+
+  it('denies an order read when the authenticated workspace resolves to a different tenant', async () => {
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    workspaces.requireAccess.mockResolvedValue({ organizationId: 'tenant-b' });
+
+    await expect(service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'foreign-order', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-b', workspaceSlug: 'workspace-b' } })).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.connectorInstance.findMany).not.toHaveBeenCalled();
+    expect(prisma.commerceOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects an assistant owned by another tenant before resolving order connections', async () => {
+    prisma.chatbot.findFirst.mockResolvedValue(null);
+
+    await expect(service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-from-tenant-b', orderReference: 'order-a', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } })).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.chatbot.findFirst).toHaveBeenCalledWith({ where: { id: 'assistant-from-tenant-b', organizationId: 'tenant-a', status: 'ACTIVE', archivedAt: null }, select: { id: true } });
+    expect(workspaces.requireAccess).not.toHaveBeenCalled();
+    expect(prisma.connectorInstance.findMany).not.toHaveBeenCalled();
+    expect(prisma.commerceOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for order reads when the current Shopify scope snapshot is stale', async () => {
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    workspaces.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', lastVerifiedAt: new Date('2020-01-01T00:00:00.000Z'), commerceConnection: { id: 'commerce-a', grantedScopesVerifiedAt: new Date('2020-01-01T00:00:00.000Z') } }]);
+    prisma.connectorInstance.findFirst.mockResolvedValue({ connectorId: 'shopify_v1', verifiedCapabilities: ['ORDERS'], lastVerifiedAt: new Date('2020-01-01T00:00:00.000Z'), commerceConnection: { grantedScopes: ['read_orders'], grantedScopesVerifiedAt: new Date('2020-01-01T00:00:00.000Z') } });
+    prisma.connectorDataPermission.findFirst.mockResolvedValue({ id: 'workspace-order-permission' });
+    prisma.assistantConnectorDataPermission.findFirst.mockResolvedValue({ id: 'assistant-order-permission' });
+
+    const result = await service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'order-a', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } });
+
+    expect(result).toBeNull();
+    expect(prisma.commerceOrder.findFirst).not.toHaveBeenCalled();
+    expect(prisma.connectorInstance.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'connector-a', organizationId: 'tenant-a' }) }));
+  });
+
+  it('revalidates connector state and ownership after permission lookup before an order read', async () => {
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    workspaces.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', commerceConnection: { id: 'commerce-a' } }]);
+    prisma.connectorDataPermission.findFirst.mockResolvedValue({ id: 'workspace-order-permission' });
+    prisma.assistantConnectorDataPermission.findFirst.mockResolvedValue({ id: 'assistant-order-permission' });
+    prisma.connectorInstance.findFirst.mockResolvedValueOnce(null);
+
+    const result = await service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'order-a', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } });
+
+    expect(result).toBeNull();
+    expect(prisma.connectorInstance.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'connector-a', organizationId: 'tenant-a', state: 'CONNECTED', integrationConnectionId: { not: null }, commerceConnection: { is: expect.objectContaining({ organizationId: 'tenant-a' }) } }) }));
+    expect(prisma.commerceOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when assistant-specific order permission is revoked', async () => {
+    const verifiedAt = new Date();
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    workspaces.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', lastVerifiedAt: verifiedAt, commerceConnection: { id: 'commerce-a', grantedScopesVerifiedAt: verifiedAt } }]);
+    prisma.connectorInstance.findFirst.mockResolvedValue({ connectorId: 'shopify_v1', verifiedCapabilities: ['ORDERS'], lastVerifiedAt: verifiedAt, commerceConnection: { grantedScopes: ['read_orders'], grantedScopesVerifiedAt: verifiedAt } });
+    prisma.connectorDataPermission.findFirst.mockResolvedValue({ id: 'workspace-order-permission' });
+    prisma.assistantConnectorDataPermission.findFirst.mockResolvedValue(null);
+
+    const result = await service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'order-a', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } });
+
+    expect(result).toBeNull();
+    expect(prisma.assistantConnectorDataPermission.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: 'tenant-a', connectorInstanceId: 'connector-a', assistantId: 'assistant-a', category: 'ORDERS', enabled: true } }));
+    expect(prisma.commerceOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('scopes order identity lookup to authorized tenant connections, excluding a foreign order ID', async () => {
+    const verifiedAt = new Date();
+    prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
+    workspaces.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', lastVerifiedAt: verifiedAt, commerceConnection: { id: 'commerce-a', grantedScopesVerifiedAt: verifiedAt } }]);
+    prisma.connectorInstance.findFirst.mockResolvedValue({ connectorId: 'shopify_v1', verifiedCapabilities: ['ORDERS'], lastVerifiedAt: verifiedAt, commerceConnection: { grantedScopes: ['read_orders'], grantedScopesVerifiedAt: verifiedAt } });
+    prisma.connectorDataPermission.findFirst.mockResolvedValue({ id: 'workspace-order-permission' });
+    prisma.assistantConnectorDataPermission.findFirst.mockResolvedValue({ id: 'assistant-order-permission' });
+    prisma.commerceOrder.findFirst.mockResolvedValue(null);
+
+    const result = await service.getAuthorizedOrder({ organizationId: 'tenant-a', assistantId: 'assistant-a', orderReference: 'foreign-order-id', principal: { type: 'WORKSPACE_OPERATOR', userId: 'user-a', workspaceSlug: 'workspace-a' } });
+
+    expect(result).toBeNull();
+    expect(prisma.commerceOrder.findFirst.mock.calls[0]?.[0].where).toMatchObject({ organizationId: 'tenant-a', connectionId: { in: ['commerce-a'] }, OR: [{ externalId: 'foreign-order-id' }, { displayReference: 'foreign-order-id' }] });
   });
 
   it('omits price and inventory evidence unless both workspace and assistant permissions and Shopify scopes allow it', async () => {

@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException } from '@nestjs/common';
 import { evaluateFlowCondition, flowValueCharCount, flowValueItemCount, FlowService, renderFlowTemplate, validateGraph, validateRunnableGraph } from './flow.service';
 
-const validGraph = (): { version: number; nodes: Array<{ id: string; kind: string; title: string; detail: string; x: number; y: number; promptTemplate?: string; conditionOperator?: string; conditionValue?: string }>; edges: Array<[string, string]> } => ({
+const validGraph = (): { version: number; nodes: Array<{ id: string; kind: string; title: string; detail: string; x: number; y: number; assistantId?: string; promptTemplate?: string; conditionOperator?: string; conditionValue?: string }>; edges: Array<[string, string]> } => ({
   version: 1,
   nodes: [
     { id: 'start', kind: 'start', title: 'Chat Input', detail: 'Input', x: 0, y: 0 },
@@ -264,5 +264,44 @@ describe('FlowService.run', () => {
     expect(result.trace.traversedEdges).toHaveLength(3);
     expect(result.trace.traversedEdges.every((edge: any) => /^edge-/.test(edge.id))).toBe(true);
     expect(JSON.stringify(result.trace)).not.toContain('I need a refund');
+  });
+});
+
+describe('FlowService tenant assignment boundary', () => {
+  it('denies a foreign-workspace assistant node before persisting a flow, while accepting an owned assistant', async () => {
+    const assistantId = '11111111-1111-4111-8111-111111111111';
+    const foreignAssistantId = '22222222-2222-4222-8222-222222222222';
+    const workspace = { requireAccess: jest.fn().mockResolvedValue({ organizationId: 'workspace-a' }) };
+    const knowledge = { searchPreview: jest.fn() };
+    const foreignGraph = validGraph();
+    foreignGraph.nodes[1]!.assistantId = foreignAssistantId;
+    const foreignPrisma = { $queryRaw: jest.fn().mockResolvedValue([]) };
+    const foreignService = new FlowService(foreignPrisma as any, workspace as any, {} as any, knowledge as any);
+
+    await expect(foreignService.create('owner-a', 'workspace-a', { name: 'Foreign assignment', assistantId, graph: foreignGraph }))
+      .rejects.toThrow('Every Carteio Assistant node must reference a non-archived assistant in this workspace.');
+
+    const [assignmentSql, assignmentOrganizationId, assignedAssistantIds] = foreignPrisma.$queryRaw.mock.calls[0]!;
+    expect(assignmentSql.join('')).toContain('"organizationId" = ');
+    expect(assignmentOrganizationId).toBe('workspace-a');
+    expect(assignedAssistantIds).toEqual([foreignAssistantId]);
+    expect(foreignPrisma.$queryRaw).toHaveBeenCalledTimes(1);
+
+    const ownedGraph = validGraph();
+    ownedGraph.nodes[1]!.assistantId = assistantId;
+    const created = { id: 'flow-a', organizationId: 'workspace-a', assistantId };
+    const ownedPrisma = { $queryRaw: jest.fn()
+      .mockResolvedValueOnce([{ id: assistantId }])
+      .mockResolvedValueOnce([{ id: assistantId }])
+      .mockResolvedValueOnce([created]) };
+    const ownedService = new FlowService(ownedPrisma as any, workspace as any, {} as any, knowledge as any);
+
+    await expect(ownedService.create('owner-a', 'workspace-a', { name: 'Owned assignment', assistantId, graph: ownedGraph })).resolves.toEqual(created);
+    expect(ownedPrisma.$queryRaw).toHaveBeenCalledTimes(3);
+    const [insertSql, insertedId, insertedOrganizationId, insertedAssistantId] = ownedPrisma.$queryRaw.mock.calls[2]!;
+    expect(insertSql.join('')).toContain('INSERT INTO "FlowDefinition"');
+    expect(insertedOrganizationId).toBe('workspace-a');
+    expect(insertedAssistantId).toBe(assistantId);
+    expect(typeof insertedId).toBe('string');
   });
 });

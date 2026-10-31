@@ -156,9 +156,11 @@ describe('public widget runtime appearance and avatar lifecycle', () => {
   it('keeps one host for repeated execution of a compatible versioned embed', async () => {
     installScript();
     window.eval(runtime);
-    await waitForWidget(() => Boolean(document.querySelector('[data-carteio-widget-host]')));
+    await waitForWidget(() => document.querySelector('[data-carteio-widget-host]')?.style.visibility === 'visible');
+    expect(fetchMock.mock.calls.filter(([input]) => new URL(String(input)).pathname.endsWith('/widgets/configuration'))).toHaveLength(1);
     window.eval(runtime);
     expect(document.querySelectorAll('[data-carteio-widget-host]').length).toBe(1);
+    expect(fetchMock.mock.calls.filter(([input]) => new URL(String(input)).pathname.endsWith('/widgets/configuration'))).toHaveLength(1);
   });
 
   it('routes the explicit raise-ticket shortcut through the existing AI conversation endpoint', async () => {

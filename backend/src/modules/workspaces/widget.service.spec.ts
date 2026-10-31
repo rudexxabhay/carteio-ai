@@ -60,6 +60,12 @@ describe('WidgetService public sessions', () => {
     expect(saas.recordCustomerMessage).toHaveBeenCalledWith(expect.objectContaining({organizationId:'org-a',assistantId:'assistant-a',channel:'WEB_WIDGET',content:'Can you help?',allowTicketStatusLookup:true}));
     expect(answer.message.content).toBe('A grounded answer'); expect(answer.provider).toBe('gemini');
   });
+  it('ignores caller-supplied tenant, assistant, and conversation IDs in favor of the signed session scope',async()=>{
+    const {service,db,saas}=create(); const boot=await service.bootstrap({widgetId:config.publicId},request()); db.supportConversation.findFirst.mockResolvedValue({id:'conversation-a'});
+    await service.message(boot.accessToken,request(),{organizationId:'org-b',assistantId:'assistant-b',conversationId:'conversation-b',content:'Can you help?',idempotencyKey:'customer-turn-foreign-ids'});
+    expect(saas.recordCustomerMessage).toHaveBeenCalledWith(expect.objectContaining({organizationId:'org-a',assistantId:'assistant-a',channel:'WEB_WIDGET',content:'Can you help?'}));
+    expect(db.supportMessage.findFirst).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({organizationId:'org-a',conversationId:'conversation-a'})}));
+  });
   it('loads history only for the signed conversation and tenant',async()=>{
     const {service,db}=create(); const boot=await service.bootstrap({widgetId:config.publicId},request()); db.supportConversation.findFirst.mockResolvedValue({id:'conversation-a'});
     await service.history(boot.accessToken,request(),undefined,30);
