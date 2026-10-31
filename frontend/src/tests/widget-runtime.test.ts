@@ -168,11 +168,11 @@ describe('public widget runtime appearance and avatar lifecycle', () => {
       const path = new URL(input).pathname;
       if (path.endsWith('/widgets/configuration')) return jsonResponse({ assistant: appearance });
       if (path.endsWith('/widgets/bootstrap')) return jsonResponse({ accessToken: `${'a'.repeat(64)}.${'b'.repeat(43)}`, resumeToken: 'r'.repeat(43), expiresIn: 900 });
-      if (path.endsWith('/widgets/session/history')) return jsonResponse({ items: [], hasMore: false, nextCursor: null });
+      if (path.endsWith('/widgets/session/history')) return jsonResponse({ items: [{ id: 'restored-product-message', sender: 'assistant', content: 'Earlier catalog result.', createdAt: new Date().toISOString(), productCards: [{ id: 'restored-product', title: 'Restored catalog item', imageUrl: null, imageAltText: null, price: null, currency: null, compareAtPrice: null, availability: null, productUrl: null, variants: [], syncedAt: new Date().toISOString(), stale: true }] }], hasMore: false, nextCursor: null });
       if (path.endsWith('/widgets/session/deliveries')) return jsonResponse({ items: [], nextCursor: null });
       if (path.endsWith('/widgets/session/messages')) {
         const body = JSON.parse(String(init?.body));
-        return jsonResponse({ message: { id: body.content === 'I would like to raise a support ticket.' ? 'ai-ticket-guidance' : 'ai-chat-reply', sender: 'assistant', content: body.content === 'I would like to raise a support ticket.' ? 'What happened?' : 'Here is the answer.', createdAt: new Date().toISOString(), ...(body.content === 'Where can I find the product catalog?' ? { sourceIndicator: { generationType: 'AI_GENERATED', evidenceSources: ['SHOPIFY', 'KNOWLEDGE_BASE'] } } : {}) }, sources: [] });
+        return jsonResponse({ message: { id: body.content === 'I would like to raise a support ticket.' ? 'ai-ticket-guidance' : 'ai-chat-reply', sender: 'assistant', content: body.content === 'I would like to raise a support ticket.' ? 'What happened?' : 'Here is the answer.', createdAt: new Date().toISOString(), ...(body.content === 'Where can I find the product catalog?' ? { sourceIndicator: { generationType: 'AI_GENERATED', evidenceSources: ['SHOPIFY', 'KNOWLEDGE_BASE'] } } : {}) }, ...(body.content === 'Where can I find the product catalog?' ? { productCards: [{ id: 'product-1', title: 'Canvas bag', imageUrl: 'https://cdn.example.test/bag.jpg', imageAltText: 'Canvas bag', price: '24.50', currency: 'USD', compareAtPrice: null, availability: 'IN_STOCK', productUrl: 'https://store.example.test/products/canvas-bag', variants: [], syncedAt: new Date().toISOString(), stale: false }, { id: 'product-unsafe', title: 'Unsafe link item', imageUrl: null, imageAltText: null, price: null, currency: null, compareAtPrice: null, availability: null, productUrl: 'https://admin.shopify.com/store/private/products/1', variants: [], syncedAt: new Date().toISOString(), stale: true }] } : {}), sources: [] });
       }
       if (path.endsWith('/widgets/session/tickets/status')) {
         expect(JSON.parse(String(init?.body))).toMatchObject({ reference: 'TKT-0123456789' });
@@ -191,6 +191,7 @@ describe('public widget runtime appearance and avatar lifecycle', () => {
     const styles = shadow.querySelector('style')!.textContent || '';
     expect(shadow.querySelector('.tools')).toBeNull();
     expect(body.querySelector('.raise-ticket')).toBeNull();
+    expect(body.querySelector('[data-mid="restored-product-message"] .product-card')?.textContent).toContain('Restored catalog item');
     expect(body.querySelector('.track-ticket')).toBeNull();
     expect(footer.querySelector('.raise-ticket')).not.toBeNull();
     expect(footer.querySelector('.track-ticket')).not.toBeNull();
@@ -220,6 +221,14 @@ describe('public widget runtime appearance and avatar lifecycle', () => {
     expect(indicator.textContent).toContain('AI generated');
     expect(indicator.textContent).toContain('Shopify data');
     expect(indicator.textContent).toContain('Knowledge Base');
+    const productCard = shadow.querySelector('[data-mid="ai-chat-reply"] .product-card')!;
+    expect(productCard.textContent).toContain('Canvas bag');
+    expect(productCard.querySelector('img')).toHaveAttribute('src', 'https://cdn.example.test/bag.jpg');
+    expect(productCard.querySelector('a')).toHaveAttribute('href', 'https://store.example.test/products/canvas-bag');
+    expect(productCard.querySelector('a')).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(shadow.querySelectorAll('[data-mid="ai-chat-reply"] .product-card a')).toHaveLength(1);
+    productCard.querySelector('img')!.dispatchEvent(new Event('error'));
+    expect(productCard.querySelector('.product-image')?.textContent).toContain('Image unavailable');
     expect(shadow.querySelector('[data-mid="ai-chat-reply"] .stamp')!.compareDocumentPosition(indicator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     shadow.querySelector<HTMLButtonElement>('.close')!.click();
   });

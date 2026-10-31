@@ -5,7 +5,7 @@ describe('WidgetService public sessions', () => {
   const config = { id:'cfg', organizationId:'org-a', assistantId:'assistant-a', publicId:'widget_identifier_123456', enabled:true, allowedDomains:['shop.example.com'], appearance:{name:'Shop AI',welcomeMessage:'Hello',color:'#3157d5',position:'right',suggestions:[]}, assistant:{id:'assistant-a',name:'Shop AI',greetingMessage:null,status:'ACTIVE',archivedAt:null} };
   const create = () => {
     const db:any={widgetConfiguration:{findFirst:jest.fn().mockResolvedValue(config)},widgetSession:{findFirst:jest.fn().mockResolvedValue({id:'session-a',organizationId:'org-a',assistantId:'assistant-a',conversationId:'conversation-a',visitorSessionId:'visitor-a',resumeTokenHash:'hash-resume',resumeExpiresAt:new Date(Date.now()+86400000),origin:'https://shop.example.com'}),create:jest.fn().mockResolvedValue({}),deleteMany:jest.fn()},supportConversation:{findFirst:jest.fn().mockResolvedValue(null),create:jest.fn().mockResolvedValue({id:'conversation-a'})},supportMessage:{updateMany:jest.fn().mockResolvedValue({count:1}),findFirst:jest.fn().mockResolvedValue(null),findMany:jest.fn().mockResolvedValue([])},ticketDraft:{findFirst:jest.fn().mockResolvedValue(null)},ticket:{findFirst:jest.fn().mockResolvedValue(null)},auditEvent:{create:jest.fn()},$queryRaw:jest.fn().mockResolvedValue([{requestCount:1}])};
-    const saas:any={recordAssistantMessage:jest.fn().mockResolvedValue({}),recordCustomerMessage:jest.fn().mockResolvedValue({messageId:'ai-message',reply:'A grounded answer',answerOrigin:'MODEL_GENERATED',sources:[],providerUsed:'gemini',modelUsed:'model-x',createdAt:new Date()})};
+    const saas:any={recordAssistantMessage:jest.fn().mockResolvedValue({}),recordCustomerMessage:jest.fn().mockResolvedValue({messageId:'ai-message',reply:'A grounded answer',answerOrigin:'MODEL_GENERATED',sources:[],providerUsed:'gemini',modelUsed:'model-x',createdAt:new Date()}),resolveProductCardGroups:jest.fn().mockResolvedValue(new Map())};
     const delivery:any={register:jest.fn()};
     const tickets:any={recordDeliveryOutcome:jest.fn().mockResolvedValue({state:'DELIVERED'}),confirmCustomerDraft:jest.fn().mockResolvedValue({id:'ticket-a',reference:'TKT-0123456789',status:'OPEN'}),cancelDraft:jest.fn().mockResolvedValue({cancelled:true})};
     const service=new WidgetService(db,{} as any,saas,tickets,delivery);
@@ -60,6 +60,14 @@ describe('WidgetService public sessions', () => {
     expect(saas.recordCustomerMessage).toHaveBeenCalledWith(expect.objectContaining({organizationId:'org-a',assistantId:'assistant-a',channel:'WEB_WIDGET',content:'Can you help?',allowTicketStatusLookup:true}));
     expect(answer.message.content).toBe('A grounded answer'); expect(answer.provider).toBe('gemini');
   });
+  it('returns authorized structured product cards with the assistant reply',async()=>{
+    const {service,db,saas}=create(); const boot=await service.bootstrap({widgetId:config.publicId},request()); db.supportConversation.findFirst.mockResolvedValue({id:'conversation-a'});
+    const productCards=[{id:'product-a',title:'Product',imageUrl:'https://cdn.example.test/item.jpg',imageAltText:'Product image',price:'20.00',currency:'USD',compareAtPrice:null,availability:'IN_STOCK',productUrl:'https://shop.example.test/products/item',variants:[],syncedAt:new Date().toISOString(),stale:false}];
+    saas.recordCustomerMessage.mockResolvedValue({messageId:'ai-message',reply:'Here are options.',answerOrigin:'MODEL_GENERATED',sources:[],productCards,createdAt:new Date()});
+    const answer=await service.message(boot.accessToken,request(),{content:'Show products',idempotencyKey:'customer-product-turn-001'});
+    expect(answer.productCards).toEqual(productCards);
+    expect(answer.message.content).toBe('Here are options.');
+  });
   it('ignores caller-supplied tenant, assistant, and conversation IDs in favor of the signed session scope',async()=>{
     const {service,db,saas}=create(); const boot=await service.bootstrap({widgetId:config.publicId},request()); db.supportConversation.findFirst.mockResolvedValue({id:'conversation-a'});
     await service.message(boot.accessToken,request(),{organizationId:'org-b',assistantId:'assistant-b',conversationId:'conversation-b',content:'Can you help?',idempotencyKey:'customer-turn-foreign-ids'});
@@ -80,6 +88,16 @@ describe('WidgetService public sessions', () => {
     expect(result.items[0]).not.toHaveProperty('sources');
     expect(JSON.stringify(result.items[0])).not.toContain('Private product title');
     expect(JSON.stringify(result.items[0])).not.toContain('/products/item');
+  });
+  it('restores product cards from the signed workspace conversation through current catalog revalidation',async()=>{
+    const {service,db,saas}=create(); const boot=await service.bootstrap({widgetId:config.publicId},request()); db.supportConversation.findFirst.mockResolvedValue({id:'conversation-a'});
+    const sourceRefs=[{reference:'C1',title:'Item',type:'COMMERCE_PRODUCT',locator:'https://shop.example.com/products/item',chunkId:'11111111-1111-4111-8111-111111111111',sourceId:'22222222-2222-4222-8222-222222222222',sourceVersion:1793448000000,contentHash:'a'.repeat(64),cited:'true'}];
+    const card={id:'11111111-1111-4111-8111-111111111111',title:'Item',imageUrl:null,imageAltText:'Item',price:'10.00',currency:'USD',compareAtPrice:null,availability:'IN_STOCK',productUrl:'https://shop.example.com/products/item',variants:[],syncedAt:new Date().toISOString(),stale:false};
+    db.supportMessage.findMany.mockResolvedValue([{id:'answer-product',kind:'AI',content:'Here is an item.',answerOrigin:'MODEL_GENERATED',sourceRefs,createdAt:new Date()}]);
+    saas.resolveProductCardGroups.mockResolvedValue(new Map([['answer-product',[card]]]));
+    const history=await service.history(boot.accessToken,request());
+    expect(history.items[0].productCards).toEqual([card]);
+    expect(saas.resolveProductCardGroups).toHaveBeenCalledWith('org-a','assistant-a',[{key:'answer-product',sourceReferences:sourceRefs}]);
   });
   it('acknowledges only outbox messages in the current signed conversation',async()=>{
     const {service,db,tickets}=create(); const boot=await service.bootstrap({widgetId:config.publicId},request()); db.supportConversation.findFirst.mockResolvedValue({id:'conversation-a'});

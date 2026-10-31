@@ -201,6 +201,31 @@ describe('PlaygroundChat', () => {
     expect(sendPlaygroundMessage).toHaveBeenCalledWith('acme', 'assistant-1', 'How long is delivery?', undefined, expect.any(String), expect.any(AbortSignal));
   });
 
+  it('renders server-supplied product cards with real image, formatted price, and safe storefront link', async () => {
+    vi.mocked(sendPlaygroundMessage).mockResolvedValue({ sessionId: 'session-1', reply: 'Here are matching products.', retrievalMode: 'hybrid', responseLanguage: 'English', sources: [], productCards: [{ id: 'product-1', title: 'Canvas bag', imageUrl: 'https://cdn.example.test/bag.jpg', imageAltText: 'Canvas bag', price: '24.50', currency: 'USD', compareAtPrice: '30.00', availability: 'IN_STOCK', productUrl: 'https://store.example.test/products/canvas-bag', variants: [{ title: 'Natural', price: '24.50', currency: 'USD', availability: 'IN_STOCK' }], syncedAt: '2026-10-31T12:00:00.000Z', stale: false }] });
+    const user = userEvent.setup();
+    render(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByRole('textbox', { name: 'Message your assistant' }), 'Show products');
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    const card = await screen.findByRole('listitem');
+    expect(card).toHaveTextContent('Canvas bag');
+    expect(card).toHaveTextContent('$24.50');
+    expect(card.querySelector('img')).toHaveAttribute('src', 'https://cdn.example.test/bag.jpg');
+    expect(card.querySelector('a')).toHaveAttribute('href', 'https://store.example.test/products/canvas-bag');
+    expect(card.querySelector('a')).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders persisted product cards after authorized conversation restoration', async () => {
+    const sessionId = '88888888-8888-4888-8888-888888888888';
+    sessionStorage.setItem('carteio-playground-session:acme:assistant-1', sessionId);
+    vi.mocked(getPlaygroundConversation).mockResolvedValue({ sessionId, latest: true, messages: [{ id: 'restored-product-answer', role: 'assistant', content: 'Here is the item.', sources: [], productCards: [{ id: 'product-restored', title: 'Restored item', imageUrl: null, imageAltText: null, price: null, currency: null, compareAtPrice: null, availability: null, productUrl: null, variants: [], syncedAt: '2026-10-31T12:00:00.000Z', stale: true }], createdAt: '2026-10-31T12:00:00.000Z' }] });
+    render(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
+    const card = await screen.findByRole('listitem');
+    expect(card).toHaveTextContent('Restored item');
+    expect(card).toHaveTextContent('Price unavailable');
+    expect(card.querySelector('a')).toBeNull();
+  });
+
   it.each([
     ['AI_GENERATED', 'AI generated'],
     ['KNOWLEDGE_GROUNDED', 'Source unavailable'],

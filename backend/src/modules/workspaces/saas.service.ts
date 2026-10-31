@@ -44,6 +44,11 @@ export class SaasService {
     this.db = prisma;
   }
 
+  /** Internal Widget history adapter: cards are rebuilt from current authorized catalog rows. */
+  resolveProductCardGroups(organizationId: string, assistantId: string, groups: readonly { key: string; sourceReferences: unknown }[]) {
+    return this.conversations.resolveProductCardGroups(organizationId, assistantId, groups);
+  }
+
   async listIntegrations(userId: string, slug: string) {
     const { organizationId } = await this.workspaces.requireAccess(userId, slug);
     const items = await this.db.integrationConnection.findMany({

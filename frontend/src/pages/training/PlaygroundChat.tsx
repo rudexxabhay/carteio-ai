@@ -6,7 +6,7 @@ import { formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundM
 import { resolveKnowledgeEvidenceMetadata, type KnowledgeEvidenceMetadataItem } from '../../services/api/knowledge';
 import './playground-chat.css';
 
-type Message = { id: string; role: 'user' | 'assistant' | 'notice' | 'error'; content: string; createdAt: number; sources?: PlaygroundChatReply['sources']; provenance?: ResponseProvenance; providerUsed?: AssistantProvider | null; modelUsed?: string | null; diagnostics?: PlaygroundChatReply['diagnostics']; retryText?: string; retryTurnId?: string };
+type Message = { id: string; role: 'user' | 'assistant' | 'notice' | 'error'; content: string; createdAt: number; sources?: PlaygroundChatReply['sources']; productCards?: PlaygroundChatReply['productCards']; provenance?: ResponseProvenance; providerUsed?: AssistantProvider | null; modelUsed?: string | null; diagnostics?: PlaygroundChatReply['diagnostics']; retryText?: string; retryTurnId?: string };
 
 export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantUpdated, onClose }: { workspaceSlug: string; assistant: Assistant; manager: boolean; onAssistantUpdated: (assistant: Assistant) => void; onClose: () => void }) {
   const [sessionId, setSessionId] = useState<string | null>(() => storedSessionId(workspaceSlug, assistant));
@@ -61,7 +61,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     const controller = new AbortController();
     void getPlaygroundConversation(workspaceSlug, assistant.id, nextSessionId, controller.signal, { latest: true }).then((conversation) => {
       if (generation.current !== loadGeneration || conversation.messages.length === 0) return;
-      setMessages(conversation.messages.map((item) => ({ id: item.id, role: item.responseType === 'knowledge_setup' ? 'notice' : item.role, content: item.content, sources: item.sources, provenance: item.provenance, providerUsed: item.providerUsed, modelUsed: item.modelUsed, createdAt: new Date(item.createdAt).getTime() })));
+      setMessages(conversation.messages.map((item) => ({ id: item.id, role: item.responseType === 'knowledge_setup' ? 'notice' : item.role, content: item.content, sources: item.sources, productCards: item.productCards, provenance: item.provenance, providerUsed: item.providerUsed, modelUsed: item.modelUsed, createdAt: new Date(item.createdAt).getTime() })));
     }).catch((cause: unknown) => {
       if (generation.current !== loadGeneration || controller.signal.aborted || !isMissingSession(cause)) return;
       clearStoredSessionId(workspaceSlug, assistant, nextSessionId);
@@ -123,7 +123,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
       setSessionId(result.sessionId);
       const respondedAt = Date.now();
       const responseId = result.messageId || crypto.randomUUID();
-      setMessages((current) => [...current, { id: responseId, role: result.responseType === 'knowledge_setup' ? 'notice' : 'assistant', content: result.reply, sources: result.sources, provenance: result.provenance, providerUsed: result.providerUsed, modelUsed: result.modelUsed, diagnostics: result.diagnostics, createdAt: result.createdAt ? new Date(result.createdAt).getTime() : respondedAt }]);
+      setMessages((current) => [...current, { id: responseId, role: result.responseType === 'knowledge_setup' ? 'notice' : 'assistant', content: result.reply, sources: result.sources, productCards: result.productCards, provenance: result.provenance, providerUsed: result.providerUsed, modelUsed: result.modelUsed, diagnostics: result.diagnostics, createdAt: result.createdAt ? new Date(result.createdAt).getTime() : respondedAt }]);
       setSelectedTraceMessageId(responseId);
     } catch (cause) {
       if (controller.signal.aborted || generation.current !== generationAtStart) return;
@@ -229,7 +229,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     <div className="playground-copy-toolbar"><button type="button" className="playground-copy-history" onClick={() => void copyHistory()} disabled={!manager || sending || !messages.length}><Copy size={13}/> Copy History</button>{manager && messages.some((message) => message.diagnostics) && <button type="button" className="playground-copy-history" onClick={() => void copyHistory(true)} disabled={sending}><Activity size={13}/> Copy Chat + Diagnostics</button>}{copyFeedback && <span role={/^(?:Could not|Clipboard access failed)/.test(copyFeedback) ? 'alert' : 'status'}>{copyFeedback}</span>}</div>
     <div className="playground-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text">
       {!messages.length && <div className="playground-empty"><span className="playground-avatar" aria-hidden="true"><Bot size={20}/></span><p>{assistant.greetingMessage || `Send a test message to ${assistant.name}.`}</p>{!configured && manager && <small>Check the server-managed provider and model configuration.</small>}</div>}
-      {messages.map((message) => <article className={`playground-message playground-message-${message.role}`} key={message.id}><span className="playground-message-avatar" aria-hidden="true">{message.role === 'user' ? <UserRound size={15}/> : message.role === 'notice' ? <CircleAlert size={15}/> : <Bot size={15}/>}</span><div className="playground-message-body"><div className="playground-bubble" dir="auto">{message.content}</div>{(message.role === 'assistant' || message.role === 'notice') && <span className="playground-provenance" title={message.provenance === 'KNOWLEDGE_GROUNDED' ? 'Validated citation metadata is shown; this does not guarantee every claim is correct.' : undefined}>{sourceLabel(message)}</span>}{message.role === 'assistant' && message.providerUsed && message.modelUsed && !isCredentialLike(message.modelUsed) && <span className="playground-provider-used">Generated by {providerName(message.providerUsed)} · {message.modelUsed}</span>}{message.sources?.length ? <details className="playground-citations"><summary>Sources <span>{message.sources.length}</span><ChevronDown size={14}/></summary><ul>{message.sources.map((source) => <li key={`${source.reference}:${source.title}`}><strong>[{source.reference}] {source.title}</strong><small>{source.type}{source.locator ? ` · ${source.locator}` : ''}</small></li>)}</ul></details> : null}{(message.role === 'user' || message.role === 'assistant') && <button type="button" className="playground-message-copy" aria-label="Copy message" title="Copy message" onClick={() => void copyMessage(message)}><Copy size={12}/>{copiedMessageId === message.id ? 'Copied' : ''}</button>}{manager && (message.role === 'assistant' || message.role === 'error') && <button type="button" className="playground-inspect-message" onClick={() => { setSelectedTraceMessageId(message.id); setInspectorOpen(true); setInspectorTab('trace'); }}>Inspect trace</button>}{message.role === 'error' && message.retryText && !sessionNeedsNewChat && <button type="button" className="playground-retry" disabled={sending || !configured} onClick={() => void send(message.retryText!, message.id, message.retryTurnId)}>Retry message</button>}<time dateTime={new Date(message.createdAt).toISOString()}>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></div></article>)}
+      {messages.map((message) => <article className={`playground-message playground-message-${message.role}`} key={message.id}><span className="playground-message-avatar" aria-hidden="true">{message.role === 'user' ? <UserRound size={15}/> : message.role === 'notice' ? <CircleAlert size={15}/> : <Bot size={15}/>}</span><div className="playground-message-body"><div className="playground-bubble" dir="auto">{message.content}</div>{message.role === 'assistant' && message.productCards?.length ? <ProductCards cards={message.productCards}/> : null}{(message.role === 'assistant' || message.role === 'notice') && <span className="playground-provenance" title={message.provenance === 'KNOWLEDGE_GROUNDED' ? 'Validated citation metadata is shown; this does not guarantee every claim is correct.' : undefined}>{sourceLabel(message)}</span>}{message.role === 'assistant' && message.providerUsed && message.modelUsed && !isCredentialLike(message.modelUsed) && <span className="playground-provider-used">Generated by {providerName(message.providerUsed)} · {message.modelUsed}</span>}{message.sources?.length ? <details className="playground-citations"><summary>Sources <span>{message.sources.length}</span><ChevronDown size={14}/></summary><ul>{message.sources.map((source) => <li key={`${source.reference}:${source.title}`}><strong>[{source.reference}] {source.title}</strong><small>{source.type}{source.locator ? ` · ${source.locator}` : ''}</small></li>)}</ul></details> : null}{(message.role === 'user' || message.role === 'assistant') && <button type="button" className="playground-message-copy" aria-label="Copy message" title="Copy message" onClick={() => void copyMessage(message)}><Copy size={12}/>{copiedMessageId === message.id ? 'Copied' : ''}</button>}{manager && (message.role === 'assistant' || message.role === 'error') && <button type="button" className="playground-inspect-message" onClick={() => { setSelectedTraceMessageId(message.id); setInspectorOpen(true); setInspectorTab('trace'); }}>Inspect trace</button>}{message.role === 'error' && message.retryText && !sessionNeedsNewChat && <button type="button" className="playground-retry" disabled={sending || !configured} onClick={() => void send(message.retryText!, message.id, message.retryTurnId)}>Retry message</button>}<time dateTime={new Date(message.createdAt).toISOString()}>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></div></article>)}
       {sending && <div className="playground-message playground-message-assistant"><span className="playground-message-avatar" aria-hidden="true"><Bot size={15}/></span><div className="playground-bubble playground-typing" role="status"><LoaderCircle size={15}/> Working on your response…</div></div>}
       <div ref={bottom}/>
     </div>
@@ -243,6 +243,45 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     </div></aside>}
     </div>
   </section>;
+}
+
+function safeProductUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hostname === 'admin.shopify.com'
+      || url.pathname.split('/').some((part) => part.toLowerCase() === 'admin') || url.searchParams.has('preview_theme_id')) return null;
+    return url.href;
+  } catch { return null; }
+}
+
+function productPrice(value: string | null, currency: string | null): string | null {
+  if (!value || !currency || !/^[A-Z]{3}$/.test(currency) || !/^\d+(?:\.\d{1,4})?$/.test(value)) return null;
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 4 }).format(Number(value)); }
+  catch { return `${value} ${currency}`; }
+}
+
+function ProductCards({ cards }: { cards: NonNullable<PlaygroundChatReply['productCards']> }) {
+  return <div className="playground-product-cards" aria-label="Products" role="list">
+    {cards.slice(0, 5).map((product) => {
+      const url = safeProductUrl(product.productUrl);
+      const price = productPrice(product.price, product.currency);
+      const compare = productPrice(product.compareAtPrice, product.currency);
+      return <article className="playground-product-card" role="listitem" key={product.id}>
+        <div className="playground-product-image">
+          {product.imageUrl && safeProductUrl(product.imageUrl) ? <><img src={product.imageUrl} alt={product.imageAltText || product.title} loading="lazy" decoding="async" onError={(event) => { event.currentTarget.hidden = true; const fallback = event.currentTarget.nextElementSibling; if (fallback instanceof HTMLElement) fallback.hidden = false; }}/><span hidden>Image unavailable</span></> : <span>Image unavailable</span>}
+        </div>
+        <div className="playground-product-details">
+          <strong className="playground-product-title" title={product.title}>{product.title}</strong>
+          <div className="playground-product-price"><span>{price ?? 'Price unavailable'}</span>{compare && <del>{compare}</del>}</div>
+          {product.availability && <small className={product.availability === 'IN_STOCK' ? 'is-available' : 'is-unavailable'}>{product.availability === 'IN_STOCK' ? 'In stock' : 'Out of stock'}</small>}
+          {!product.availability && product.stale && <small>Catalog snapshot · {new Date(product.syncedAt).toLocaleDateString()}</small>}
+          {product.variants.length > 0 && <small className="playground-product-variants">{product.variants.slice(0, 2).map((variant) => `${variant.title}${productPrice(variant.price, variant.currency) ? ` · ${productPrice(variant.price, variant.currency)}` : ''}`).join(' · ')}</small>}
+          {url && <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`View ${product.title}`}>View product <span aria-hidden="true">↗</span></a>}
+        </div>
+      </article>;
+    })}
+  </div>;
 }
 
 function messageFor(error: unknown) {

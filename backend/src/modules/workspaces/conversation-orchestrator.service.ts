@@ -23,7 +23,7 @@ import { buildRetrievalQueryPlan } from './retrieval-query-plan';
 import { buildEvidenceContext } from './knowledge-context-builder';
 import { buildGroundedAnswerPlan } from './grounded-answer-plan';
 import { TicketingService } from './ticketing.service';
-import { CommerceReadContracts, hasProductCatalogFilterSignal, parseProductSearchFilters, type CommerceProductEvidence } from './connectors/commerce-read-contracts.service';
+import { CommerceReadContracts, commerceProductCard, hasProductCatalogFilterSignal, parseProductSearchFilters, type CommerceProductCard, type CommerceProductEvidence } from './connectors/commerce-read-contracts.service';
 import { historyDiagnostic, providerHistoryDiagnostic, safeDiagnosticSourceIds, selectBoundedHistory } from './conversation-diagnostics';
 import { groundingSearchState, validateGroundedResponse, groundingFailureMetadata } from './grounded-response-validation';
 import { answerOutcome } from './answer-outcome';
@@ -354,7 +354,7 @@ export class ConversationOrchestrator {
     if (!conversation || !assistant || !customerMessage || customerMessage.content !== input.content) throw new NotFoundException({ code: 'CUSTOMER_SESSION_NOT_AUTHORIZED', message: 'Customer conversation or message not found.' });
     const answerKey = `ai:${createHash('sha256').update(input.idempotencyKey).digest('hex')}`;
     const priorAnswer = await customerDb.supportMessage.findFirst({ where: { organizationId: input.organizationId, conversationId: conversation.id, idempotencyKey: answerKey, kind: 'AI' }, select: { id: true, content: true, provider: true, model: true, responseCategory: true, answerOrigin: true, sourceRefs: true, createdAt: true } });
-    if (priorAnswer) return { conversationId: conversation.id, messageId: priorAnswer.id, reply: priorAnswer.content, providerUsed: priorAnswer.provider, modelUsed: priorAnswer.model, responseCategory: priorAnswer.responseCategory, answerOrigin: priorAnswer.answerOrigin, sources: priorAnswer.sourceRefs ?? [], createdAt: priorAnswer.createdAt.toISOString(), replay: true };
+    if (priorAnswer) { const cards = await this.resolveProductCardGroups(input.organizationId, input.assistantId, [{ key: priorAnswer.id, sourceReferences: priorAnswer.sourceRefs }]); return { conversationId: conversation.id, messageId: priorAnswer.id, reply: priorAnswer.content, providerUsed: priorAnswer.provider, modelUsed: priorAnswer.model, responseCategory: priorAnswer.responseCategory, answerOrigin: priorAnswer.answerOrigin, sources: priorAnswer.sourceRefs ?? [], ...(cards.get(priorAnswer.id)?.length ? { productCards: cards.get(priorAnswer.id) } : {}), createdAt: priorAnswer.createdAt.toISOString(), replay: true }; }
     const owner = await customerDb.organizationMembership.findFirst({ where: { organizationId: input.organizationId, role: 'OWNER', status: 'ACTIVE' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { userId: true, organization: { select: { slug: true } } } });
     if (!owner) throw new NotFoundException({ code: 'CUSTOMER_WORKSPACE_NOT_AUTHORIZED', message: 'Customer conversation workspace is unavailable.' });
     const lockId = randomUUID();
@@ -366,7 +366,8 @@ export class ConversationOrchestrator {
       const committedAnswer = await customerDb.supportMessage.findFirst({ where: { organizationId: input.organizationId, conversationId: conversation.id, idempotencyKey: answerKey, kind: 'AI' }, select: { id: true, content: true, provider: true, model: true, responseCategory: true, answerOrigin: true, sourceRefs: true, createdAt: true } });
       if (committedAnswer) {
         await this.releaseSessionSafely({ requestId: input.requestId ?? 'unknown', organizationId: input.organizationId, assistantId: input.assistantId, channel: 'CUSTOMER_INTERNAL' }, releaseSession);
-        return { conversationId: conversation.id, messageId: committedAnswer.id, reply: committedAnswer.content, providerUsed: committedAnswer.provider, modelUsed: committedAnswer.model, responseCategory: committedAnswer.responseCategory, answerOrigin: committedAnswer.answerOrigin, sources: committedAnswer.sourceRefs ?? [], createdAt: committedAnswer.createdAt.toISOString(), replay: true };
+        const cards = await this.resolveProductCardGroups(input.organizationId, input.assistantId, [{ key: committedAnswer.id, sourceReferences: committedAnswer.sourceRefs }]);
+        return { conversationId: conversation.id, messageId: committedAnswer.id, reply: committedAnswer.content, providerUsed: committedAnswer.provider, modelUsed: committedAnswer.model, responseCategory: committedAnswer.responseCategory, answerOrigin: committedAnswer.answerOrigin, sources: committedAnswer.sourceRefs ?? [], ...(cards.get(committedAnswer.id)?.length ? { productCards: cards.get(committedAnswer.id) } : {}), createdAt: committedAnswer.createdAt.toISOString(), replay: true };
       }
       const recent = await customerDb.supportMessage.findMany({ where: { organizationId: input.organizationId, conversationId: conversation.id, kind: { in: ['CUSTOMER', 'AI'] } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 40, select: { id: true, kind: true, content: true, responseCategory: true, idempotencyKey: true, createdAt: true } });
       const priorCustomerKeys = new Set(recent.filter((row: any) => row.kind === 'CUSTOMER' && row.idempotencyKey !== input.idempotencyKey && row.createdAt <= customerMessage.createdAt && typeof row.idempotencyKey === 'string').map((row: any) => `ai:${createHash('sha256').update(row.idempotencyKey).digest('hex')}`));
@@ -1685,11 +1686,14 @@ export class ConversationOrchestrator {
     let safeReply = reply.trim().replace(/\s*\[(?:S|C)\d+\]/g, '');
     const persistedEvidence: PersistedConversationSource[] = evidence.map(({ reference, chunkId, sourceId, sourceVersion, contentHash, title, type, locator, sourceAuthority }) => ({ reference, chunkId, sourceId, sourceVersion, contentHash, title, type, locator, ...(sourceAuthority ? { sourceAuthority } : {}), cited: citedReferences.includes(reference) ? 'true' : 'false' }));
     const safeSources = persistedEvidence.filter((item) => item.cited === 'true').map(({ reference, title, type, locator, sourceAuthority }) => ({ reference, title, type, locator, ...(sourceAuthority ? { sourceAuthority } : {}), cited: 'true' as const }));
+    const productCardGroups = await this.resolveProductCardGroups(member.organizationId, assistantId, [{ key: 'current-turn', sourceReferences: persistedEvidence }]);
+    const productCards = productCardGroups.get('current-turn') ?? [];
     const saved = await remember(safeReply, 'grounded_answer', 'MODEL_GENERATED', persistedEvidence);
     return {
       sessionId,
       messageId: saved.id, createdAt: saved.createdAt.toISOString(), reply: safeReply,
       sources: safeSources,
+      ...(productCards.length ? { productCards } : {}),
       retrievalMode: search.mode,
       responseLanguage: effectiveResponseLanguage,
       responseType: 'grounded_answer' as const,
@@ -1736,12 +1740,26 @@ export class ConversationOrchestrator {
     const messages = hasMore ? page.slice(0, limit) : page;
     if (latest) messages.reverse();
     const authorizedMessages = await this.revalidateStoredConversationMessages(userId, slug, assistantId, member.organizationId, messages);
+    const productCards = await this.resolveProductCardGroups(member.organizationId, assistantId, authorizedMessages.map((message) => ({ key: message.id, sourceReferences: message.sourceReferences })));
     return { sessionId, offset, limit, latest, hasMore, nextOffset: hasMore ? offset + messages.length : null, messages: authorizedMessages.map((message) => {
       const sources = decodePersistedSources(message.sourceReferences);
       const provenance = message.role === 'assistant' ? responseProvenance(message.answerOrigin, message.responseCategory, sources.length > 0) : undefined;
       const usage = message.role === 'assistant' ? persistedUsage(message.inputTokens, message.outputTokens) : undefined;
-      return { id: message.id, role: message.role, content: message.content, sources, responseType: publicResponseCategory(message.responseCategory), ...(provenance ? { provenance } : {}), ...safeProviderMetadata(message.providerUsed, message.modelUsed), ...(usage ? { usage } : {}), createdAt: messages.find((row: { id: string }) => row.id === message.id)!.createdAt.toISOString() };
+      return { id: message.id, role: message.role, content: message.content, sources, ...(productCards.get(message.id)?.length ? { productCards: productCards.get(message.id) } : {}), responseType: publicResponseCategory(message.responseCategory), ...(provenance ? { provenance } : {}), ...safeProviderMetadata(message.providerUsed, message.modelUsed), ...(usage ? { usage } : {}), createdAt: messages.find((row: { id: string }) => row.id === message.id)!.createdAt.toISOString() };
     }) };
+  }
+
+  /** Rebuild cards only from current tenant/assistant-authorized catalog rows. */
+  async resolveProductCardGroups(organizationId: string, assistantId: string, groups: readonly { key: string; sourceReferences: unknown }[]): Promise<Map<string, CommerceProductCard[]>> {
+    const identitiesByKey = new Map(groups.map(({ key, sourceReferences }) => [key, decodeStoredEvidenceIdentities(sourceReferences).filter((identity) => identity.cited === 'true' && identity.sourceType === 'COMMERCE_PRODUCT')]));
+    const identities = [...new Map([...identitiesByKey.values()].flat().map((identity) => [identity.chunkId, identity])).values()];
+    if (!identities.length || !this.commerce || typeof this.commerce.revalidateProducts !== 'function') return new Map();
+    const products = await this.commerce.revalidateProducts(organizationId, assistantId, identities.flatMap((identity) => identity.sourceVersion === undefined ? [] : [{ id: identity.chunkId, connectionId: identity.sourceId, contentHash: identity.contentHash, sourceVersion: identity.sourceVersion }]));
+    const byId = new Map(products.map((product) => [product.id, commerceProductCard(product)]));
+    return new Map([...identitiesByKey].map(([key, rows]) => [key, rows.flatMap((identity) => {
+      const card = byId.get(identity.chunkId);
+      return card ? [card] : [];
+    }).slice(0, 5)]));
   }
 
   private async callChatProvider(provider: ConversationProvider, model: string, messages: ConversationProviderMessage[], maxCompletionTokens: number, diagnostic: { requestId: string; organizationId: string; assistantId: string; stage: ConversationStage; attemptIndex?: number }, signal?: AbortSignal, responseFormat?: 'json_object', timeoutMs?: number, tools?: readonly ConversationToolDefinition[], onRequestDispatched?: () => void) {
@@ -1824,8 +1842,9 @@ export class ConversationOrchestrator {
         const current = currentByChunk.get(identity.chunkId)!;
         return { reference: identity.reference, title: current.sourceTitle, type: current.sourceType, locator: current.locator };
       });
+      const productCards = await this.resolveProductCardGroups(organizationId, assistantId, [{ key: answer.id, sourceReferences: answer.sourceReferences }]);
       const provenance = responseProvenance(answer.answerOrigin, category, currentSources.length > 0);
-      return { sessionId, messageId: answer.id, createdAt: answer.createdAt.toISOString(), reply: answer.content, sources: currentSources, retrievalMode: 'persisted', responseLanguage: 'same language as the customer', responseType: publicResponseCategory(category) ?? 'social', answerOrigin: answer.answerOrigin || 'MODEL_GENERATED', ...(provenance ? { provenance } : {}), ...providerMetadata, ...(usage ? { usage } : {}) };
+      return { sessionId, messageId: answer.id, createdAt: answer.createdAt.toISOString(), reply: answer.content, sources: currentSources, ...(productCards.get(answer.id)?.length ? { productCards: productCards.get(answer.id) } : {}), retrievalMode: 'persisted', responseLanguage: 'same language as the customer', responseType: publicResponseCategory(category) ?? 'social', answerOrigin: answer.answerOrigin || 'MODEL_GENERATED', ...(provenance ? { provenance } : {}), ...providerMetadata, ...(usage ? { usage } : {}) };
     }
     const sources = decodePersistedSources(answer.sourceReferences);
     const provenance = responseProvenance(answer.answerOrigin, category, false);

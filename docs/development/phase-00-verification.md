@@ -157,3 +157,7 @@ The 201 original assertions reconcile to 181 passing in the latest per-file save
 
 
 The later targeted frontend report overlapped the full report on 100 assertions and changed four previously failing outcomes to pass (two Builder selectors and two Playground checks). Thus the latest per-file deduplicated saved outcome is 221 pass / 22 fail across the same 243 identities. This is not a single complete suite run; the complete frontend command itself remains 217/26. Two of those 22 current report failures are newly added assertions outside the original 201.
+# Current scoped source correction — 2026-10-31
+
+Outside the Phase 00 gate, the owner approved a targeted Shopify verification capability-contract correction. `ShopifyConnectorAdapter` now declares `WEBSITE_CONTENT`, matching its existing conditional probe result. Focused adapter assertions cover returned/declaration consistency and absence in the no-content case. Tests and all runtime commands were NOT RUN by explicit instruction. Source checkpoint is `/tmp/carteio-shopify-capability-checkpoint/`. This does not alter historical Phase 00 failures or status; Phase 00 remains BLOCKED. UAT deployment and successful sync are NOT VERIFIED.
+

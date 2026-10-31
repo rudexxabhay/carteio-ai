@@ -68,6 +68,59 @@ export type CommerceProductEvidence = Readonly<{
   contentHash: string;
 }>;
 
+export type CommerceProductCard = Readonly<{
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  imageAltText: string | null;
+  price: string | null;
+  currency: string | null;
+  compareAtPrice: string | null;
+  availability: 'IN_STOCK' | 'OUT_OF_STOCK' | null;
+  productUrl: string | null;
+  variants: readonly Readonly<{ title: string; price: string | null; currency: string | null; availability: 'IN_STOCK' | 'OUT_OF_STOCK' | null }>[];
+  syncedAt: string;
+  stale: boolean;
+}>;
+
+/** Formats only revalidated catalog records; never derives card fields from model prose. */
+export function commerceProductCard(product: CommerceProductEvidence): CommerceProductCard {
+  const amount = (value: string | null) => value !== null && /^\d+(?:\.\d{1,4})?$/.test(value) && Number.isFinite(Number(value)) && Number(value) >= 0 ? value : null;
+  const currency = product.currency && /^[A-Z]{3}$/.test(product.currency) ? product.currency : null;
+  const price = currency ? amount(product.price) : null;
+  const compare = currency ? amount(product.compareAtPrice) : null;
+  const compareAtPrice = price !== null && compare !== null && Number(compare) > Number(price) ? compare : null;
+  const publicUrl = (value: string | null) => {
+    if (!value) return null;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hostname === 'admin.shopify.com'
+        || url.pathname.split('/').some((part) => part.toLowerCase() === 'admin') || url.searchParams.has('preview_theme_id')) return null;
+      return url.href.slice(0, 2048);
+    } catch { return null; }
+  };
+  const knownAvailability = (value: string | null): 'IN_STOCK' | 'OUT_OF_STOCK' | null => value === 'IN_STOCK' || value === 'OUT_OF_STOCK' ? value : null;
+  const imageUrl = publicUrl(product.imageUrl) ?? publicUrl(product.imageEvidence[0]?.url ?? null);
+  const imageAltText = product.imageUrl && publicUrl(product.imageUrl) ? product.imageAltText : product.imageEvidence[0]?.altText ?? product.imageAltText;
+  return {
+    id: product.id,
+    title: product.name,
+    imageUrl,
+    imageAltText: imageAltText ?? product.name,
+    price,
+    currency,
+    compareAtPrice,
+    availability: product.stale ? null : knownAvailability(product.availabilityStatus),
+    productUrl: publicUrl(product.productUrl),
+    variants: product.variants.slice(0, 5).map((variant) => {
+      const variantCurrency = variant.currency && /^[A-Z]{3}$/.test(variant.currency) ? variant.currency : null;
+      return { title: variant.title, price: variantCurrency ? amount(variant.price) : null, currency: variantCurrency, availability: product.stale ? null : knownAvailability(variant.availabilityStatus) };
+    }),
+    syncedAt: product.syncedAt,
+    stale: product.stale,
+  };
+}
+
 /** Provider-neutral, read-only contracts over the existing normalized commerce tables. */
 @Injectable()
 export class CommerceReadContracts {

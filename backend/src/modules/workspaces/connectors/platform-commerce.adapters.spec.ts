@@ -39,6 +39,7 @@ describe('Phase 16 platform adapter security and normalization', () => {
     expect(verified.grantedScopes).toEqual(['read_products', 'read_inventory']);
     expect(verified.grantedScopeMetadata?.[0]).toMatchObject({ handle: 'read_products', description: 'Read products' });
     expect(verified.capabilities).toContain('INVENTORY');
+    expect(verified.capabilities).not.toContain('WEBSITE_CONTENT');
     expect(verified.capabilities).not.toContain('ORDERS');
   });
   it('advertises an added read capability only after an authenticated provider probe succeeds', async () => {
@@ -47,6 +48,7 @@ describe('Phase 16 platform adapter security and normalization', () => {
     const verified = await shopify.verify({ organizationId: 'tenant-a', connectorInstanceId: 'connector-a' }, { shopDomain: 'sample.myshopify.com' }, { accessToken: 'opaque-token-value-12345' });
     expect(verified.capabilities).toContain('SHOPIFY_LOCATIONS');
     expect(verified.capabilities).toContain('WEBSITE_CONTENT');
+    expect(shopify.definition.capabilities).toContain('WEBSITE_CONTENT');
     expect(verified.capabilities).not.toContain('SHOPIFY_SHIPPING');
   });
   it('refreshes an expiring Shopify token before discovering installed scopes', async () => {

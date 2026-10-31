@@ -91,6 +91,26 @@ describe('Phase 06 actual shared provider payloads', () => {
     persistTurn = jest.fn().mockResolvedValue({ id: 'saved-answer', createdAt: new Date('2026-10-27T12:00:00Z') });
   });
   afterEach(() => jest.restoreAllMocks());
+  it('builds cards only from cited product evidence revalidated for the active organization and assistant', async () => {
+    const sourceReferences = [
+      { reference: 'C1', chunkId: '30000000-0000-4000-8000-000000000003', sourceId: '40000000-0000-4000-8000-000000000004', sourceVersion: 1793448000000, contentHash: 'b'.repeat(64), cited: 'true', type: 'COMMERCE_PRODUCT' },
+      { reference: 'C2', chunkId: '50000000-0000-4000-8000-000000000005', sourceId: '40000000-0000-4000-8000-000000000004', sourceVersion: 1793448000000, contentHash: 'c'.repeat(64), cited: 'false', type: 'COMMERCE_PRODUCT' },
+      { reference: 'S1', chunkId: row.chunkId, sourceId: row.sourceId, sourceVersion: 1, contentHash: row.contentHash, cited: 'true', type: 'FAQ' },
+    ];
+    commerce.revalidateProducts = jest.fn().mockResolvedValue([{
+      id: '30000000-0000-4000-8000-000000000003', connectionId: '40000000-0000-4000-8000-000000000004', externalId: 'external-product', name: 'Catalog item',
+      description: null, category: null, productType: null, taxonomyCategoryId: null, taxonomyCategory: null, collections: [], vendor: null, handle: null, compareAtPrice: '30.00',
+      imageUrl: 'https://cdn.example.test/item.jpg', imageAltText: 'Catalog item', imageWidth: 800, imageHeight: 600, imageEvidence: [], sku: null, currency: 'USD', price: '20.00', inventory: 4,
+      availabilityStatus: 'IN_STOCK', rawStatus: 'ACTIVE', productUrl: 'https://store.example.test/products/item', syncedAt: new Date(1793448000000).toISOString(), externalUpdatedAt: null, stale: false,
+      retrievalScore: 1, retrievalReason: 'catalog_browse', dataCompleteness: 'UNKNOWN', variants: [], contentHash: 'b'.repeat(64),
+    }]);
+    const cards = await engine.resolveProductCardGroups('north', 'assistant-north', [{ key: 'message-a', sourceReferences }]);
+    expect(commerce.revalidateProducts).toHaveBeenCalledWith('north', 'assistant-north', [{ id: sourceReferences[0].chunkId, connectionId: sourceReferences[0].sourceId, contentHash: sourceReferences[0].contentHash, sourceVersion: sourceReferences[0].sourceVersion }]);
+    expect(cards.get('message-a')).toMatchObject([{ id: sourceReferences[0].chunkId, title: 'Catalog item', price: '20.00', productUrl: 'https://store.example.test/products/item' }]);
+    commerce.revalidateProducts.mockResolvedValueOnce([]);
+    expect(await engine.resolveProductCardGroups('south', 'assistant-south', [{ key: 'foreign-context', sourceReferences }])).toEqual(new Map([['foreign-context', []]]));
+    expect(commerce.revalidateProducts).toHaveBeenLastCalledWith('south', 'assistant-south', expect.any(Array));
+  });
   const result = (content: string, extra = {}) => ({ provider, model, content, finishReason: 'stop', ...extra });
   const run = function (message: string, turns: any[] = [], workspace = 'North Shop') {
     const tenant = workspace === 'South Shop' ? 'south' : 'north';

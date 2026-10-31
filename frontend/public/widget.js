@@ -101,6 +101,9 @@
       .stamp{display:block;margin-top:6px;font-size:10px;line-height:1.2;opacity:.64}
       .answer-source-indicator{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;max-width:100%;margin-top:5px;color:#667085;font-size:10px;font-weight:550;line-height:1.35;overflow-wrap:anywhere}.answer-source-indicator .source-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0}.answer-source-indicator .source-chip+.source-chip::before{content:"·";margin-right:1px;color:#98a2b3}.answer-source-indicator .source-icon{width:12px;height:12px;flex:none;opacity:.72}
       .sources{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.sources a,.sources .source-label{color:inherit;font-size:11px;text-decoration:underline;text-underline-offset:2px;opacity:.85}.sources .source-label{text-decoration:none;opacity:.7}
+      .product-cards{display:flex;gap:10px;max-width:min(100%,640px);overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;padding:3px 1px 8px;scrollbar-width:thin}
+      .product-card{box-sizing:border-box;display:flex;flex:0 0 min(76vw,210px);flex-direction:column;min-width:0;overflow:hidden;border:1px solid #e5e7e3;border-radius:13px;background:#fff;color:#26332e;scroll-snap-align:start}
+      .product-image{display:grid;place-items:center;aspect-ratio:4/3;overflow:hidden;background:#f2f4f0;color:#78817b;font-size:11px}.product-image img{width:100%;height:100%;object-fit:cover}.product-card-body{display:grid;gap:7px;min-width:0;padding:10px}.product-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;min-height:2.7em;font-size:13px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}.product-price{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-size:14px;font-weight:700}.product-compare{color:#78817b;font-size:11px;font-weight:400;text-decoration:line-through}.product-meta{color:#78817b;font-size:10px}.product-link{display:flex;justify-content:center;align-items:center;min-height:34px;border-radius:8px;background:#273831;color:#fff;font-size:11px;font-weight:650;text-decoration:none}.product-link:focus-visible{outline:2px solid #273831;outline-offset:2px}.product-link:hover{filter:brightness(1.12)}
       .welcome{max-width:100%;padding:7px 1px 9px;border:0;border-radius:0;background:transparent;box-shadow:none;color:#27312c}.welcome::before{display:none}.welcome-eyebrow{display:block;margin:0 0 10px;color:#78817b;font-size:10px;font-weight:700;letter-spacing:.14em;line-height:1.3}.welcome-title{display:block;margin:0 0 9px;color:#202a27;font-size:25px;font-weight:650;letter-spacing:-.045em;line-height:1.16}.welcome-message{margin:0;color:#78817b;font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.suggestions{display:grid;gap:8px;padding:3px 0 7px}.suggestions button{width:100%;min-height:50px;padding:9px 12px;border:1px solid #e5e7e3;border-radius:11px;display:grid;grid-template-columns:22px minmax(0,1fr) 16px;align-items:center;gap:9px;background:#fff;color:#303a35;font-size:12px;font-weight:550;line-height:1.4;text-align:left;transition:border-color .15s ease,background .15s ease,transform .15s ease}.suggestions button:hover{border-color:#aeb9b1;background:#fafbf9;transform:translateY(-1px)}.suggestion-icon{width:20px;height:20px;display:grid;place-items:center;color:var(--brand)}.suggestion-icon svg,.suggestion-arrow svg{width:16px;height:16px;display:block}.suggestion-text{min-width:0}.suggestion-arrow{display:grid;place-items:center;color:#78817b}
       .load-older{align-self:center;min-height:30px;padding:5px 10px;border:1px solid #e4e7ec;border-radius:16px;background:#fff;color:#667085;font-size:11px;font-weight:600}.load-older[hidden]{display:none}
       .status{flex:none;min-height:18px;margin:0;padding:0 14px 7px;color:#667085;font-size:12px;line-height:1.4}.status:empty{display:none}.status.is-typing{display:flex;align-items:center;gap:8px}.status.is-typing::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand);box-shadow:10px 0 var(--brand),20px 0 var(--brand);animation:dots .9s infinite ease-in-out alternate}
@@ -367,6 +370,36 @@
         }
         card.append(sourceList);
       }
+      if (message.sender === 'assistant' && Array.isArray(message.productCards) && message.productCards.length) {
+        const products = document.createElement('div');
+        products.className = 'product-cards';
+        products.setAttribute('aria-label', 'Products');
+        for (const product of message.productCards.slice(0, 5)) {
+          if (!product || typeof product.title !== 'string' || !product.title.trim()) continue;
+          const item = document.createElement('article'); item.className = 'product-card';
+          const media = document.createElement('div'); media.className = 'product-image';
+          const imageUrl = safeSourceUrl(product.imageUrl);
+          if (imageUrl) {
+            const image = document.createElement('img'); image.src = imageUrl; image.alt = typeof product.imageAltText === 'string' ? product.imageAltText : product.title; image.loading = 'lazy'; image.decoding = 'async';
+            image.addEventListener('error', () => { image.remove(); media.textContent = 'Image unavailable'; }, { once: true }); media.append(image);
+          } else media.textContent = 'Image unavailable';
+          const details = document.createElement('div'); details.className = 'product-card-body';
+          const title = element('strong', product.title); title.className = 'product-title'; details.append(title);
+          const price = document.createElement('div'); price.className = 'product-price';
+          const priceValue = formatProductPrice(product.price, product.currency);
+          price.append(element('span', priceValue || 'Price unavailable'));
+          const compareValue = formatProductPrice(product.compareAtPrice, product.currency);
+          if (compareValue) { const compare = element('span', compareValue); compare.className = 'product-compare'; price.append(compare); }
+          details.append(price);
+          if (product.availability === 'IN_STOCK' || product.availability === 'OUT_OF_STOCK') { const availability = element('small', product.availability === 'IN_STOCK' ? 'In stock' : 'Out of stock'); availability.className = 'product-meta'; details.append(availability); }
+          else if (product.stale === true && typeof product.syncedAt === 'string') { const freshness = element('small', `Catalog snapshot · ${new Date(product.syncedAt).toLocaleDateString()}`); freshness.className = 'product-meta'; details.append(freshness); }
+          if (Array.isArray(product.variants) && product.variants.length) details.append(Object.assign(element('small', product.variants.slice(0, 2).map((variant) => `${variant.title}${formatProductPrice(variant.price, variant.currency) ? ` · ${formatProductPrice(variant.price, variant.currency)}` : ''}`).join(' · ')), { className: 'product-meta' }));
+          const productUrl = safeProductUrl(product.productUrl);
+          if (productUrl) { const link = element('a', 'View product'); link.className = 'product-link'; link.href = productUrl; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.setAttribute('aria-label', `View ${product.title}`); details.append(link); }
+          item.append(media, details); products.append(item);
+        }
+        if (products.childElementCount) card.append(products);
+      }
       if (older) {
         const firstMessage = [...body.querySelectorAll('.msg')].find((node) => node.dataset.mid !== 'widget-welcome');
         body.insertBefore(card, firstMessage || status);
@@ -384,6 +417,20 @@
       } catch {
         return '';
       }
+    }
+
+    function formatProductPrice(value, currency) {
+      if (typeof value !== 'string' || !/^\d+(?:\.\d{1,4})?$/.test(value) || typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) return '';
+      try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 4 }).format(Number(value)); } catch { return `${value} ${currency}`; }
+    }
+
+    function safeProductUrl(value) {
+      const safe = safeSourceUrl(value);
+      if (!safe) return '';
+      try {
+        const url = new URL(safe);
+        return url.port || url.hostname === 'admin.shopify.com' || url.pathname.split('/').some((part) => part.toLowerCase() === 'admin') || url.searchParams.has('preview_theme_id') ? '' : url.href;
+      } catch { return ''; }
     }
 
     function showWelcome() {
@@ -749,7 +796,7 @@
       let expired = false;
       try {
         const result = await call('/widgets/session/messages', 'POST', pendingTurn, activeController.signal);
-        append({ ...result.message, sources: result.sources });
+        append({ ...result.message, sources: result.sources, productCards: result.productCards });
         pendingTurn = null;
         if (result.pendingTicket) await showPendingTicket(result.pendingTicket);
         setStatus('');

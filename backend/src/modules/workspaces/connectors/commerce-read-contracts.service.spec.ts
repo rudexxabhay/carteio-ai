@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { CommerceReadContracts, parseProductSearchFilters } from './commerce-read-contracts.service';
+import { CommerceReadContracts, commerceProductCard, parseProductSearchFilters, type CommerceProductEvidence } from './commerce-read-contracts.service';
 
 describe('CommerceReadContracts tenant and privacy boundary', () => {
   const prisma: any = { chatbot: { findFirst: jest.fn() }, commerceProduct: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() }, commerceOrder: { findFirst: jest.fn() }, connectorInstance: { findMany: jest.fn(), findFirst: jest.fn() }, connectorDataPermission: { findMany: jest.fn(), findFirst: jest.fn() }, assistantConnectorDataPermission: { findMany: jest.fn(), findFirst: jest.fn() } };
@@ -323,5 +323,23 @@ describe('CommerceReadContracts tenant and privacy boundary', () => {
     const result = await service.revalidateProducts('tenant-a', 'assistant-a', [{ id: 'cached-product', connectionId: 'commerce-a', contentHash: 'old-hash', sourceVersion: 1 }]);
     expect(result).toEqual([]);
     expect(prisma.commerceProduct.findMany).not.toHaveBeenCalled();
+  });
+
+  it('maps verified catalog fields into a safe card without promoting stale stock, invalid prices, or admin URLs', () => {
+    const product: CommerceProductEvidence = {
+      id: 'product-a', connectionId: 'commerce-a', externalId: 'external-a', name: 'Product title', description: null,
+      category: null, productType: null, taxonomyCategoryId: null, taxonomyCategory: null, collections: [], vendor: null, handle: 'product-title',
+      compareAtPrice: '30.00', imageUrl: null, imageAltText: null, imageWidth: null, imageHeight: null,
+      imageEvidence: [{ url: 'https://cdn.example.test/product.jpg', altText: 'Catalog image', width: 800, height: 600 }], sku: null,
+      currency: 'USD', price: '20.00', inventory: 4, availabilityStatus: 'IN_STOCK', rawStatus: 'ACTIVE',
+      productUrl: 'https://admin.shopify.com/store/private/products/1', syncedAt: new Date().toISOString(), externalUpdatedAt: null, stale: true,
+      retrievalScore: 1, retrievalReason: 'catalog_browse', dataCompleteness: 'UNKNOWN', variants: [], contentHash: 'a'.repeat(64),
+    };
+    expect(commerceProductCard(product)).toMatchObject({
+      id: 'product-a', title: 'Product title', imageUrl: 'https://cdn.example.test/product.jpg', imageAltText: 'Catalog image',
+      price: '20.00', currency: 'USD', compareAtPrice: '30.00', availability: null, productUrl: null, stale: true,
+    });
+    expect(commerceProductCard({ ...product, imageUrl: 'javascript:alert(1)', imageAltText: 'Untrusted primary image' })).toMatchObject({ imageUrl: 'https://cdn.example.test/product.jpg', imageAltText: 'Catalog image' });
+    expect(commerceProductCard({ ...product, price: 'invalid', compareAtPrice: '19.00', productUrl: 'https://store.example.test/products/item', stale: false })).toMatchObject({ price: null, compareAtPrice: null, availability: 'IN_STOCK', productUrl: 'https://store.example.test/products/item' });
   });
 });
