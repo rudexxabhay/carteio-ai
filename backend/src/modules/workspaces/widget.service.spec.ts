@@ -1,20 +1,38 @@
-import { ForbiddenException, GoneException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, GoneException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { WidgetService } from './widget.service';
 
 describe('WidgetService public sessions', () => {
   const config = { id:'cfg', organizationId:'org-a', assistantId:'assistant-a', publicId:'widget_identifier_123456', enabled:true, allowedDomains:['shop.example.com'], appearance:{name:'Shop AI',welcomeMessage:'Hello',color:'#3157d5',position:'right',suggestions:[]}, assistant:{id:'assistant-a',name:'Shop AI',greetingMessage:null,status:'ACTIVE',archivedAt:null} };
   const create = () => {
-    const db:any={widgetConfiguration:{findFirst:jest.fn().mockResolvedValue(config)},widgetSession:{findFirst:jest.fn().mockResolvedValue({id:'session-a',organizationId:'org-a',assistantId:'assistant-a',conversationId:'conversation-a',visitorSessionId:'visitor-a',resumeTokenHash:'hash-resume',resumeExpiresAt:new Date(Date.now()+86400000),origin:'https://shop.example.com'}),create:jest.fn().mockResolvedValue({}),deleteMany:jest.fn()},supportConversation:{findFirst:jest.fn().mockResolvedValue(null),create:jest.fn().mockResolvedValue({id:'conversation-a'})},supportMessage:{updateMany:jest.fn().mockResolvedValue({count:1}),findFirst:jest.fn().mockResolvedValue(null),findMany:jest.fn().mockResolvedValue([])},ticketDraft:{findFirst:jest.fn().mockResolvedValue(null)},ticket:{findFirst:jest.fn().mockResolvedValue(null)},auditEvent:{create:jest.fn()},$queryRaw:jest.fn().mockResolvedValue([{requestCount:1}])};
+    const db:any={widgetConfiguration:{findFirst:jest.fn().mockResolvedValue(config),upsert:jest.fn().mockResolvedValue(config)},chatbot:{findFirst:jest.fn().mockResolvedValue({id:'assistant-a',name:'Shop AI',greetingMessage:null,status:'ACTIVE'})},widgetSession:{findFirst:jest.fn().mockResolvedValue({id:'session-a',organizationId:'org-a',assistantId:'assistant-a',conversationId:'conversation-a',visitorSessionId:'visitor-a',resumeTokenHash:'hash-resume',resumeExpiresAt:new Date(Date.now()+86400000),origin:'https://shop.example.com'}),create:jest.fn().mockResolvedValue({}),deleteMany:jest.fn()},supportConversation:{findFirst:jest.fn().mockResolvedValue(null),create:jest.fn().mockResolvedValue({id:'conversation-a'})},supportMessage:{updateMany:jest.fn().mockResolvedValue({count:1}),findFirst:jest.fn().mockResolvedValue(null),findMany:jest.fn().mockResolvedValue([])},ticketDraft:{findFirst:jest.fn().mockResolvedValue(null)},ticket:{findFirst:jest.fn().mockResolvedValue(null)},auditEvent:{create:jest.fn()},$queryRaw:jest.fn().mockResolvedValue([{requestCount:1}])};
     const saas:any={recordAssistantMessage:jest.fn().mockResolvedValue({}),recordCustomerMessage:jest.fn().mockResolvedValue({messageId:'ai-message',reply:'A grounded answer',answerOrigin:'MODEL_GENERATED',sources:[],providerUsed:'gemini',modelUsed:'model-x',createdAt:new Date()}),resolveProductCardGroups:jest.fn().mockResolvedValue(new Map())};
     const delivery:any={register:jest.fn()};
     const tickets:any={recordDeliveryOutcome:jest.fn().mockResolvedValue({state:'DELIVERED'}),confirmCustomerDraft:jest.fn().mockResolvedValue({id:'ticket-a',reference:'TKT-0123456789',status:'OPEN'}),cancelDraft:jest.fn().mockResolvedValue({cancelled:true})};
-    const service=new WidgetService(db,{} as any,saas,tickets,delivery);
-    return {db,service,saas,tickets};
+    const workspaces:any={requireAccess:jest.fn().mockResolvedValue({organizationId:'org-a'})};
+    const service=new WidgetService(db,workspaces,saas,tickets,delivery);
+    return {db,service,saas,tickets,workspaces};
   };
   const request=(origin='https://shop.example.com')=>({headers:{origin},ip:'127.0.0.1'});
   const originalSigningSecret=process.env.AUTH_OTP_HASH_SECRET;
   beforeEach(()=>{process.env.AUTH_OTP_HASH_SECRET='widget-session-test-secret-with-at-least-32-bytes';});
   afterEach(()=>{if(originalSigningSecret===undefined)delete process.env.AUTH_OTP_HASH_SECRET;else process.env.AUTH_OTP_HASH_SECRET=originalSigningSecret;});
+
+  it('persists and reloads the same generated public ID for the workspace assistant',async()=>{
+    const {service,db}=create();
+    const saved=await service.updateConfiguration('owner-a','workspace-a',{assistantId:'assistant-a',enabled:true,allowedDomains:['shop.example.com'],appearance:config.appearance});
+    expect(db.widgetConfiguration.upsert).toHaveBeenCalledWith(expect.objectContaining({where:{assistantId:'assistant-a'},create:expect.objectContaining({organizationId:'org-a',assistantId:'assistant-a',enabled:true,allowedDomains:['shop.example.com']})}));
+    expect(saved.publicId).toBe(config.publicId);
+    const loaded=await service.configuration('owner-a','workspace-a','assistant-a');
+    expect(db.widgetConfiguration.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({where:{organizationId:'org-a',assistantId:'assistant-a'}}));
+    expect(loaded.publicId).toBe(saved.publicId);
+  });
+
+  it('rejects a foreign workspace assistant before saving widget configuration',async()=>{
+    const {service,db}=create();
+    db.chatbot.findFirst.mockResolvedValueOnce(null);
+    await expect(service.updateConfiguration('owner-a','workspace-a',{assistantId:'assistant-from-workspace-b',enabled:true,allowedDomains:['shop.example.com'],appearance:config.appearance})).rejects.toBeInstanceOf(NotFoundException);
+    expect(db.widgetConfiguration.upsert).not.toHaveBeenCalled();
+  });
 
   it('issues opaque signed origin-bound bearer credentials for an enabled active assistant',async()=>{
     const {service,db}=create(); const result=await service.bootstrap({widgetId:config.publicId},request());

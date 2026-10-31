@@ -161,3 +161,7 @@ The later targeted frontend report overlapped the full report on 100 assertions 
 
 Outside the Phase 00 gate, the owner approved a targeted Shopify verification capability-contract correction. `ShopifyConnectorAdapter` now declares `WEBSITE_CONTENT`, matching its existing conditional probe result. Focused adapter assertions cover returned/declaration consistency and absence in the no-content case. Tests and all runtime commands were NOT RUN by explicit instruction. Source checkpoint is `/tmp/carteio-shopify-capability-checkpoint/`. This does not alter historical Phase 00 failures or status; Phase 00 remains BLOCKED. UAT deployment and successful sync are NOT VERIFIED.
 
+# Current scoped widget installation source correction — 2026-10-31
+
+Outside the Phase 00 gate, the dashboard now falls back to its validated HTTPS origin to serve the repository’s public `/widget.js` when no explicit hosting origin is set. Vercel permits cross-origin reads of that public asset; install UI distinguishes confirmed missing/non-JS response from a browser fetch restriction, and only generates/copies code for a valid saved enabled widget/assistant/hostname/API configuration plus available or probe-limited asset. Added focused frontend installation and backend widget-configuration tests; no test command was run by explicit instruction. Checkpoint: `/tmp/carteio-widget-install-checkpoint/`. No Phase 00 historical result/status changed; Phase 00 remains BLOCKED. UAT deployment, asset delivery, storefront authorization and chat are NOT VERIFIED.
+

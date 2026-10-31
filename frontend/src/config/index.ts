@@ -18,7 +18,7 @@ function validatedWidgetOrigin(rawOrigin: string): string | null {
 }
 
 export function getWidgetHostingOrigin(): string {
-  const rawOrigin = configuredWidgetHostingOrigin || (import.meta.env.DEV ? window.location.origin : '');
+  const rawOrigin = configuredWidgetHostingOrigin || window.location.origin;
   return rawOrigin ? validatedWidgetOrigin(rawOrigin) ?? '' : '';
 }
 
