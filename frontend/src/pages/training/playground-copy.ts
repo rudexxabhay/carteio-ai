@@ -144,14 +144,14 @@ export function buildPlaygroundDebugReport(input: { assistantName: string; conve
   }));
   const failed = items.filter((item) => item.role === 'error');
   const categories = new Map<string, number>();
-  for (const item of items) for (const event of item.diagnostics !== 'NOT_CAPTURED' && typeof item.diagnostics === 'object' && 'events' in item.diagnostics ? item.diagnostics.events as Array<{ errorCategory?: string }> : []) if (event.errorCategory) categories.set(event.errorCategory, (categories.get(event.errorCategory) ?? 0) + 1);
+  for (const message of turns) for (const event of message.diagnostics?.events ?? []) if (event.errorCategory) categories.set(event.errorCategory, (categories.get(event.errorCategory) ?? 0) + 1);
   const omittedCount = input.incomplete ? 1 : 0;
   const report: Record<string, unknown> = {
     reportVersion: 'playground-execution-debug-v1',
     executionIdentity: { conversationId: input.conversationId, assistantName: input.assistantName, exportedAt: new Date().toISOString() },
     conversationSummary: { totalTurns: turns.filter((message) => message.role === 'visitor' || message.role === 'user').length, successfulResponses: turns.filter((message) => message.role === 'assistant').length, failedRequests: failed.length, errorCategories: Object.fromEntries(categories), recurringFailurePatterns: [...categories.keys()], completeness: input.incomplete ? 'TRUNCATED' : 'COMPLETE' },
     turns: items,
-    diagnosticCompleteness: { unavailableHistoricalDiagnostics: items.filter((item) => item.diagnostics === 'NOT_CAPTURED').length, omittedTurnCount: omittedCount },
+    diagnosticCompleteness: { unavailableHistoricalDiagnostics: turns.filter((message) => !message.diagnostics).length, omittedTurnCount: omittedCount },
   };
   let json = JSON.stringify(report, null, 2);
   if (new TextEncoder().encode(json).byteLength > maxBytes) {

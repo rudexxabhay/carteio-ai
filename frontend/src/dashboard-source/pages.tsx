@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, Globe2, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
 import { Badge, Btn, Card, PageHeader, Stat, FilterInput, SectionHeader, TableWrap, Notice, Bars, Progress, ViewAll, CircleIcon, AddButton, Empty } from './ui';
 import { sections, type PageId } from './data';
 import { useOverviewData } from './use-overview-data';
@@ -1009,7 +1009,7 @@ function Sync({ go, notify, workspaceSlug = '', workspaceRole = '' }: Props) {
         <Card className="major"><SectionHeader title="Connector job history" desc="Only returned sync jobs are listed."/>{jobs.length ? jobs.map(job => <div className="detail-row bordered" key={job.id}><span>{job.resourceType} · {job.mode}</span><strong>{job.state} · {new Date(job.createdAt).toLocaleString()}</strong></div>) : <Empty title="No sync jobs returned"/>}</Card>
     </>;
 }
-export default function Pages({ page, go, notify, workspaceSlug = '', workspaceRole = '', workspaceData, onWorkspaceSaved, recordId = '', preferredAssistantId = '', openProduct, openOrder, openAssistant, createAssistant, openKnowledge, openTicket, openCrawl, openShopify }: { page: PageId } & Props) {
+export default function Pages({ page, go, notify, workspaceSlug = '', workspaceRole = '', workspaceData, onWorkspaceSaved, recordId = '', preferredAssistantId = '', openProduct, openOrder, openAssistant, createAssistant, openKnowledge, openTicket, openShopify }: { page: PageId } & Props) {
     switch (page) {
         case 'overview': return <Overview go={go} notify={notify} workspaceSlug={workspaceSlug} />;
         case 'products': return <Products go={go} notify={notify} workspaceSlug={workspaceSlug} workspaceRole={workspaceRole} openProduct={openProduct} />;
