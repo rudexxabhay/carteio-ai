@@ -7,6 +7,7 @@ import { connectorSyncDebug } from './connector-sync-debug';
 import { isShopifyScopeSnapshotFresh, shopifyScopeAllows, SHOPIFY_CONTENT_SCOPE_REQUIREMENTS, shopifyContentCategoryAllowed } from './shopify-granted-scope-discovery.service';
 
 const boundedError = (error: unknown) => { const code = error instanceof Error ? error.message : ''; return /^CONNECTOR_[A-Z0-9_]{1,80}$/.test(code) ? code : 'CONNECTOR_OPERATION_FAILED'; };
+export const isTerminalConnectorSyncError = (code: string) => ['CONNECTOR_SHOPIFY_REAUTH_REQUIRED', 'CONNECTOR_SHOPIFY_SCOPE_MISSING', 'CONNECTOR_AUTHORIZATION_FAILED', 'CONNECTOR_CREDENTIAL_INVALID', 'CONNECTOR_NESTED_PAGINATION_LIMIT', 'CONNECTOR_NESTED_PAGINATION_INCOMPLETE', 'CONNECTOR_CURSOR_INVALID', 'CONNECTOR_SYNC_CURSOR_INVALID', 'CONNECTOR_SYNC_RESULT_INVALID', 'CONNECTOR_PROVIDER_RESPONSE_INVALID', 'CONNECTOR_METAOBJECT_DEFINITION_NOT_PUBLIC', 'CONNECTOR_METAOBJECT_DEFINITION_LIMIT', 'CONNECTOR_METAOBJECT_FIELD_LIMIT'].includes(code) || /^CONNECTOR_HTTP_(?:400|401|403|404|405|410|422)$/.test(code);
 const batchSize = () => Math.min(Math.max(Number(process.env.CONNECTOR_SYNC_BATCH_SIZE ?? 10), 1), 100);
 export const isCompleteAuthoritativeProductSnapshot = (input: { connectorId: string; resourceType: string; mode: string; complete: boolean }) => input.connectorId === 'shopify_v1' && input.resourceType === 'PRODUCTS' && input.mode === 'FULL' && input.complete;
 export function validateConnectorSyncPage(result: any, connectorId: string, currentCursor?: string | null, cursorTrail: readonly string[] = []) {
@@ -151,7 +152,7 @@ export class ConnectorSyncWorker implements OnModuleInit, OnModuleDestroy {
     }
     const debugShopify = job.connector.connectorId === 'shopify_v1';
     const debug = (name: string, fields: Record<string, string | number | boolean | null | undefined>, error?: unknown) => {
-      if (debugShopify) connectorSyncDebug(this.logger, name, `worker:${job.id}`, startedAt, { operation: 'connector.shopify_sync', syncJobId: job.id, organizationId: job.organizationId, connectorInstanceId: job.connectorInstanceId, ...fields }, error);
+      if (debugShopify) connectorSyncDebug(this.logger, name, `worker:${job.id}`, startedAt, { operation: 'connector.shopify_sync', syncJobId: job.id, organizationId: job.organizationId, connectorInstanceId: job.connectorInstanceId, attemptCount: job.attemptCount, ...fields }, error);
     };
     debug(stage, { state: job.state });
     if (job.connector.state !== 'CONNECTED' || !job.connector.credential) {
@@ -319,7 +320,7 @@ export class ConnectorSyncWorker implements OnModuleInit, OnModuleDestroy {
   private safeUrl(value: unknown): string | null { if (typeof value !== 'string') return null; try { const url = new URL(value); return url.protocol === 'https:' ? url.toString().slice(0,2048) : null; } catch { return null; } }
   private async retrySync(job: any, token: string, code: string) {
     const maximum = Math.min(Math.max(Number(process.env.CONNECTOR_SYNC_MAX_ATTEMPTS ?? 8), 1), 20);
-    const terminal = ['CONNECTOR_NESTED_PAGINATION_LIMIT', 'CONNECTOR_NESTED_PAGINATION_INCOMPLETE', 'CONNECTOR_CURSOR_INVALID', 'CONNECTOR_SYNC_CURSOR_INVALID', 'CONNECTOR_SYNC_RESULT_INVALID', 'CONNECTOR_PROVIDER_RESPONSE_INVALID', 'CONNECTOR_METAOBJECT_DEFINITION_NOT_PUBLIC', 'CONNECTOR_METAOBJECT_DEFINITION_LIMIT', 'CONNECTOR_METAOBJECT_FIELD_LIMIT'].includes(code);
+    const terminal = isTerminalConnectorSyncError(code);
     const baseDelay = Math.min(3600000, 1000 * (2 ** Math.min(job.attemptCount, 12)));
     const exhausted = terminal || job.attemptCount >= maximum, delay = Math.floor(baseDelay * (0.8 + Math.random() * 0.4));
     await this.db.connectorSyncJob.updateMany({ where: { id: job.id, state: 'RUNNING', leaseToken: token }, data: { state: exhausted ? 'FAILED' : 'RETRY_WAIT', scheduledAt: new Date(Date.now() + delay), lastErrorCode: code, leaseToken: null, leaseUntil: null, ...(exhausted ? { finishedAt: new Date() } : {}) } });

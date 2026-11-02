@@ -1,7 +1,15 @@
 import { createHash } from 'node:crypto';
-import { ConnectorSyncWorker, isCompleteAuthoritativeProductSnapshot, validateConnectorSyncPage } from './connector-sync-worker.service';
+import { ConnectorSyncWorker, isCompleteAuthoritativeProductSnapshot, isTerminalConnectorSyncError, validateConnectorSyncPage } from './connector-sync-worker.service';
 
 describe('ConnectorSyncWorker lease behavior', () => {
+  it('terminates permanent Shopify authentication and client failures while retrying transient provider failures', () => {
+    expect(isTerminalConnectorSyncError('CONNECTOR_SHOPIFY_REAUTH_REQUIRED')).toBe(true);
+    expect(isTerminalConnectorSyncError('CONNECTOR_HTTP_401')).toBe(true);
+    expect(isTerminalConnectorSyncError('CONNECTOR_HTTP_403')).toBe(true);
+    expect(isTerminalConnectorSyncError('CONNECTOR_RATE_LIMITED')).toBe(false);
+    expect(isTerminalConnectorSyncError('CONNECTOR_REQUEST_TIMEOUT')).toBe(false);
+    expect(isTerminalConnectorSyncError('CONNECTOR_HTTP_503')).toBe(false);
+  });
   it('reconciles missing products only after a complete full Shopify product snapshot', () => {
     expect(isCompleteAuthoritativeProductSnapshot({ connectorId: 'shopify_v1', resourceType: 'PRODUCTS', mode: 'FULL', complete: true })).toBe(true);
     expect(isCompleteAuthoritativeProductSnapshot({ connectorId: 'shopify_v1', resourceType: 'PRODUCTS', mode: 'FULL', complete: false })).toBe(false);

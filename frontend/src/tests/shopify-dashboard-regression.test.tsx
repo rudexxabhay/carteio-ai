@@ -339,6 +339,15 @@ describe('Shopify dashboard connection regression', () => {
     }
   });
 
+  it('shows RETRY_WAIT as waiting rather than actively running', async () => {
+    const retryJob: SyncJob = { id: 'sync-retry-1', resourceType: 'PRODUCTS', mode: 'FULL', state: 'RETRY_WAIT', itemCount: 10, attemptCount: 2, lastErrorCode: 'CONNECTOR_RATE_LIMITED', scheduledAt: new Date(Date.now() + 60_000).toISOString(), startedAt: new Date().toISOString(), finishedAt: null, createdAt: new Date().toISOString() };
+    vi.mocked(getConnectorSyncHistory).mockResolvedValue({ items: [retryJob], hasMore: false, nextCursor: null });
+    vi.mocked(getConnectors).mockResolvedValue({ items: [connector('CONNECTED')], pageSize: 100 });
+    renderShopify();
+    expect(await screen.findByText('Sync waiting to retry…')).toBeInTheDocument();
+    expect(screen.queryByText('Sync running…')).not.toBeInTheDocument();
+  });
+
   it('scopes products by the selected Shopify store and hides the prior store results on switch', async () => {
     const makeProduct = (name: string, connectionId: string): Product => ({
       id: `${connectionId}-product`, externalId: `${connectionId}-external`, name, description: null, sku: null,

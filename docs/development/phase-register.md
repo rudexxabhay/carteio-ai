@@ -1,5 +1,9 @@
 # Approved 12-phase register
 
+## Shopify sync permanent authentication retry correction — 2026-11-02
+
+Worker retry classification now treats Shopify reauthorization-required and permanent client HTTP errors as terminal while retaining retries for throttling/timeouts/server errors. Worker debug events include attempt count. Added focused worker/UI regressions; NOT RUN. The UAT `CONNECTOR_OPERATION_FAILED` runtime cause remains uncorrelated and unconfirmed. Phase 00 remains BLOCKED; see `lastwork.md`.
+
 ## Commerce outcome compile correction — 2026-11-02
 
 Removed an impossible UNKNOWN-versus-COMPLETE comparison in shared commerce outcome classification. Existing UNKNOWN completeness remains partial; source authorization and product contracts are unchanged. User reported TS2367; recompilation/tests NOT RUN by this agent. See current `lastwork.md` entry. Phase 00 remains BLOCKED.
