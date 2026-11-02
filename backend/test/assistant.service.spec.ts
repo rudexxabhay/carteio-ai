@@ -201,7 +201,7 @@ describe('AssistantService', () => {
   });
 
   it('saves the full Bot Behavior fields and returns the persisted assistant configuration', async () => {
-    const behavior = { name: 'Carteio', businessPurpose: 'Customer support', description: 'Carteio online store', systemInstructions: 'x'.repeat(9_500), defaultLanguage: 'auto', responseTone: 'friendly', responseStyle: 'short', greetingMessage: 'Namaste', fallbackMessage: 'Please contact support.', escalationMessage: 'A support teammate can help.' } as const;
+    const behavior = { name: 'Carteio', businessPurpose: 'Customer support', description: 'Carteio online store', systemInstructions: ` \n${'x'.repeat(9_500)}\n `, defaultLanguage: 'auto', responseTone: 'friendly', responseStyle: 'short', greetingMessage: 'Namaste', fallbackMessage: 'Please contact support.', escalationMessage: 'A support teammate can help.' } as const;
     db.chatbot.update.mockResolvedValueOnce(record(behavior));
     const saved = await service.update('user-a', 'alpha', 'assistant-a', behavior);
     expect(db.chatbot.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -209,7 +209,7 @@ describe('AssistantService', () => {
       data: behavior,
       select: expect.objectContaining({ systemInstructions: true, defaultLanguage: true, responseTone: true, responseStyle: true, fallbackMessage: true, greetingMessage: true, escalationMessage: true }),
     }));
-    expect(saved).toMatchObject({ name: 'Carteio', systemInstructions: 'x'.repeat(9_500), defaultLanguage: 'auto', responseTone: 'friendly', responseStyle: 'short' });
+    expect(saved).toMatchObject({ name: 'Carteio', systemInstructions: behavior.systemInstructions, defaultLanguage: 'auto', responseTone: 'friendly', responseStyle: 'short' });
     db.chatbot.findFirst.mockResolvedValueOnce(record(behavior));
     const reloaded = await service.get('user-a', 'alpha', 'assistant-a');
     expect(db.chatbot.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'assistant-a', organizationId: 'org-a' } }));

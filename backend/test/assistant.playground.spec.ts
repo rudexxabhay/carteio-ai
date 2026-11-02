@@ -943,17 +943,15 @@ describe('AssistantService Playground chat', () => {
     expect(orchestrator.db.$transaction).not.toHaveBeenCalled();
   });
 
-  it('retries one invalid citation and does not claim authorized evidence was missing when citations still fail', async () => {
+  it('retries one invalid citation and fails the turn when the recovered answer still fails verification', async () => {
     fetchMock.mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       const isInterpreter = body.messages[0].content.includes('Interpret the latest customer message');
       const content = isInterpreter ? '{"englishQuery":"delivery time","englishQueries":["delivery time"],"language":"English","intent":"business"}' : 'Delivery takes three days. [S99]';
       return new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
     });
-    const result = await service.playgroundChat(userId, 'workspace', assistantId, { message: 'How long is delivery?' });
-    expect(result).toMatchObject({ reply: expect.stringContaining('could not verify a reliable answer'), sources: [], answerOrigin: 'KNOWLEDGE_FALLBACK', deliveryStatus: 'FACTUAL_VERIFICATION_REJECTED' });
-    expect(JSON.stringify(result)).not.toContain('tomorrow');
-    expect(JSON.stringify(result)).not.toContain('S99');
+    await expect(service.playgroundChat(userId, 'workspace', assistantId, { message: 'How long is delivery?' }))
+      .rejects.toMatchObject({ response: { code: 'PLAYGROUND_CITATION_VALIDATION_FAILED' } });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 

@@ -39,8 +39,8 @@ const connector = (state: string, hasCredentials = true): ConnectorInstance => (
   displayName: 'store.myshopify.com',
   configuration: { shopDomain: 'store.myshopify.com' },
   state,
-  verifiedCapabilities: state === 'CONNECTED' ? ['PRODUCT_CATALOG'] : [],
-  lastVerifiedAt: state === 'CONNECTED' ? '2026-10-20T10:00:00.000Z' : null,
+  verifiedCapabilities: ['CONNECTED', 'DEGRADED'].includes(state) ? ['PRODUCT_CATALOG'] : [],
+  lastVerifiedAt: ['CONNECTED', 'DEGRADED'].includes(state) ? '2026-10-20T10:00:00.000Z' : null,
   lastSyncAt: null,
   lastSuccessfulSyncAt: null,
   lastErrorCode: null,
@@ -158,6 +158,14 @@ describe('Shopify dashboard connection regression', () => {
 
     expect(await screen.findByRole('heading', { name: 'Verification was not saved' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry verification' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reconnect Shopify' })).not.toBeInTheDocument();
+  });
+
+  it('offers explicit verification retry for a degraded previously verified connection instead of OAuth', async () => {
+    vi.mocked(getConnectors).mockResolvedValue({ items: [{ ...connector('DEGRADED'), lastErrorCode: 'CONNECTOR_REQUEST_TIMEOUT' }], pageSize: 100 });
+    renderShopify();
+
+    expect(await screen.findByRole('button', { name: 'Retry verification' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reconnect Shopify' })).not.toBeInTheDocument();
   });
 

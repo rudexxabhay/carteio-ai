@@ -14,7 +14,7 @@ describe('ConnectorService tenant and verification boundaries', () => {
   });
   const prepareVerification = () => {
     const claimedAt = new Date('2026-10-16T12:00:00.000Z');
-    const row = { id: 'connector-a', organizationId: 'tenant-a', connectorId: 'shopify_v1', connectorType: 'SHOPIFY', connectorVersion: '1.0.0', displayName: 'Store', configuration: { shopDomain: 'store.myshopify.com' }, state: 'DRAFT', verifiedCapabilities: [], integrationConnectionId: 'commerce-a', webhookPublicId: null, updatedAt: new Date('2026-10-16T11:59:00.000Z'), credential: { id: 'credential-a' } };
+    const row = { id: 'connector-a', organizationId: 'tenant-a', connectorId: 'shopify_v1', connectorType: 'SHOPIFY', connectorVersion: '1.0.0', displayName: 'Store', configuration: { shopDomain: 'store.myshopify.com' }, state: 'DRAFT', verifiedCapabilities: [] as string[], lastVerifiedAt: null as Date | null, integrationConnectionId: 'commerce-a', webhookPublicId: null, updatedAt: new Date('2026-10-16T11:59:00.000Z'), credential: { id: 'credential-a' } };
     const adapter = { definition: { id: 'shopify_v1', capabilities: ['CONNECTOR_HEALTH_CHECK', 'PRODUCT_CATALOG', 'PRODUCT_PRICES', 'INVENTORY', 'ORDERS', 'FULFILLMENT'], webhooks: { supported: true } }, connect: jest.fn(), verify: jest.fn().mockResolvedValue({ verified: true, externalAccountId: 'gid://shopify/Shop/1', grantedScopes: ['read_products', 'read_inventory', 'read_orders'], grantedScopeMetadata: [{ handle: 'read_products', description: 'Read products' }], capabilities: ['CONNECTOR_HEALTH_CHECK', 'PRODUCT_CATALOG', 'PRODUCT_PRICES', 'INVENTORY', 'ORDERS', 'FULFILLMENT'] }) };
     workspace.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
     registry.adapter.mockReturnValue(adapter);
@@ -301,6 +301,41 @@ describe('ConnectorService tenant and verification boundaries', () => {
       data: { state: 'DRAFT', lastErrorCode: 'CONNECTOR_DATABASE_TRANSACTION_FAILED' },
     }));
     expect(db.integrationConnection.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('marks a previously verified Shopify connector degraded on transient timeout without invalidating grants or catalog data', async () => {
+    const { row, adapter } = prepareVerification();
+    row.state = 'CONNECTED';
+    row.lastVerifiedAt = new Date('2026-10-15T12:00:00.000Z');
+    row.verifiedCapabilities = ['CONNECTOR_HEALTH_CHECK', 'PRODUCT_CATALOG', 'PRODUCT_PRICES'];
+    adapter.verify.mockRejectedValueOnce(new Error('CONNECTOR_REQUEST_TIMEOUT'));
+
+    await expect(service.verify('user-a', 'workspace-a', 'connector-a')).rejects.toMatchObject({ response: { code: 'CONNECTOR_REQUEST_TIMEOUT' } });
+
+    expect(db.connectorInstance.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'connector-a', organizationId: 'tenant-a', state: 'CONNECTING' }),
+      data: { state: 'DEGRADED', verifiedCapabilities: row.verifiedCapabilities, lastErrorCode: 'CONNECTOR_REQUEST_TIMEOUT' },
+    }));
+    expect(db.integrationConnection.updateMany).not.toHaveBeenCalled();
+    expect(db.commerceProduct.deleteMany).not.toHaveBeenCalled();
+    expect(db.commerceOrder.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('continues to fail closed and clears verified capabilities on an explicit Shopify authorization rejection', async () => {
+    const { row, adapter } = prepareVerification();
+    row.state = 'CONNECTED';
+    row.lastVerifiedAt = new Date('2026-10-15T12:00:00.000Z');
+    row.verifiedCapabilities = ['CONNECTOR_HEALTH_CHECK', 'PRODUCT_CATALOG'];
+    adapter.verify.mockRejectedValueOnce(new Error('CONNECTOR_HTTP_401'));
+
+    await expect(service.verify('user-a', 'workspace-a', 'connector-a')).rejects.toMatchObject({ response: { code: 'CONNECTOR_HTTP_401' } });
+
+    expect(db.connectorInstance.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: { state: 'ERROR', verifiedCapabilities: [], lastErrorCode: 'CONNECTOR_HTTP_401' },
+    }));
+    expect(db.integrationConnection.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'commerce-a', organizationId: 'tenant-a' }, data: { state: 'ERROR', lastErrorCode: 'CONNECTOR_HTTP_401' },
+    }));
   });
 
   it('does not start a second verification while the persisted CONNECTING claim is still fresh', async () => {

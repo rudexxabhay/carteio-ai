@@ -15,6 +15,12 @@ const safeErrorCode = (error: unknown) => {
   const candidate = error instanceof Error ? error.message : '';
   return /^CONNECTOR_[A-Z0-9_]{1,80}$/.test(candidate) ? candidate : 'CONNECTOR_OPERATION_FAILED';
 };
+const isTransientShopifyVerificationFailure = (error: unknown, safeCode: string) => {
+  if (/^CONNECTOR_HTTP_(?:408|425|429|5\d\d)$/.test(safeCode) || ['CONNECTOR_REQUEST_TIMEOUT', 'CONNECTOR_RATE_LIMITED'].includes(safeCode)) return true;
+  const causeCode = error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+    ? (error as { code: string }).code : '';
+  return ['ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN'].includes(causeCode);
+};
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export const CONNECTOR_DATA_CATEGORIES = ['PRODUCTS', 'PRICES', 'INVENTORY', 'CATEGORIES', 'SERVICES', 'WEBSITE_PAGES', 'FAQ_POLICIES', 'ORDERS', 'CUSTOMER_PII', 'SHOPIFY_LOCATIONS', 'SHOPIFY_SHIPPING', 'SHOPIFY_LEGAL_POLICIES', 'SHOPIFY_ONLINE_STORE_PAGES', 'SHOPIFY_MARKETS', 'SHOPIFY_DISCOUNTS', 'SHOPIFY_METAOBJECT_DEFINITIONS', 'SHOPIFY_METAOBJECTS'] as const;
 type ConnectorDataCategory = typeof CONNECTOR_DATA_CATEGORIES[number];
@@ -477,8 +483,12 @@ export class ConnectorService {
       this.logger.error(JSON.stringify({ event: 'connector_verification_diagnostic', requestId, operation: 'connector.verify', stage: verificationStage, ...(shopDomain ? { targetHost: shopDomain } : {}), elapsedMs: Math.max(0, Date.now() - verificationStartedAt), errorCode: code, causeCode, causeType: typeof cause?.constructor?.name === 'string' ? cause.constructor.name.slice(0, 40) : 'UnknownError' }));
       await this.db.$transaction(async (tx: any) => {
         const temporaryScopeFailure = row.connectorId === 'shopify_v1' && code === 'CONNECTOR_SHOPIFY_SCOPE_DISCOVERY_FAILED';
-        const changed = await tx.connectorInstance.updateMany({ where: { id, organizationId, state: 'CONNECTING', updatedAt: verificationClaim }, data: { state: temporaryScopeFailure ? row.state : 'ERROR', verifiedCapabilities: temporaryScopeFailure ? row.verifiedCapabilities : [], lastErrorCode: code } });
-        if (changed.count && row.integrationConnectionId && !temporaryScopeFailure) {
+        const previouslyVerified = Boolean(row.lastVerifiedAt && Array.isArray(row.verifiedCapabilities) && row.verifiedCapabilities.length);
+        const transientTransportFailure = row.connectorId === 'shopify_v1' && isTransientShopifyVerificationFailure(error, code);
+        const preserveVerifiedAuthorization = temporaryScopeFailure || (previouslyVerified && transientTransportFailure);
+        const nextState = temporaryScopeFailure ? row.state : previouslyVerified && transientTransportFailure ? 'DEGRADED' : 'ERROR';
+        const changed = await tx.connectorInstance.updateMany({ where: { id, organizationId, state: 'CONNECTING', updatedAt: verificationClaim }, data: { state: nextState, verifiedCapabilities: preserveVerifiedAuthorization ? row.verifiedCapabilities : [], lastErrorCode: code } });
+        if (changed.count && row.integrationConnectionId && !preserveVerifiedAuthorization) {
           await tx.integrationConnection.updateMany({ where: { id: row.integrationConnectionId, organizationId }, data: { state: 'ERROR', lastErrorCode: code, ...(code === 'CONNECTOR_SHOPIFY_SCOPE_MISSING' ? { grantedScopes: [], grantedScopeMetadata: [], grantedScopesVerifiedAt: null } : {}) } });
           if (code === 'CONNECTOR_SHOPIFY_SCOPE_MISSING') {
             await tx.commerceProduct.deleteMany({ where: { organizationId, connectionId: row.integrationConnectionId } });

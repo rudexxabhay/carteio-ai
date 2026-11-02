@@ -1,5 +1,17 @@
 # Approved 12-phase register
 
+## Shopify transient verification state — 2026-11-02
+
+Source correction: transient Shopify verification transport/provider errors on a previously verified connector now produce connector `DEGRADED` while preserving verified capabilities and the linked OAuth authorization/grants. Explicit authorization failures remain fail-closed. Dashboard offers explicit verification retry for degraded connectors without prompting OAuth. Regression cases added for timeout, HTTP 401, and degraded retry; NOT RUN per instruction. The request-specific UAT operation and 409 cause remain unverified; see `lastwork.md`. No provider/configuration, scope, sync, catalog, AI or Phase 00 changes; Phase 00 remains BLOCKED.
+
+## Bot Behavior instruction validation contract — 2026-11-02
+
+Source-only correction: Behavior form now validates the existing 10,000-character DTO/database limit before sending; backend validation returns a sanitized actionable length detail. Instruction text formatting is preserved through the DTO and service. Regression cases were added/updated but NOT RUN per explicit instruction. The reported UAT payload length and deployed behavior remain unverified; see `lastwork.md`. No migration or Phase 00 status/evidence change; Phase 00 remains BLOCKED.
+
+## Shared grounded-answer failure contract — 2026-11-02
+
+Source-only change: exhausted citation verification now raises `PLAYGROUND_CITATION_VALIDATION_FAILED` rather than persisting a fixed English/Hindi/Hinglish fallback as a successful answer. The focused existing Playground test now expects the explicit error after one citation-repair call. See `lastwork.md` for the source checkpoint hashes and exact assertion baseline. Tests were NOT RUN by explicit instruction; no runtime/deployment claim is made. This does not close Phase 00 or start/complete a roadmap phase. All other reported failure families remain unmodified pending sanitized runtime evidence.
+
 ## Natural conversation stabilization — 2026-10-30
 
 **IMPLEMENTED — CODE REVIEWED; FOCUSED TEST VERIFIED (routing boundary only).** Found and reproduced a regression from the preceding change: `validateInterpretation()` synthesizes an answer aspect when an ordinary capability interpretation omits `answerAspects`. Therefore the previous `answerAspects.length > 0` condition disabled the intended capability shortcut even for “Who are you?”. Baseline direct check: 7 passed, 1 failed (capability), exit 1. Removed that unreliable factual signal; retained static-business and explicit business/Knowledge intent gates, added mixed-static/personal handling, and restricted the capability shortcut to certain, unambiguous UNKNOWN-information-need interpretations containing only affirmative assistant-identity intent. Mixed live-record requests cannot enter the capability shortcut. The preceding factual-identity fix is preserved.

@@ -3,6 +3,8 @@ import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength, V
 import { WorkspacePaginationDto } from './workspace.dto';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
+export const ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH = 10_000;
+export const ASSISTANT_SYSTEM_INSTRUCTIONS_LENGTH_MESSAGE = `Assistant instructions must be ${ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH.toLocaleString('en-US')} characters or fewer.`;
 const tones = ['professional', 'friendly', 'casual', 'supportive', 'concise', 'empathetic'] as const;
 const responseStyles = ['short', 'balanced', 'detailed'] as const;
 
@@ -22,7 +24,7 @@ export class CreateAssistantDto {
   @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(500)
   businessPurpose?: string;
 
-  @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(10000)
+  @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH, { message: ASSISTANT_SYSTEM_INSTRUCTIONS_LENGTH_MESSAGE })
   systemInstructions?: string;
 
   @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @Matches(/^(?:auto|[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*)$/) @MaxLength(35)
@@ -58,7 +60,7 @@ export class UpdateAssistantDto {
   @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(500)
   businessPurpose?: string;
 
-  @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(10000)
+  @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH, { message: ASSISTANT_SYSTEM_INSTRUCTIONS_LENGTH_MESSAGE })
   systemInstructions?: string;
 
   @Transform(trim) @ValidateIf((_object, value) => value !== undefined) @IsString() @Matches(/^(?:auto|[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*)$/) @MaxLength(35)

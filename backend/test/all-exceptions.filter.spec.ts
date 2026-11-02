@@ -25,6 +25,15 @@ describe('AllExceptionsFilter', () => {
     expect(JSON.stringify((unsafe.response.json as jest.Mock).mock.calls)).not.toContain('private-token-value');
   });
 
+  it('returns an actionable instruction-length validation detail without exposing submitted prompt text', () => {
+    const { host, response } = makeHost();
+    new AllExceptionsFilter().catch(new BadRequestException({ message: ['Assistant instructions must be 10,000 characters or fewer.'], error: 'Bad Request', statusCode: 400 }), host);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'VALIDATION_ERROR', message: 'Invalid request data', details: ['Assistant instructions must be 10,000 characters or fewer.'],
+    }));
+    expect(JSON.stringify((response.json as jest.Mock).mock.calls)).not.toContain('private prompt');
+  });
+
   it('keeps rejected session identifiers generic while preserving the recovery code', () => {
     const { host, response } = makeHost();
     new AllExceptionsFilter().catch(new HttpException({ code: 'PLAYGROUND_SESSION_NOT_FOUND', message: 'foreign session 11111111-1111-4111-8111-111111111111 belongs to user@example.test' }, 404), host);

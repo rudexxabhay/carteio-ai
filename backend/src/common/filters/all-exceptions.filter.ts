@@ -7,6 +7,7 @@ import { playgroundDiagnosticsEnabled } from '../../modules/workspaces/playgroun
 const HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
 const safeValidationDetails = (messages: string[]) => messages
   .map((message) => {
+    if (/^Assistant instructions must be [\d,]{1,8} characters or fewer\.$/u.test(message)) return message;
     const field = /^([A-Za-z][A-Za-z0-9_.-]{0,63})\s+(?:must|should)\b/u.exec(message)?.[1];
     return field ? `${field} is invalid.` : null;
   })

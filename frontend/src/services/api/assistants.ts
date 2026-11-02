@@ -41,6 +41,7 @@ export interface Assistant {
   updatedAt: string;
 }
 export type AssistantInput = Pick<Assistant, 'name' | 'description' | 'businessPurpose' | 'systemInstructions' | 'defaultLanguage' | 'responseTone' | 'fallbackMessage'> & Partial<Pick<Assistant, 'responseStyle' | 'greetingMessage' | 'escalationMessage' | 'providerMode' | 'providerFallbacks' | 'useAllEligibleWorkspaceKnowledge'>>;
+export const ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH = 10_000;
 export interface AssistantPage { assistants: Assistant[]; page: number; pageSize: number; total: number; }
 
 const base = (slug: string) => `/workspaces/${encodeURIComponent(slug)}/assistants`;

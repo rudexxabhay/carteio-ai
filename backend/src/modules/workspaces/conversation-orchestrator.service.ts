@@ -1670,12 +1670,7 @@ export class ConversationOrchestrator {
     const citedReferences = verification.citedReferences;
     if (!verification.accepted) {
       this.logger.warn(JSON.stringify({ event: 'playground_grounding_rejected', requestId, organizationId: member.organizationId, assistantId, stage: 'citation_validation', provider, model, evidenceCount: evidence.length, citedReferenceCount: citedReferences.length, unsupportedClaimCount: verification.unsupportedClaimCount ?? 0, reason: verification.reason, invalidCitation: verification.reason === 'unknown_reference', code: 'PLAYGROUND_CITATION_VALIDATION_FAILED' }));
-      const language = (responseLanguage ?? detectedLanguage).toLocaleLowerCase();
-      const citationFailureReply = /hindi|hinglish|\bhi\b/u.test(language)
-        ? /devanagari/u.test(detectedScript.toLocaleLowerCase()) ? 'मैं अभी इस जवाब को सत्यापित नहीं कर पा रहा हूँ। कृपया थोड़ी देर बाद फिर पूछें।' : 'Main abhi is jawab ko verify nahi kar pa raha hoon. Kripya thodi der baad phir poochhein.'
-        : 'I could not verify a reliable answer right now. Please try again later.';
-      const saved = await remember(citationFailureReply, 'knowledge_fallback', 'KNOWLEDGE_FALLBACK');
-      return { sessionId, messageId: saved.id, createdAt: saved.createdAt.toISOString(), reply: citationFailureReply, sources: [], retrievalMode: search.mode, responseLanguage: effectiveResponseLanguage, responseType: 'knowledge_fallback' as const, answerOrigin: 'KNOWLEDGE_FALLBACK' as const, provenance: 'SYSTEM_RESPONSE' as const, deliveryStatus: 'FACTUAL_VERIFICATION_REJECTED' as const, fallbackReason: 'uncited_or_invalid_reference' as const, ...usageFields() };
+      throw new ServiceUnavailableException({ code: 'PLAYGROUND_CITATION_VALIDATION_FAILED', message: 'The generated answer did not pass evidence verification.' });
     }
     if (businessRoutePlan.requiresLiveApi && containsUnsupportedPersonalStatusClaim(reply)) {
       const safeReply = personalStatusSafetyRefusal(businessRoutePlan.informationNeed, responseLanguage);

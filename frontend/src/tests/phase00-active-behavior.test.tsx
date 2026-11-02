@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), update: vi.fn() }));
@@ -60,6 +60,34 @@ describe('Phase 00 active dashboard Bot Behavior', () => {
     await user.click(screen.getAllByRole('button', { name: 'Save behavior' })[0]!);
     expect(await screen.findByText('Permission denied')).toBeInTheDocument();
     expect(instructions).toHaveValue('Unsaved draft');
+    expect(persisted.systemInstructions).toBe('Use authorized evidence.');
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('rejects over-limit instructions before submission without truncating the draft or changing saved behavior', async () => {
+    const user = userEvent.setup();
+    show();
+    const instructions = await screen.findByLabelText('Business role & instructions');
+    const draft = `${'x'.repeat(10_000)}y`;
+    fireEvent.change(instructions, { target: { value: draft } });
+    await user.click(screen.getAllByRole('button', { name: 'Save behavior' })[0]!);
+    expect(await screen.findByText('Instructions must be 10,000 characters or fewer.')).toBeInTheDocument();
+    expect(instructions).toHaveValue(draft);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(persisted.systemInstructions).toBe('Use authorized evidence.');
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('rejects over-limit instructions before submission without truncating the draft or changing saved behavior', async () => {
+    const user = userEvent.setup();
+    show();
+    const instructions = await screen.findByLabelText('Business role & instructions');
+    const draft = `${'x'.repeat(10_000)}y`;
+    fireEvent.change(instructions, { target: { value: draft } });
+    await user.click(screen.getAllByRole('button', { name: 'Save behavior' })[0]!);
+    expect(await screen.findByText('Instructions must be 10,000 characters or fewer.')).toBeInTheDocument();
+    expect(instructions).toHaveValue(draft);
+    expect(mocks.update).not.toHaveBeenCalled();
     expect(persisted.systemInstructions).toBe('Use authorized evidence.');
     expect(notify).not.toHaveBeenCalled();
   });

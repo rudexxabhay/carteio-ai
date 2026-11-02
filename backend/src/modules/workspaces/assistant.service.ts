@@ -97,7 +97,9 @@ export class AssistantService {
     for (const key of ['name', 'description', 'providerMode', 'providerFallbacks', 'businessPurpose', 'systemInstructions', 'defaultLanguage', 'responseTone', 'responseStyle', 'fallbackMessage', 'greetingMessage', 'escalationMessage', 'useAllEligibleWorkspaceKnowledge'] as const) {
       if (input[key] !== undefined) {
         const value = input[key];
-        data[key] = typeof value === 'string' ? value.trim() : value;
+        data[key] = typeof value === 'string'
+          ? key === 'systemInstructions' ? value : value.trim()
+          : value;
       }
     }
     if (!Object.keys(data).length) throw new BadRequestException({ code: 'EMPTY_ASSISTANT_UPDATE', message: 'Choose at least one assistant setting to update.' });
