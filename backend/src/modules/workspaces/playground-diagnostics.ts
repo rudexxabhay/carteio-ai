@@ -43,7 +43,7 @@ export class PlaygroundTraceRecorder {
   private readonly events: StoredEvent[] = [];
   private readonly evidence = new Map<string, PlaygroundDiagnosticEvidence>();
   private readonly captureExpiresAt = Date.now() + 5 * 60_000;
-  private readonly developmentChecks: Array<{ stage: 'INTERPRETATION' | 'INITIAL_DRAFT' | 'RECOVERY_DRAFT' | 'NUMERIC_CHECK'; metadata: Record<string, string | number | boolean> }> = [];
+  private readonly developmentChecks: Array<{ stage: 'INTERPRETATION' | 'INITIAL_DRAFT' | 'RECOVERY_DRAFT' | 'NUMERIC_CHECK' | 'COMMERCE_READINESS'; metadata: Record<string, string | number | boolean> }> = [];
   private sequence = 0;
   private organizationId: string | null = null;
   private assistantId = '';

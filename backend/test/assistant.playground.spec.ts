@@ -461,6 +461,39 @@ describe('AssistantService Playground chat', () => {
     expect(result.reply).toContain('Shipping is free');
   });
 
+  it('continues normal greeting handling when optional source-language hints fail', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    orchestrator.knowledgeProcessing.publicSourceLanguageHints = jest.fn().mockRejectedValue(new Error('hint lookup unavailable'));
+    mockSocialTurn('Hello', 'GREETING', 'How can I help?');
+    const result = await service.playgroundChat(userId, 'workspace', assistantId, { message: 'Hello' }, 'request-hint-failure-greeting');
+    expect(result).toMatchObject({ responseType: 'social', reply: 'How can I help?' });
+    expect(searchPreview).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues required Knowledge retrieval after optional source-language hints fail', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    orchestrator.knowledgeProcessing.publicSourceLanguageHints = jest.fn().mockRejectedValue(new Error('hint lookup unavailable'));
+    const semantics = { language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] }, responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'STATIC_BUSINESS_INFORMATION', businessScopeAssessment: 'IN_SCOPE', intents: [{ category: 'KNOWLEDGE_QUESTION', polarity: 'AFFIRMATIVE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false };
+    fetchMock.mockResolvedValueOnce(providerResponse(JSON.stringify({ retrievalQueries: ['What is your shipping policy?'], answerAspects: [{ questionSpan: 'What is your shipping policy?', retrievalQuery: 'shipping policy' }], language: 'English', script: 'Latin', style: 'plain', intent: 'business', semantics })));
+    searchPreview.mockResolvedValueOnce({ mode: 'lexical_only', results: [previewEvidence], eligibleSourceCount: 1 });
+    revalidatePublicEvidence.mockResolvedValue([previewEvidence]);
+    fetchMock.mockResolvedValueOnce(providerResponse('Delivery takes three days. [S1]'));
+    const result = await service.playgroundChat(userId, 'workspace', assistantId, { message: 'What is your shipping policy?' }, 'request-hint-failure-factual');
+    expect(searchPreview).toHaveBeenCalled();
+    expect(result.provenance).toBe('KNOWLEDGE_GROUNDED');
+    expect(result.reply).toContain('[S1]');
+  });
+
+  it('surfaces required Knowledge retrieval failures after optional hint failure', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    orchestrator.knowledgeProcessing.publicSourceLanguageHints = jest.fn().mockRejectedValue(new Error('hint lookup unavailable'));
+    const semantics = { language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] }, responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'STATIC_BUSINESS_INFORMATION', businessScopeAssessment: 'IN_SCOPE', intents: [{ category: 'KNOWLEDGE_QUESTION', polarity: 'AFFIRMATIVE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false };
+    fetchMock.mockResolvedValueOnce(providerResponse(JSON.stringify({ retrievalQueries: ['shipping policy'], answerAspects: [{ questionSpan: 'What is your shipping policy?', retrievalQuery: 'shipping policy' }], language: 'English', script: 'Latin', style: 'plain', intent: 'business', semantics })));
+    searchPreview.mockRejectedValueOnce(new Error('authorized retrieval unavailable'));
+    await expect(service.playgroundChat(userId, 'workspace', assistantId, { message: 'What is your shipping policy?' }, 'request-hint-failure-retrieval')).rejects.toBeDefined();
+  });
+
   it.each([
     ['What is North Shop’s shipping policy?', 'English', 'Latin', 'North Shop shipping policy', 'English'],
     ['north shop ki shipping policy kya h', 'Hindi', 'Latin', 'North Shop shipping policy', 'Hinglish'],
