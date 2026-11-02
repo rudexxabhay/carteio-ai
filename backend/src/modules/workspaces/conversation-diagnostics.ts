@@ -1,4 +1,4 @@
-import type { PlaygroundTurn } from './conversation-intent';
+import { MAX_CONVERSATION_HISTORY_MESSAGES, type PlaygroundTurn } from './conversation-intent';
 
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -35,7 +35,7 @@ export function providerHistoryDiagnostic(messages: readonly { role: string; con
     try {
       const value = JSON.parse(message.content);
       if (value?.type !== 'untrusted_conversation_context' || !Array.isArray(value.priorTurns)) continue;
-      const roles = value.priorTurns.filter((turn: any) => turn && ['user', 'assistant'].includes(turn.role) && typeof turn.content === 'string').slice(0, 12).map((turn: any) => turn.role as 'user' | 'assistant');
+      const roles = value.priorTurns.filter((turn: any) => turn && ['user', 'assistant'].includes(turn.role) && typeof turn.content === 'string').slice(0, MAX_CONVERSATION_HISTORY_MESSAGES).map((turn: any) => turn.role as 'user' | 'assistant');
       return { historyMessageCount: roles.length, historyRoles: roles };
     } catch { /* Raw customer text is not a history envelope. */ }
   }

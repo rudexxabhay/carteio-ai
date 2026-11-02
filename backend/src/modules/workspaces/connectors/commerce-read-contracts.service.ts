@@ -134,7 +134,7 @@ export class CommerceReadContracts {
   }
 
   /** Current server-side readiness with a safe, specific blocker for the Playground Inspector. */
-  async productSearchReadiness(organizationId: string, assistantId: string, filters: ProductSearchFilters = {}): Promise<{ eligible: boolean; reason: string | null; recordCount: number; connectionStatus?: 'CONNECTED' | 'NOT_CONNECTED'; scopeSnapshotStatus?: 'FRESH' | 'STALE' | 'UNAVAILABLE'; relevantGrantedScopes?: string[]; assistantEnabledOperations?: string[]; dataSource?: 'NORMALIZED_SNAPSHOT' }> {
+  async productSearchReadiness(organizationId: string, assistantId: string, filters: ProductSearchFilters = {}): Promise<{ eligible: boolean; reason: string | null; recordCount: number; connectionStatus?: 'CONNECTED' | 'NOT_CONNECTED'; scopeSnapshotStatus?: 'FRESH' | 'STALE' | 'UNAVAILABLE'; relevantGrantedScopes?: string[]; assistantEnabledOperations?: string[]; dataSource?: 'NORMALIZED_SNAPSHOT'; permissionDiagnostics?: { assistantProducts: 'MISSING' | 'DISABLED' | 'ENABLED'; workspaceProducts: 'MISSING' | 'DISABLED' | 'ENABLED'; productScopeReady: boolean; catalogCapabilityReady: boolean } }> {
     const supported = SHOPIFY_REGISTERED_OPERATIONS.some((operation) => operation.category === 'PRODUCTS' && operation.accessType === 'READ' && operation.executable && operation.assistantEligible);
     if (!supported) return { eligible: false, reason: 'PRODUCT_OPERATION_UNSUPPORTED', recordCount: 0 };
     await this.assertAssistant(organizationId, assistantId);
@@ -142,14 +142,19 @@ export class CommerceReadContracts {
     if (!connectors.length) return { eligible: false, reason: 'NO_CONNECTED_SHOPIFY_CONNECTION', recordCount: 0, connectionStatus: 'NOT_CONNECTED' as const, scopeSnapshotStatus: 'UNAVAILABLE' as const, relevantGrantedScopes: [] as string[], assistantEnabledOperations: [] as string[], dataSource: 'NORMALIZED_SNAPSHOT' as const };
     const connectorIds = connectors.map((row: any) => row.id);
     const [workspaceRows, assistantRows] = await Promise.all([
-      this.db.connectorDataPermission.findMany({ where: { organizationId, connectorInstanceId: { in: connectorIds }, category: { in: ['PRODUCTS', 'PRICES', 'INVENTORY', 'CATEGORIES'] }, enabled: true }, select: { connectorInstanceId: true, category: true } }),
-      this.db.assistantConnectorDataPermission.findMany({ where: { organizationId, assistantId, connectorInstanceId: { in: connectorIds }, category: { in: ['PRODUCTS', 'PRICES', 'INVENTORY', 'CATEGORIES'] }, enabled: true }, select: { connectorInstanceId: true, category: true } }),
+      this.db.connectorDataPermission.findMany({ where: { organizationId, connectorInstanceId: { in: connectorIds }, category: { in: ['PRODUCTS', 'PRICES', 'INVENTORY', 'CATEGORIES'] } }, select: { connectorInstanceId: true, category: true, enabled: true } }),
+      this.db.assistantConnectorDataPermission.findMany({ where: { organizationId, assistantId, connectorInstanceId: { in: connectorIds }, category: { in: ['PRODUCTS', 'PRICES', 'INVENTORY', 'CATEGORIES'] } }, select: { connectorInstanceId: true, category: true, enabled: true } }),
     ]);
-    const workspaceEnabled = new Set(workspaceRows.map((row: any) => `${row.connectorInstanceId}:${row.category}`));
-    const assistantEnabled = new Set(assistantRows.map((row: any) => `${row.connectorInstanceId}:${row.category}`));
+    const workspaceEnabled = new Set(workspaceRows.filter((row: any) => row.enabled).map((row: any) => `${row.connectorInstanceId}:${row.category}`));
+    const assistantEnabled = new Set(assistantRows.filter((row: any) => row.enabled).map((row: any) => `${row.connectorInstanceId}:${row.category}`));
+    const permissionState = (rows: any[]): 'MISSING' | 'DISABLED' | 'ENABLED' => {
+      const productRows = rows.filter((row) => row.category === 'PRODUCTS');
+      return !productRows.length ? 'MISSING' : productRows.some((row) => row.enabled) ? 'ENABLED' : 'DISABLED';
+    };
     const relevantGrantedScopes = [...new Set<string>(connectors.flatMap((row: any) => row.commerceConnection?.grantedScopes ?? []).filter((scope: unknown): scope is string => typeof scope === 'string' && ['read_products', 'read_inventory'].includes(scope)))].sort();
     const assistantEnabledOperations = [...new Set<string>(assistantRows.map((row: any) => row.category).filter((category: unknown): category is string => typeof category === 'string' && ['PRODUCTS', 'PRICES', 'INVENTORY', 'CATEGORIES'].includes(category)))].sort();
     const scopeSnapshotStatus = connectors.some((row: any) => isShopifyScopeSnapshotFresh(row.commerceConnection?.grantedScopesVerifiedAt ?? row.lastVerifiedAt)) ? 'FRESH' as const : 'STALE' as const;
+    const permissionDiagnostics = { assistantProducts: permissionState(assistantRows), workspaceProducts: permissionState(workspaceRows), productScopeReady: connectors.some((row: any) => isShopifyScopeSnapshotFresh(row.commerceConnection?.grantedScopesVerifiedAt ?? row.lastVerifiedAt) && shopifyScopeAllows(row.commerceConnection?.grantedScopes ?? [], 'PRODUCTS')), catalogCapabilityReady: connectors.some((row: any) => Array.isArray(row.verifiedCapabilities) && row.verifiedCapabilities.includes('PRODUCT_CATALOG')) };
     const readinessMetadata = { connectionStatus: 'CONNECTED' as const, scopeSnapshotStatus, relevantGrantedScopes, assistantEnabledOperations, dataSource: 'NORMALIZED_SNAPSHOT' as const };
     const connectionIds: string[] = [];
     const blockers = new Set<string>();
@@ -168,10 +173,10 @@ export class CommerceReadContracts {
     }
     if (!connectionIds.length) {
       const order = ['SHOPIFY_SCOPE_SNAPSHOT_STALE', 'SHOPIFY_READ_PRODUCTS_NOT_GRANTED', 'PRODUCT_CATALOG_CAPABILITY_UNVERIFIED', 'WORKSPACE_PERMISSION_DISABLED', 'ASSISTANT_PERMISSION_DISABLED', 'PRICE_WORKSPACE_PERMISSION_DISABLED', 'PRICE_ASSISTANT_PERMISSION_DISABLED', 'PRICE_CAPABILITY_UNVERIFIED'];
-      return { eligible: false, reason: order.find((reason) => blockers.has(reason)) ?? 'PRODUCT_PERMISSION_UNAVAILABLE', recordCount: 0, ...readinessMetadata };
+      return { eligible: false, reason: order.find((reason) => blockers.has(reason)) ?? 'PRODUCT_PERMISSION_UNAVAILABLE', recordCount: 0, ...readinessMetadata, permissionDiagnostics };
     }
     const recordCount = typeof this.db.commerceProduct.count === 'function' ? await this.db.commerceProduct.count({ where: { organizationId, connectionId: { in: connectionIds }, OR: [{ rawStatus: null }, { rawStatus: { not: 'DELETED' } }], connection: { is: { organizationId, state: { in: ACTIVE_CONNECTION_STATES } } } } }) : 0;
-    return recordCount > 0 ? { eligible: true, reason: null, recordCount, ...readinessMetadata } : { eligible: false, reason: 'NO_QUERY_READY_PRODUCTS', recordCount: 0, ...readinessMetadata };
+    return recordCount > 0 ? { eligible: true, reason: null, recordCount, ...readinessMetadata, permissionDiagnostics } : { eligible: false, reason: 'NO_QUERY_READY_PRODUCTS', recordCount: 0, ...readinessMetadata, permissionDiagnostics };
   }
 
   async searchProducts(organizationId: string, assistantId: string, query: string, limit = 10) {

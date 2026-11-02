@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { AuthSessionGuard } from '../auth/auth-session.guard';
 import { CommerceListQueryDto, CreateIntegrationConnectionDto, CreateConnectorDto, ConnectorCredentialsDto, InboxListQueryDto, InboxMessagePageQueryDto, QueueConnectorSyncDto, ShopifyInstallDto, TicketAssignmentDto, TicketListQueryDto, TicketNoteDto, TicketReplyDto, UpdateConnectorDto, UpdateConnectorDataPermissionDto, UpdateConnectorSyncScheduleDto, UpdateInboxConversationDto, UpdateTicketDto } from './saas.dto';
 import { SaasService } from './saas.service';
@@ -38,7 +38,12 @@ export class SaasController {
     connectorSyncDebug(this.logger, '13_api_response_generated', requestId, startedAt, { ...fields, syncJobId: result.id, state: result.state });
     return result;
   }
-  @Get('connectors/:connectorInstanceId/sync-jobs') connectorSyncHistory(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Query('before') before?: string, @Query('limit') limit?: string) { return this.connectors.syncHistory(r.authSession!.userId, slug, id, before, Number(limit ?? 25)); }
+  @Get('connectors/:connectorInstanceId/sync-jobs') connectorSyncHistory(@Req() r: AuthenticatedRequest, @Res({ passthrough: true }) response: Response, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Query('before') before?: string, @Query('limit') limit?: string) {
+    response.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
+    response.vary('Cookie');
+    response.vary('Authorization');
+    return this.connectors.syncHistory(r.authSession!.userId, slug, id, before, Number(limit ?? 25));
+  }
   @Patch('connectors/:connectorInstanceId/sync-schedule') connectorSyncSchedule(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Body() body: UpdateConnectorSyncScheduleDto) { return this.connectors.updateSyncSchedule(r.authSession!.userId, slug, id, body); }
   @Post('connectors/:connectorInstanceId/sync-jobs/:syncJobId/retry') connectorSyncRetry(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Param('syncJobId', ParseUUIDPipe) jobId: string) { return this.connectors.retrySyncJob(r.authSession!.userId, slug, id, jobId); }
 

@@ -1,5 +1,6 @@
 import type { MultilingualSemanticInterpretation, SemanticIntent } from './multilingual-semantics';
 import type { ConversationContinuityAct } from './conversation-intent';
+import { isUnresolvedSemanticNeed } from './conversation-intent';
 
 export type ClarificationReason = 'AMBIGUOUS_INTENT' | 'MISSING_REQUIRED_ENTITY' | 'AMBIGUOUS_REFERENCE' | 'EXPIRED_REFERENCE_CONTEXT' | 'UNSAFE_REFERENCE' | 'INSUFFICIENT_BUSINESS_CONTEXT' | 'MULTIPLE_POSSIBLE_TARGETS' | 'UNSUPPORTED_INFORMATION_NEED' | 'UNCERTAIN_LANGUAGE_INTERPRETATION' | 'CONTRADICTORY_SIGNALS';
 export type ClarificationDecision = Readonly<{ required: boolean; reason?: ClarificationReason }>;
@@ -12,6 +13,7 @@ export function decideClarification(semantic: MultilingualSemanticInterpretation
   if (!semantic) return { required: true, reason: 'UNCERTAIN_LANGUAGE_INTERPRETATION' };
   if (continuityAct === 'CONTRADICTION') return { required: true, reason: 'CONTRADICTORY_SIGNALS' };
   if (semantic.uncertainty === 'UNKNOWN' && (legacyIntent === 'unknown' || (activeCategories(semantic).includes('UNKNOWN') && !['business', 'capability'].includes(legacyIntent ?? '')))) return { required: true, reason: 'UNCERTAIN_LANGUAGE_INTERPRETATION' };
+  if (semantic.uncertainty !== 'UNKNOWN' && isUnresolvedSemanticNeed(semantic)) return { required: true, reason: 'UNSUPPORTED_INFORMATION_NEED' };
   if (semantic.uncertainty !== 'UNKNOWN' && semantic.intents.some((intent) => intent.polarity === 'UNCERTAIN')) return { required: true, reason: 'CONTRADICTORY_SIGNALS' };
   if (semantic.uncertainty === 'AMBIGUOUS' || semantic.informationNeed === 'AMBIGUOUS') {
     const intents = activeCategories(semantic);

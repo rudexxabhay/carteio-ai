@@ -5,6 +5,7 @@ import { validateScopeSplit } from './scope-splitting';
 import { decideSocialResponse } from './social-conversation';
 
 export type PlaygroundTurn = { role: 'user' | 'assistant'; content: string; responseCategory?: string | null };
+export const MAX_CONVERSATION_HISTORY_MESSAGES = 40;
 export type PlaygroundConversationHandle = { id: string; lockId: string; organizationId: string; assistantId: string; userId: string; nextSequence: number; turns: PlaygroundTurn[]; memory?: ConversationMemoryDiagnostic };
 export type ConversationUsage = { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 export type PlaygroundLanguage = string;
@@ -77,7 +78,7 @@ export function recoverContinuityFromInvalidInterpretation(raw: string, priorTur
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
   const record = parsed as Record<string, unknown>;
   if (!CONVERSATION_CONTINUITY_ACTS.includes(record.continuityAct as ConversationContinuityAct)) return null;
-  const recentTurns = priorTurns.slice(-8);
+  const recentTurns = priorTurns.slice(-MAX_CONVERSATION_HISTORY_MESSAGES);
   const offset = record.referenceTurnOffset;
   const referenceTurnOffset = Number.isSafeInteger(offset) && Number(offset) >= 0 && Number(offset) < recentTurns.length && recentTurns[Number(offset)]?.role === 'user'
     ? Number(offset)
@@ -252,16 +253,19 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
   if (!retrievalQueries.length && !(semanticValidation.value && standaloneConversationalAct)) {
     return { value: null, reason: 'invalid_retrieval_queries' };
   }
+  const unresolvedNeed = record.semantics !== undefined && Boolean(semanticValidation.value)
+    && isUnresolvedSemanticNeed(semantics);
+  const emptyAspectsAllowed = standaloneConversationalAct || unresolvedNeed;
   let answerAspects: InterpretedAnswerAspect[];
   if (record.answerAspects === undefined) {
-    answerAspects = standaloneConversationalAct ? [] : [{ questionSpan: originalMessage.trim().slice(0, 2000), retrievalQuery: retrievalQueries[0]! }];
+    answerAspects = emptyAspectsAllowed ? [] : [{ questionSpan: originalMessage.trim().slice(0, 2000), retrievalQuery: retrievalQueries[0]! }];
   } else {
     if (!Array.isArray(record.answerAspects) || record.answerAspects.length > 4) return { value: null, reason: 'invalid_answer_aspects' };
     if (record.answerAspects.length === 0) {
-      if (!standaloneConversationalAct) return { value: null, reason: 'invalid_answer_aspects' };
+      if (!emptyAspectsAllowed) return { value: null, reason: 'invalid_answer_aspects' };
       answerAspects = [];
     } else {
-      if (standaloneConversationalAct) return { value: null, reason: 'invalid_answer_aspects' };
+      if (emptyAspectsAllowed) return { value: null, reason: 'invalid_answer_aspects' };
       answerAspects = [];
       for (const item of record.answerAspects) {
         if (typeof item !== 'object' || item === null || Array.isArray(item)) return { value: null, reason: 'invalid_answer_aspect' };
@@ -313,12 +317,20 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
   }
   let referenceTurnOffset: number | null = null;
   if (record.referenceTurnOffset !== undefined && record.referenceTurnOffset !== null) {
-    const boundedTurns = priorTurns.slice(-8);
+    const boundedTurns = priorTurns.slice(-MAX_CONVERSATION_HISTORY_MESSAGES);
     if (!Number.isSafeInteger(record.referenceTurnOffset) || (record.referenceTurnOffset as number) < 0 || (record.referenceTurnOffset as number) >= boundedTurns.length || boundedTurns[record.referenceTurnOffset as number]?.role !== 'user') {
       metadataWarnings.push('invalid_reference_turn_offset');
     } else referenceTurnOffset = record.referenceTurnOffset as number;
   }
   return { value: { retrievalQueries: retrievalQueries.map((candidate) => candidate.trim()), answerAspects: Object.freeze(answerAspects.map((aspect) => Object.freeze(aspect))), language: record.language.trim(), script: script.trim(), style: style.trim(), intent, needsClarification: record.needsClarification === true, semantics, scopeSplit, continuityAct: continuityAct as ConversationContinuityAct, referenceTurnOffset, ticketIntent }, reason: 'valid', ...(metadataWarnings.length ? { metadataWarnings } : {}) };
+}
+
+/** Unresolved meaning requires clarification, never a social or retrieval shortcut. */
+export function isUnresolvedSemanticNeed(semantics: MultilingualSemanticInterpretation): boolean {
+  return semantics.informationNeed === 'UNKNOWN'
+    && semantics.entities.length === 0
+    && semantics.intents.length > 0
+    && semantics.intents.every(({ category }) => category === 'UNKNOWN' || category === 'CLARIFICATION');
 }
 
 /** A closed semantic contract, not message keywords, determines this shortcut. */
@@ -355,10 +367,13 @@ export function recoverValidatedSemanticInterpretation(raw: string, originalMess
   if (complete && (complete.answerAspects.length === 0 || semantics.informationNeed !== 'UNKNOWN')) {
     return { ...complete, ticketIntent: { ticketRequest: 'NONE', draftAction: 'NONE' } };
   }
+  // Do not manufacture query/aspect metadata to repair unresolved meaning.
+  // The bounded model repair must resolve the missing structural fields.
+  if (isUnresolvedSemanticNeed(semantics)) return null;
   const language = safeLanguageDescriptor(record.language) ? record.language.trim() : semantics.language.primary ?? 'Unknown';
   const script = safeLanguageDescriptor(record.script) ? record.script.trim() : semantics.language.scripts.join(' and ') || 'Unknown';
   const style = safeLanguageDescriptor(record.style) ? record.style.trim() : 'plain';
-  const recentTurns = priorTurns.slice(-8);
+  const recentTurns = priorTurns.slice(-MAX_CONVERSATION_HISTORY_MESSAGES);
   const offset = record.referenceTurnOffset;
   const referenceTurnOffset = Number.isSafeInteger(offset) && Number(offset) >= 0 && Number(offset) < recentTurns.length && recentTurns[Number(offset)]?.role === 'user'
     ? Number(offset) : null;

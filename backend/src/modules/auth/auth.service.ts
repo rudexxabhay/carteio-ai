@@ -147,9 +147,10 @@ export class AuthService {
     await this.observe('password_login', 'email_token_cleanup', requestId, () => this.db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: now } } }));
     await this.observe('password_login', 'password_token_cleanup', requestId, () => this.db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: now } } }));
     const user = await this.observe('password_login', 'user_lookup', requestId, () => this.db.user.findUnique({ where: { email: normalizeEmail(emailInput) }, include: { credential: true } }));
+    if (!user) throw new UnauthorizedException({ code: 'ACCOUNT_NOT_FOUND', message: 'Account does not exist. Please sign up first.' });
     const valid = user?.credential ? await argon2.verify(user.credential.passwordHash, password).catch(() => false) : false;
-    if (!valid || user.status !== 'ACTIVE') { this.logger.warn('login_rejected'); throw new UnauthorizedException('Email or password is incorrect.'); }
-    if (!user.emailVerifiedAt) throw new UnauthorizedException('Verify your email before signing in.');
+    if (!valid || user.status !== 'ACTIVE') { this.logger.warn('login_rejected'); throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' }); }
+    if (!user.emailVerifiedAt) throw new UnauthorizedException({ code: 'EMAIL_NOT_VERIFIED', message: 'Verify your email before signing in.' });
     await this.audit('auth.login.succeeded', user.id);
     return this.createSession(user, existingSessionToken, this.db, 'password_login', requestId);
   }
@@ -302,7 +303,8 @@ export class AuthService {
     }
     if (result.blocked) throw new UnauthorizedException('This account is unavailable.');
     if (result.accountExists) return { status: 'account_exists' as const, session: null };
-    if (!result.user || !result.session) throw new UnauthorizedException('This code could not sign in to an account. Create an account or request a new code.');
+    if (!result.user) throw new UnauthorizedException({ code: 'ACCOUNT_NOT_FOUND', message: 'Account does not exist. Please sign up first.' });
+    if (!result.session) throw new UnauthorizedException('This code could not sign in to an account. Create an account or request a new code.');
     await this.audit(flow === 'signup' ? 'auth.otp.signup.succeeded' : 'auth.otp.login.succeeded', result.user.id);
     return { status: 'authenticated' as const, session: result.session };
   }

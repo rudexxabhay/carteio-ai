@@ -38,6 +38,7 @@ export function lowestShopifyVariantPrice(variants: readonly unknown[]): { price
   return lowest ?? { price: null, compareAtPrice: null };
 }
 const int = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+const inventoryInt = (value: unknown) => value !== null && value !== undefined && value !== '' && Number.isSafeInteger(Number(value)) ? Number(value) : null;
 const graphqlJson = (value: Buffer) => { try { return JSON.parse(value.toString('utf8')) as any; } catch { throw new Error('CONNECTOR_PROVIDER_RESPONSE_INVALID'); } };
 const assertConnection = (value: any) => {
   if (!value || !Array.isArray(value.nodes) || !value.pageInfo || typeof value.pageInfo.hasNextPage !== 'boolean' || (value.pageInfo.hasNextPage && typeof value.pageInfo.endCursor !== 'string')) throw new Error('CONNECTOR_PROVIDER_RESPONSE_INVALID');
@@ -155,19 +156,24 @@ export class ShopifyConnectorAdapter implements ConnectorAdapter {
       const data = await this.query(_context, config, credentials, `query($after:String,$filter:String){ shop{currencyCode} products(first:10,after:$after,query:$filter,sortKey:UPDATED_AT){ pageInfo{hasNextPage endCursor} nodes{id title descriptionHtml handle productType vendor status createdAt updatedAt category{id name} featuredImage{url altText width height} images(first:100){nodes{id url altText width height} pageInfo{hasNextPage endCursor}} onlineStoreUrl collections(first:50){nodes{id title handle ruleSet{rules{column}}} pageInfo{hasNextPage endCursor}} variants(first:100){nodes{id title sku ${selectedPrice} ${input.includePrices === false ? '' : 'compareAtPrice'} ${selectedInventory} selectedOptions{name value}} pageInfo{hasNextPage endCursor}}}}}`, { after, filter: input.mode === 'INCREMENTAL' ? `updated_at:>='${String((input.checkpoint as any)?.updatedAt ?? (input.checkpoint as any)?.highWatermark ?? (input.checkpoint as any)?.since ?? new Date(Date.now()-86400000).toISOString())}'` : null }, true);
       const connection = assertConnection(data.products);
       await this.expandProductImagePages(_context, config, credentials, connection?.nodes ?? []);
-      await this.expandNestedPages(_context, config, credentials, connection?.nodes ?? [], 'variants', 9, true, input.includePrices !== false, input.includeInventory === true);
+      await this.expandNestedPages(_context, config, credentials, connection?.nodes ?? [], 'variants', true, input.includePrices !== false, input.includeInventory === true);
       await this.expandCollectionPages(_context, config, credentials, connection?.nodes ?? []);
       const records: NormalizedCommerceRecord[] = (connection?.nodes ?? []).map((p: any) => {
         const variants = p.variants?.nodes ?? [];
         const productPrice = input.includePrices === false ? { price: null, compareAtPrice: null } : lowestShopifyVariantPrice(variants);
-        return { kind:'PRODUCT', externalId:String(p.id), name:text(p.title,500) ?? 'Untitled', description:text(p.descriptionHtml,20000), category:text(p.category?.name,500), taxonomyCategoryId:text(p.category?.id,255), taxonomyCategory:text(p.category?.name,500), productType:text(p.productType,200), vendor:text(p.vendor,200), handle:text(p.handle,255), collections:(p.collections?.nodes ?? []).filter((c:any)=>typeof c.id==='string'&&typeof c.title==='string').map((c:any)=>({externalId:c.id,title:text(c.title,200)!,handle:text(c.handle,255),membershipType:c.ruleSet?'AUTOMATED':'MANUAL'})), currency:text(data.shop?.currencyCode,3), price:productPrice.price, compareAtPrice:productPrice.compareAtPrice, inventory:variants.some((v:any)=>v.inventoryItem?.tracked)&&variants.filter((v:any)=>v.inventoryItem?.tracked).every((v:any)=>int(v.inventoryQuantity)!==null)?variants.filter((v:any)=>v.inventoryItem?.tracked).reduce((n:number,v:any)=>n+int(v.inventoryQuantity)!,0):null, availability:variants.some((v:any)=>int(v.inventoryQuantity)!==null&&int(v.inventoryQuantity)!==0)?'IN_STOCK':variants.length&&variants.every((v:any)=>int(v.inventoryQuantity)===0)?'OUT_OF_STOCK':null, status:text(p.status,80), productUrl:text(p.onlineStoreUrl,2048), imageUrl:text(p.featuredImage?.url,2048), imageAltText:text(p.featuredImage?.altText,500), imageWidth:int(p.featuredImage?.width), imageHeight:int(p.featuredImage?.height), imageEvidence:(p.images?.nodes ?? []).map((image:any)=>({externalId:String(image.id),url:text(image.url,2048),altText:text(image.altText,500),width:int(image.width),height:int(image.height)})).filter((image:any)=>image.url), imagesComplete:p.images?.pageInfo?.hasNextPage === false, createdAt:text(p.createdAt,40), updatedAt:text(p.updatedAt,40), variants:variants.map((v:any)=>({externalId:String(v.id),title:text(v.title,500)??'Variant',sku:text(v.sku,160),selectedOptions:Array.isArray(v.selectedOptions)?v.selectedOptions.map((o:any)=>({name:text(o.name,100)??'',value:text(o.value,200)??''})):[],currency:text(data.shop?.currencyCode,3),price:amount(v.price),compareAtPrice:amount(v.compareAtPrice),inventory:int(v.inventoryQuantity),availability:int(v.inventoryQuantity)===null?null:int(v.inventoryQuantity)!>0?'IN_STOCK':'OUT_OF_STOCK',status:text(p.status,80)})), variantsComplete:p.variants?.pageInfo?.hasNextPage === false };
+        const trackedVariants = variants.filter((v:any) => v.inventoryItem?.tracked === true);
+        const quantities = trackedVariants.map((v:any) => inventoryInt(v.inventoryQuantity));
+        const productInventory = trackedVariants.length > 0 && quantities.every((quantity:number|null) => quantity !== null)
+          ? quantities.reduce((total:number, quantity:number|null) => total + (quantity ?? 0), 0)
+          : null;
+        return { kind:'PRODUCT', externalId:String(p.id), name:text(p.title,500) ?? 'Untitled', description:text(p.descriptionHtml,20000), category:text(p.category?.name,500), taxonomyCategoryId:text(p.category?.id,255), taxonomyCategory:text(p.category?.name,500), productType:text(p.productType,200), vendor:text(p.vendor,200), handle:text(p.handle,255), collections:(p.collections?.nodes ?? []).filter((c:any)=>typeof c.id==='string'&&typeof c.title==='string').map((c:any)=>({externalId:c.id,title:text(c.title,200)!,handle:text(c.handle,255),membershipType:c.ruleSet?'AUTOMATED':'MANUAL'})), collectionsComplete:p.collections?.pageInfo?.hasNextPage === false, currency:text(data.shop?.currencyCode,3), price:productPrice.price, compareAtPrice:productPrice.compareAtPrice, inventory:productInventory, availability:quantities.some((quantity:number|null) => quantity !== null && quantity > 0) ? 'IN_STOCK' : quantities.length > 0 && quantities.every((quantity:number|null) => quantity !== null && quantity <= 0) ? 'OUT_OF_STOCK' : null, status:text(p.status,80), productUrl:text(p.onlineStoreUrl,2048), imageUrl:text(p.featuredImage?.url,2048), imageAltText:text(p.featuredImage?.altText,500), imageWidth:int(p.featuredImage?.width), imageHeight:int(p.featuredImage?.height), imageEvidence:(p.images?.nodes ?? []).map((image:any)=>({externalId:String(image.id),url:text(image.url,2048),altText:text(image.altText,500),width:int(image.width),height:int(image.height)})).filter((image:any)=>image.url), imagesComplete:p.images?.pageInfo?.hasNextPage === false, createdAt:text(p.createdAt,40), updatedAt:text(p.updatedAt,40), variants:variants.map((v:any)=>({externalId:String(v.id),title:text(v.title,500)??'Variant',sku:text(v.sku,160),selectedOptions:Array.isArray(v.selectedOptions)?v.selectedOptions.map((o:any)=>({name:text(o.name,100)??'',value:text(o.value,200)??''})):[],currency:text(data.shop?.currencyCode,3),price:amount(v.price),compareAtPrice:amount(v.compareAtPrice),inventory:inventoryInt(v.inventoryQuantity),availability:inventoryInt(v.inventoryQuantity)===null?null:inventoryInt(v.inventoryQuantity)!>0?'IN_STOCK':'OUT_OF_STOCK',status:text(p.status,80)})), variantsComplete:p.variants?.pageInfo?.hasNextPage === false };
       });
       connectorSyncDebug(this.logger, '16_product_variant_inventory_processing', `worker:${_context.connectorInstanceId}`, processingStartedAt, { operation: 'connector.shopify_normalize_products', organizationId: _context.organizationId, connectorInstanceId: _context.connectorInstanceId, productCount: records.length, variantCount: records.reduce((count, record) => count + (record.kind === 'PRODUCT' ? record.variants.length : 0), 0), complete: !connection?.pageInfo?.hasNextPage });
       return { itemCount: records.length, records, cursor: connection?.pageInfo?.endCursor ?? null, checkpoint: { since: (input.checkpoint as any)?.since ?? (input.mode === 'INCREMENTAL' ? (input.checkpoint as any)?.updatedAt ?? new Date(Date.now()-86400000).toISOString() : null), highWatermark: records.map(r => r.kind === 'PRODUCT' ? r.updatedAt : null).filter(Boolean).sort().at(-1) ?? (input.checkpoint as any)?.highWatermark ?? null, updatedAt: !connection?.pageInfo?.hasNextPage ? (records.map(r => r.kind === 'PRODUCT' ? r.updatedAt : null).filter(Boolean).sort().at(-1) ?? (input.checkpoint as any)?.highWatermark ?? (input.checkpoint as any)?.updatedAt ?? new Date().toISOString()) : (input.checkpoint as any)?.updatedAt ?? null }, complete: !connection?.pageInfo?.hasNextPage };
     }
     if (input.resourceType === 'ORDERS') {
       const data = await this.query(_context, config, credentials, `query($after:String,$filter:String){ orders(first:10,after:$after,query:$filter,sortKey:UPDATED_AT){pageInfo{hasNextPage endCursor} nodes{id name displayFinancialStatus displayFulfillmentStatus currencyCode subtotalPriceSet{shopMoney{amount currencyCode}} totalDiscountsSet{shopMoney{amount}} totalShippingPriceSet{shopMoney{amount}} totalTaxSet{shopMoney{amount}} totalPriceSet{shopMoney{amount}} cancelledAt createdAt updatedAt lineItems(first:50){nodes{id name sku quantity originalUnitPriceSet{shopMoney{amount}} discountedTotalSet{shopMoney{amount}} variant{id}} pageInfo{hasNextPage endCursor}}}}}`, { after, filter: input.mode === 'INCREMENTAL' ? `updated_at:>='${String((input.checkpoint as any)?.updatedAt ?? (input.checkpoint as any)?.highWatermark ?? (input.checkpoint as any)?.since ?? new Date(Date.now()-86400000).toISOString())}'` : null });
-      const connection = assertConnection(data.orders); await this.expandNestedPages(_context, config, credentials, connection?.nodes ?? [], 'lineItems', 19); const records: NormalizedCommerceRecord[] = (connection?.nodes ?? []).map((o:any) => ({ kind:'ORDER', externalId:String(o.id), displayReference:text(o.name,160), financialStatus:text(o.displayFinancialStatus,80), fulfillmentStatus:text(o.displayFulfillmentStatus,80), currency:text(o.currencyCode,3), subtotal:amount(o.subtotalPriceSet?.shopMoney?.amount), discountTotal:amount(o.totalDiscountsSet?.shopMoney?.amount), shippingTotal:amount(o.totalShippingPriceSet?.shopMoney?.amount), taxTotal:amount(o.totalTaxSet?.shopMoney?.amount), total:amount(o.totalPriceSet?.shopMoney?.amount), orderedAt:text(o.createdAt,40), updatedAt:text(o.updatedAt,40), linesComplete:!o.lineItems?.pageInfo?.hasNextPage, status:o.cancelledAt?'CANCELLED':'ACTIVE', lines:(o.lineItems?.nodes ?? []).map((l:any)=>({externalId:String(l.id),productExternalId:text(l.variant?.id,255),name:text(l.name,500)??'Item',sku:text(l.sku,160),quantity:int(l.quantity)??0,currency:text(o.currencyCode,3),unitPrice:amount(l.originalUnitPriceSet?.shopMoney?.amount),total:amount(l.discountedTotalSet?.shopMoney?.amount)})) }));
+      const connection = assertConnection(data.orders); await this.expandNestedPages(_context, config, credentials, connection?.nodes ?? [], 'lineItems'); const records: NormalizedCommerceRecord[] = (connection?.nodes ?? []).map((o:any) => ({ kind:'ORDER', externalId:String(o.id), displayReference:text(o.name,160), financialStatus:text(o.displayFinancialStatus,80), fulfillmentStatus:text(o.displayFulfillmentStatus,80), currency:text(o.currencyCode,3), subtotal:amount(o.subtotalPriceSet?.shopMoney?.amount), discountTotal:amount(o.totalDiscountsSet?.shopMoney?.amount), shippingTotal:amount(o.totalShippingPriceSet?.shopMoney?.amount), taxTotal:amount(o.totalTaxSet?.shopMoney?.amount), total:amount(o.totalPriceSet?.shopMoney?.amount), orderedAt:text(o.createdAt,40), updatedAt:text(o.updatedAt,40), linesComplete:!o.lineItems?.pageInfo?.hasNextPage, status:o.cancelledAt?'CANCELLED':'ACTIVE', lines:(o.lineItems?.nodes ?? []).map((l:any)=>({externalId:String(l.id),productExternalId:text(l.variant?.id,255),name:text(l.name,500)??'Item',sku:text(l.sku,160),quantity:int(l.quantity)??0,currency:text(o.currencyCode,3),unitPrice:amount(l.originalUnitPriceSet?.shopMoney?.amount),total:amount(l.discountedTotalSet?.shopMoney?.amount)})) }));
       return { itemCount:records.length,records,cursor:connection?.pageInfo?.endCursor??null,checkpoint:{since:(input.checkpoint as any)?.since??(input.mode==='INCREMENTAL'?(input.checkpoint as any)?.updatedAt??new Date(Date.now()-86400000).toISOString():null),highWatermark:connection?.nodes?.map((o:any)=>o.updatedAt).filter(Boolean).sort().at(-1)??(input.checkpoint as any)?.highWatermark??null,updatedAt:!connection?.pageInfo?.hasNextPage?(connection?.nodes?.map((o:any)=>o.updatedAt).filter(Boolean).sort().at(-1)??(input.checkpoint as any)?.highWatermark??(input.checkpoint as any)?.updatedAt??new Date().toISOString()):(input.checkpoint as any)?.updatedAt??null},complete:!connection?.pageInfo?.hasNextPage };
     }
     if (input.resourceType === 'CONTENT') {
@@ -389,21 +395,20 @@ export class ShopifyConnectorAdapter implements ConnectorAdapter {
     return { itemCount: records.length, records, cursor: nextCursor, complete: nextCursor === null, checkpoint: { category: 'SHOPIFY_METAOBJECTS', metaobjectTypes: definitions, metaobjectTypeIndex: nextTypeIndex, updatedAt: new Date().toISOString() } };
   }
   private async expandProductImagePages(context: ConnectorOperationContext, config: Record<string, unknown>, credentials: Record<string, unknown>, products: any[]) {
-    const pageSize = 100, maxPages = 9, maxImages = 1000;
+    const pageSize = 100;
     for (const product of products) {
       const connection = product.images;
       assertConnection(connection);
       let after: string | null = connection.pageInfo.endCursor ?? null;
       let hasNext = connection.pageInfo.hasNextPage === true;
-      const seenCursors = new Set<string>();
       const byId = new Map<string, any>();
       for (const image of connection.nodes) {
         if (typeof image?.id !== 'string' || typeof image?.url !== 'string') throw new Error('CONNECTOR_PROVIDER_RESPONSE_INVALID');
         if (!byId.has(image.id)) byId.set(image.id, image);
       }
-      let page = 0;
+      const seenCursors = new Set<string>();
       while (hasNext) {
-        if (!after || seenCursors.has(after) || page >= maxPages || byId.size >= maxImages) throw new Error('CONNECTOR_NESTED_PAGINATION_LIMIT');
+        if (!after || seenCursors.has(after)) throw new Error('CONNECTOR_SYNC_CURSOR_INVALID');
         seenCursors.add(after);
         const result = await this.query(context, config, credentials, `query($id:ID!,$after:String){node(id:$id){... on Product{images(first:${pageSize},after:$after){nodes{id url altText width height} pageInfo{hasNextPage endCursor}}}}}`, { id: product.id, after }, true);
         const chunk = assertConnection(result.node?.images);
@@ -411,40 +416,42 @@ export class ShopifyConnectorAdapter implements ConnectorAdapter {
           if (typeof image?.id !== 'string' || typeof image?.url !== 'string') throw new Error('CONNECTOR_PROVIDER_RESPONSE_INVALID');
           if (!byId.has(image.id)) byId.set(image.id, image);
         }
-        if (byId.size > maxImages) throw new Error('CONNECTOR_NESTED_PAGINATION_LIMIT');
         hasNext = chunk.pageInfo.hasNextPage === true;
         after = typeof chunk.pageInfo.endCursor === 'string' ? chunk.pageInfo.endCursor : null;
-        page++;
       }
       connection.nodes = [...byId.values()];
       connection.pageInfo = { ...connection.pageInfo, hasNextPage: false };
     }
   }
-  private async expandNestedPages(context: ConnectorOperationContext, config: Record<string,unknown>, credentials: Record<string,unknown>, nodes: any[], connectionName: 'variants'|'lineItems', maxPages: number, syncDebug = false, includePrices = true, includeInventory = true) {
+  private async expandNestedPages(context: ConnectorOperationContext, config: Record<string,unknown>, credentials: Record<string,unknown>, nodes: any[], connectionName: 'variants'|'lineItems', syncDebug = false, includePrices = true, includeInventory = true) {
     const shape = connectionName === 'variants' ? `... on Product { variants(first:100,after:$after){nodes{id title sku ${includePrices ? 'price compareAtPrice' : ''} ${includeInventory ? 'inventoryQuantity inventoryItem{tracked}' : ''} selectedOptions{name value}} pageInfo{hasNextPage endCursor}} }` : '... on Order { lineItems(first:50,after:$after){nodes{id name sku quantity originalUnitPriceSet{shopMoney{amount}} discountedTotalSet{shopMoney{amount}} variant{id}} pageInfo{hasNextPage endCursor}} }';
     for (const node of nodes) {
-      let next = node[connectionName]?.pageInfo?.hasNextPage, after = node[connectionName]?.pageInfo?.endCursor, page = 0;
-      while (next && after && page < maxPages) {
+      let next = node[connectionName]?.pageInfo?.hasNextPage === true, after = node[connectionName]?.pageInfo?.endCursor;
+      const seenCursors = new Set<string>();
+      while (next) {
+        if (typeof after !== 'string' || seenCursors.has(after)) throw new Error('CONNECTOR_SYNC_CURSOR_INVALID');
+        seenCursors.add(after);
         const result = await this.query(context, config, credentials, `query($id:ID!,$after:String){node(id:$id){${shape}}}`, { id: node.id, after }, syncDebug);
         const chunk = assertConnection(result.node?.[connectionName]);
         node[connectionName].nodes.push(...chunk.nodes);
         next = chunk.pageInfo?.hasNextPage === true;
         after = chunk.pageInfo?.endCursor ?? null;
-        page++;
       }
-      if (next) throw new Error('CONNECTOR_NESTED_PAGINATION_LIMIT');
       node[connectionName].pageInfo = { ...node[connectionName].pageInfo, hasNextPage: false };
     }
   }
   private async expandCollectionPages(context: ConnectorOperationContext, config: Record<string,unknown>, credentials: Record<string,unknown>, nodes: any[]) {
     for (const node of nodes) {
-      let next = node.collections?.pageInfo?.hasNextPage, after = node.collections?.pageInfo?.endCursor, page = 0;
-      while (next && after && page < 9) {
+      let next = node.collections?.pageInfo?.hasNextPage === true, after = node.collections?.pageInfo?.endCursor;
+      const seenCursors = new Set<string>();
+      while (next) {
+        if (typeof after !== 'string' || seenCursors.has(after)) throw new Error('CONNECTOR_SYNC_CURSOR_INVALID');
+        seenCursors.add(after);
         const result = await this.query(context, config, credentials, 'query($id:ID!,$after:String){node(id:$id){... on Product{collections(first:50,after:$after){nodes{id title handle ruleSet{rules{column}}} pageInfo{hasNextPage endCursor}}}}}', { id: node.id, after }, true);
         const chunk = assertConnection(result.node?.collections);
-        node.collections.nodes.push(...chunk.nodes); next = chunk.pageInfo?.hasNextPage === true; after = chunk.pageInfo?.endCursor ?? null; page++;
+        node.collections.nodes.push(...chunk.nodes); next = chunk.pageInfo?.hasNextPage === true; after = chunk.pageInfo?.endCursor ?? null;
       }
-      if (next) throw new Error('CONNECTOR_NESTED_PAGINATION_LIMIT');
+      node.collections.pageInfo = { ...node.collections.pageInfo, hasNextPage: false };
     }
   }
   private async validCredentials(context: ConnectorOperationContext, shop: string, input: Record<string,unknown>, requestId?: string) {

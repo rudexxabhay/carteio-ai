@@ -1,4 +1,4 @@
-import type { PlaygroundTurn } from './conversation-intent';
+import { MAX_CONVERSATION_HISTORY_MESSAGES, type PlaygroundTurn } from './conversation-intent';
 import type { MultilingualSemanticInterpretation } from './multilingual-semantics';
 
 export type ContextReferenceStatus = 'RESOLVED' | 'AMBIGUOUS' | 'MISSING_CONTEXT' | 'EXPIRED_CONTEXT' | 'UNSAFE_REFERENCE' | 'NOT_APPLICABLE';
@@ -63,7 +63,7 @@ export function resolveConversationReference(input: {
     return { status: 'NOT_APPLICABLE', reason: 'NOT_A_REFERENCE', sourceTurnOffset: null, referencedTextSpan: null, entity: null, contextualQuery: null };
   }
 
-  const recentStart = Math.max(0, turns.length - 8);
+  const recentStart = Math.max(0, turns.length - MAX_CONVERSATION_HISTORY_MESSAGES);
   const userCandidates = turns.flatMap((turn, index) => {
     // A persisted acknowledgment of a pending clarification does not replace
     // the question being clarified. Use trusted response metadata, not wording.
@@ -83,7 +83,7 @@ export function resolveConversationReference(input: {
     if (input.historyWasTruncated) return { status: 'EXPIRED_CONTEXT', reason: 'BOUNDED_HISTORY_EXPIRED', sourceTurnOffset: null, referencedTextSpan: referenceMatch?.[0] ?? null, entity: null, contextualQuery: null };
     return { status: 'MISSING_CONTEXT', reason: 'NO_AUTHORIZED_USER_TURN', sourceTurnOffset: null, referencedTextSpan: referenceMatch?.[0] ?? null, entity: null, contextualQuery: null };
   }
-  const recentWindowStart = Math.max(0, turns.length - 8);
+  const recentWindowStart = Math.max(0, turns.length - MAX_CONVERSATION_HISTORY_MESSAGES);
   const modelSourceIndex = input.modelReferenceTurnOffset === undefined || input.modelReferenceTurnOffset === null
     ? null
     : recentWindowStart + input.modelReferenceTurnOffset;
@@ -109,5 +109,5 @@ export function resolveConversationReference(input: {
 export function isRepeatedUserRequest(message: string, turns: readonly PlaygroundTurn[]): boolean {
   const normalized = message.normalize('NFKC').toLocaleLowerCase().trim().replace(/\s+/gu, '');
   if (!normalized || normalized.length < 3) return false;
-  return turns.slice(-8).some((turn) => turn.role === 'user' && turn.content.normalize('NFKC').toLocaleLowerCase().trim().replace(/\s+/gu, '') === normalized);
+  return turns.slice(-MAX_CONVERSATION_HISTORY_MESSAGES).some((turn) => turn.role === 'user' && turn.content.normalize('NFKC').toLocaleLowerCase().trim().replace(/\s+/gu, '') === normalized);
 }

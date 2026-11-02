@@ -514,6 +514,7 @@ export class ConnectorService {
       if (row.connectorId === 'shopify_v1') {
         const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "ConnectorInstance" WHERE "id" = ${id}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
         if (!locked.length) throw new NotFoundException({ code: 'CONNECTOR_NOT_FOUND', message: 'Connector not found.' });
+        await tx.shopifyOAuthState?.updateMany?.({ where: { organizationId, connectorInstanceId: id, consumedAt: null }, data: { consumedAt: new Date() } });
       }
       await tx.connectorCredential.deleteMany({ where: { organizationId, connectorInstanceId: id } });
       await tx.connectorSyncJob.updateMany({ where: { organizationId, connectorInstanceId: id, state: { in: ['PENDING', 'RETRY_WAIT', 'RUNNING'] } }, data: { state: 'CANCELLED', finishedAt: new Date(), leaseToken: null, leaseUntil: null } });
@@ -580,7 +581,9 @@ export class ConnectorService {
     connectorSyncDebug(this.logger, stage, requestId, startedAt, { ...fields, organizationId });
     const result = await this.db.$transaction(async (tx: any) => {
       stage = '09_postgres_advisory_lock_acquisition';
-      const advisoryLockKey = `${organizationId}:${id}:${input.resourceType}:${input.mode}`;
+      // Serialize all modes for a connector/resource pair. Otherwise a FULL
+      // and INCREMENTAL request can both pass the active-job check at once.
+      const advisoryLockKey = `${organizationId}:${id}:${input.resourceType}`;
       const lockResult = await tx.$queryRaw<Array<{ acquired: boolean }>>`
         WITH advisory_lock AS MATERIALIZED (
           SELECT pg_advisory_xact_lock(hashtextextended(${advisoryLockKey}::text, 0::bigint))
@@ -590,9 +593,12 @@ export class ConnectorService {
       if (lockResult[0]?.acquired !== true) throw new Error('CONNECTOR_SYNC_LOCK_NOT_ACQUIRED');
       connectorSyncDebug(this.logger, stage, requestId, startedAt, { ...fields, organizationId, acquired: true });
       stage = '10_existing_pending_job_lookup';
-      const active = await tx.connectorSyncJob.findFirst({ where: { organizationId, connectorInstanceId: id, resourceType: input.resourceType, mode: input.mode, state: { in: ['PENDING', 'RUNNING', 'RETRY_WAIT'] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, resourceType: true, mode: true, state: true, cursor: true, itemCount: true, attemptCount: true, scheduledAt: true, createdAt: true } });
+      const active = await tx.connectorSyncJob.findFirst({ where: { organizationId, connectorInstanceId: id, resourceType: input.resourceType, state: { in: ['PENDING', 'RUNNING', 'RETRY_WAIT'] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, resourceType: true, mode: true, state: true, cursor: true, itemCount: true, attemptCount: true, scheduledAt: true, createdAt: true } });
       connectorSyncDebug(this.logger, stage, requestId, startedAt, { ...fields, organizationId, found: Boolean(active), ...(active ? { syncJobId: active.id } : {}) });
-      if (active) { stage = '12_transaction_commit'; return active; }
+      if (active) {
+        if (active.mode !== input.mode) throw new ConflictException({ code: 'CONNECTOR_SYNC_ALREADY_ACTIVE', message: 'A different synchronization mode is already active for this resource. Wait for it to finish before starting another sync.' });
+        stage = '12_transaction_commit'; return active;
+      }
       const prior = input.mode === 'INCREMENTAL' ? await tx.connectorSyncJob.findFirst({ where: { organizationId, connectorInstanceId: id, resourceType: input.resourceType, state: 'SUCCEEDED' }, orderBy: { finishedAt: 'desc' }, select: { checkpoint: true } }) : null;
       stage = '11_new_sync_job_creation';
       const created = await tx.connectorSyncJob.upsert({ where: { organizationId_connectorInstanceId_idempotencyKey: { organizationId, connectorInstanceId: id, idempotencyKey: input.idempotencyKey } }, create: { organizationId, connectorInstanceId: id, resourceType: input.resourceType, mode: input.mode, idempotencyKey: input.idempotencyKey, checkpoint: prior?.checkpoint ?? undefined, state: 'PENDING' }, update: {}, select: { id: true, resourceType: true, mode: true, state: true, cursor: true, itemCount: true, attemptCount: true, scheduledAt: true, createdAt: true } });

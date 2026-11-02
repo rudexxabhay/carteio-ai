@@ -176,3 +176,9 @@ export function buildGroundedAnswerPlan(input: {
     entailmentVerified: false,
   });
 }
+
+/** Require a supplied citation candidate for every answer aspect with mapped evidence. This is coverage only; it does not prove claim entailment. */
+export function answerPlanCitationCoverage(plan: GroundedAnswerPlan, citedReferences: readonly string[]): boolean {
+  const cited = new Set(citedReferences);
+  return plan.aspects.every((aspect) => aspect.evidenceReferences.length === 0 || aspect.evidenceReferences.some((reference) => cited.has(reference)));
+}

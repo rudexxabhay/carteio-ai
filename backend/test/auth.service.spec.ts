@@ -16,7 +16,7 @@ describe('AuthService security behavior', () => {
     expect(db.user.create.mock.calls[0][0].data.email).toBe('test@example.com');
   });
 
-  it('uses generic credentials and persists a server-side session after valid login', async () => {
+  it('persists a server-side session after valid password login', async () => {
     const passwordHash = await argon2.hash('a very long secure passphrase', { type: argon2.argon2id });
     const db: Record<string, any> = {
       userSession: { deleteMany: jest.fn(), create: jest.fn().mockResolvedValue({}) },
@@ -30,13 +30,23 @@ describe('AuthService security behavior', () => {
     expect(result.user).not.toHaveProperty('passwordHash');
   });
 
-  it('rejects invalid credentials without creating a session', async () => {
+  it('reports an unknown account without creating a session', async () => {
     const db: Record<string, any> = {
       userSession: { deleteMany: jest.fn(), create: jest.fn() }, emailVerificationToken: { deleteMany: jest.fn() },
       passwordResetToken: { deleteMany: jest.fn() }, user: { findUnique: jest.fn().mockResolvedValue(null) },
     };
     const { service } = makeService(db);
-    await expect(service.login('missing@example.com', 'incorrect')).rejects.toThrow('Email or password is incorrect.');
+    await expect(service.login('missing@example.com', 'incorrect')).rejects.toMatchObject({ response: { code: 'ACCOUNT_NOT_FOUND' }, status: 401 });
+    expect(db.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a wrong password distinct from an unknown account without creating a session', async () => {
+    const db: Record<string, any> = {
+      userSession: { deleteMany: jest.fn(), create: jest.fn() }, emailVerificationToken: { deleteMany: jest.fn() },
+      passwordResetToken: { deleteMany: jest.fn() }, user: { findUnique: jest.fn().mockResolvedValue({ ...user, credential: { passwordHash: 'not-an-argon-hash' } }) },
+    };
+    const { service } = makeService(db);
+    await expect(service.login(user.email, 'incorrect')).rejects.toMatchObject({ response: { code: 'INVALID_CREDENTIALS' }, status: 401 });
     expect(db.userSession.create).not.toHaveBeenCalled();
   });
 

@@ -294,6 +294,30 @@ describe('CommerceReadContracts tenant and privacy boundary', () => {
     await expect(service.productSearchReadiness('tenant-a', 'assistant-a')).resolves.toMatchObject({ eligible: false, reason: 'ASSISTANT_PERMISSION_DISABLED', recordCount: 0 });
   });
 
+  it.each([
+    ['missing', [], 'MISSING'],
+    ['disabled', [{ connectorInstanceId: 'connector-a', category: 'PRODUCTS', enabled: false }], 'DISABLED'],
+    ['enabled', [{ connectorInstanceId: 'connector-a', category: 'PRODUCTS', enabled: true }], 'ENABLED'],
+  ])('reports %s assistant permission without changing authorization', async (_label, assistantRows, expected) => {
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', verifiedCapabilities: ['PRODUCT_CATALOG'], lastVerifiedAt: new Date(), commerceConnection: { id: 'commerce-a', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } }]);
+    prisma.connectorDataPermission.findMany.mockResolvedValue([{ connectorInstanceId: 'connector-a', category: 'PRODUCTS', enabled: true }]);
+    prisma.assistantConnectorDataPermission.findMany.mockResolvedValue(assistantRows);
+    prisma.commerceProduct.count.mockResolvedValue(3);
+    const result = await service.productSearchReadiness('tenant-a', 'assistant-a');
+    expect(result.permissionDiagnostics?.assistantProducts).toBe(expected);
+    expect(result.eligible).toBe(expected === 'ENABLED');
+  });
+
+  it('reports missing workspace permission without returning connector identifiers', async () => {
+    prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-secret', verifiedCapabilities: ['PRODUCT_CATALOG'], lastVerifiedAt: new Date(), commerceConnection: { id: 'commerce-a', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } }]);
+    prisma.connectorDataPermission.findMany.mockResolvedValue([]);
+    prisma.assistantConnectorDataPermission.findMany.mockResolvedValue([{ connectorInstanceId: 'connector-secret', category: 'PRODUCTS', enabled: true }]);
+    const result = await service.productSearchReadiness('tenant-a', 'assistant-a');
+    expect(result.permissionDiagnostics?.workspaceProducts).toBe('MISSING');
+    expect(JSON.stringify(result.permissionDiagnostics)).not.toContain('connector-secret');
+    expect(result).toMatchObject({ eligible: false, reason: 'WORKSPACE_PERMISSION_DISABLED' });
+  });
+
   it('does not query catalog data when workspace AI permission is disabled', async () => {
     prisma.chatbot.findFirst.mockResolvedValue({ id: 'assistant-a' });
     prisma.connectorInstance.findMany.mockResolvedValue([{ id: 'connector-a', connectorId: 'shopify_v1', verifiedCapabilities: ['PRODUCT_CATALOG'], commerceConnection: { id: 'commerce-a', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } }]);

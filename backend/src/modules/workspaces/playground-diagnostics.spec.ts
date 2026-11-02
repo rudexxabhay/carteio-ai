@@ -1,6 +1,15 @@
 import { PlaygroundTraceRecorder, playgroundDiagnosticsEnabled } from './playground-diagnostics';
 
 describe('Playground diagnostics', () => {
+  it('keeps commerce permission metadata allowlisted and tied to the Playground trace', () => {
+    const trace = new PlaygroundTraceRecorder('commerce-trace', undefined, true);
+    trace.captureCommerceReadiness({ assistantProducts: 'DISABLED', workspaceProducts: 'ENABLED', connectorReadiness: 'CONNECTED', scopeSnapshotStatus: 'FRESH', productScopeReady: true, catalogCapabilityReady: true, reason: 'ASSISTANT_PERMISSION_DISABLED', commerceExecutionSkipped: true, durationMs: 17, connectorInstanceId: 'private-connector-id', organizationId: 'private-workspace-id' });
+    const snapshot = trace.snapshot({});
+    expect(snapshot.traceId).toBe('commerce-trace');
+    expect(snapshot.developmentCapture?.checks[0]).toMatchObject({ stage: 'COMMERCE_READINESS', metadata: { assistantProducts: 'DISABLED', workspaceProducts: 'ENABLED', connectorReadiness: 'CONNECTED', scopeSnapshotStatus: 'FRESH', productScopeReady: true, catalogCapabilityReady: true, reason: 'ASSISTANT_PERMISSION_DISABLED', commerceExecutionSkipped: true, durationMs: 17 } });
+    expect(JSON.stringify(snapshot.developmentCapture)).not.toContain('private-connector-id');
+    expect(JSON.stringify(snapshot.developmentCapture)).not.toContain('private-workspace-id');
+  });
   it('keeps boundary predicates and history presence while discarding arbitrary semantic errors', () => {
     const trace = new PlaygroundTraceRecorder('boundary-trace', undefined, true);
     trace.captureDevelopmentMetadata('INTERPRETATION', { validatorFunction: 'validateInterpretation', semanticValidationReason: 'semantic_uncertainty_conflict', historyHasAssistant: true, historyEndsWithAssistant: true, usableRetrievalQueriesCount: 0, retrievalQueriesPresent: true, answerAspectsPresent: false });

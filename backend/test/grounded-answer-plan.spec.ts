@@ -1,4 +1,4 @@
-import { buildGroundedAnswerPlan, validateGroundedAnswerPlan } from '../src/modules/workspaces/grounded-answer-plan';
+import { answerPlanCitationCoverage, buildGroundedAnswerPlan, validateGroundedAnswerPlan } from '../src/modules/workspaces/grounded-answer-plan';
 import type { ConversationEvidence } from '../src/modules/workspaces/conversation.contracts';
 
 const evidence = (input: Partial<ConversationEvidence> & Pick<ConversationEvidence, 'reference' | 'sourceId' | 'excerpt' | 'title'>): ConversationEvidence => ({
@@ -37,6 +37,23 @@ describe('grounded answer planning', () => {
     });
     expect(plan.coverage).toBe('PARTIAL_CANDIDATES');
     expect(plan.aspects.map((aspect) => aspect.status)).toEqual(['EVIDENCE_CANDIDATE', 'NO_MATCHING_CANDIDATE']);
+  });
+
+  it('requires a cited candidate for each evidence-supported aspect without requiring evidence for unmatched aspects', () => {
+    const plan = buildGroundedAnswerPlan({
+      question: 'Compare two requested business details and explain an unknown detail.', responseLanguage: 'English', requiresLiveLimitation: false,
+      aspects: [
+        { questionSpan: 'first detail', retrievalQuery: 'return policy' },
+        { questionSpan: 'second detail', retrievalQuery: 'refund processing time' },
+        { questionSpan: 'unknown detail', retrievalQuery: 'unmatched business detail' },
+      ],
+      evidence: [
+        evidence({ reference: 'S1', sourceId: 'source-return', title: 'Return Policy', excerpt: 'Returns are accepted within 30 days.' }),
+        evidence({ reference: 'S2', sourceId: 'source-refund', title: 'Refund Policy', excerpt: 'Refunds are processed within 5 business days.' }),
+      ],
+    });
+    expect(answerPlanCitationCoverage(plan, ['S1', 'S2'])).toBe(true);
+    expect(answerPlanCitationCoverage(plan, ['S1'])).toBe(false);
   });
 
   it('marks different time values from distinct sources as a potential unresolved conflict', () => {

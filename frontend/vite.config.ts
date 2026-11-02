@@ -11,7 +11,7 @@ const config = {
     strictPort: true,
     // Let the API proxy forward preflights to Nest, which owns origin authorization.
     cors: false,
-    allowedHosts: ['flagpole-thus-unluckily.ngrok-free.dev'],
+    allowedHosts: ['dev-api.carteio.in'],
     headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' },
     // Match Nest's default development bind address to avoid localhost resolving to ::1.
     proxy: { '/api/v1': { target: 'http://127.0.0.1:5000', changeOrigin: true } },

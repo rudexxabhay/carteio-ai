@@ -37,6 +37,15 @@ describe('conversation diagnostics metadata', () => {
     expect(selectBoundedHistory(within, 12, 1000).turns).toEqual(within);
   });
 
+  it('retains older authorized turns inside the shared 40-message context window', () => {
+    const turns = Array.from({ length: 40 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const, content: `Conversation context ${index}` }));
+    const selected = selectBoundedHistory(turns, 40, 24 * 1024);
+    expect(selected.turns).toHaveLength(40);
+    expect(selected.turns[0]).toEqual({ role: 'user', content: 'Conversation context 0' });
+    expect(selected.turns.at(-1)).toEqual({ role: 'assistant', content: 'Conversation context 39' });
+    expect(selected.droppedMessageCount).toBe(0);
+  });
+
   it('keeps the newest complete turns and returns chronological order on overflow', () => {
     const turns = Array.from({ length: 8 }, (_, index) => [
       { role: 'user' as const, content: `Question ${index}` },

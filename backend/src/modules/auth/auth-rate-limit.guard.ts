@@ -7,6 +7,10 @@ export class AuthRateLimitGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request & { body?: Record<string, unknown> }>();
     const route = req.route?.path ?? req.path;
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().normalize('NFKC').toLowerCase() : 'unknown';
+    if (route.includes('otp/request') && process.env.NODE_ENV === 'development' && process.env.APP_ENV !== 'uat' && process.env.AUTH_OTP_RATE_LIMIT_ENABLED === 'false') {
+      const testEmails = new Set((process.env.AUTH_OTP_RATE_LIMIT_TEST_EMAILS ?? '').split(',').map(value => value.trim().normalize('NFKC').toLowerCase()).filter(Boolean));
+      if (email !== 'unknown' && testEmails.has(email)) return true;
+    }
     const limit = route.includes('otp/request') ? 4 : route.includes('otp/verify') ? 10 : route.includes('google') ? 8 : route.includes('login') ? 8 : route.includes('forgot') || route.includes('resend') ? 4 : 10;
     const windowMs = 15 * 60_000;
     const now = Date.now(); const keys = [`ip:${req.ip}:${route}`, `account:${email}:${route}`];

@@ -19,4 +19,16 @@ describe('auth CSRF origin validation', () => {
     const post = make('POST', { origin: 'http://localhost:3000', referer: 'http://localhost:3000/login' }); guard(post.req, post.res, post.next); expect(post.next).toHaveBeenCalled();
     const get = make('GET'); guard(get.req, get.res, get.next); expect(get.next).toHaveBeenCalled();
   });
+
+  it('accepts an explicitly configured development tunnel origin and rejects referer mismatches', () => {
+    const guard = csrfOriginMiddleware(['http://localhost:3000', 'https://dev-api.carteio.in']);
+    const tunnel = make('POST', { origin: 'https://dev-api.carteio.in', referer: 'https://dev-api.carteio.in/login' });
+    guard(tunnel.req, tunnel.res, tunnel.next);
+    expect(tunnel.next).toHaveBeenCalled();
+
+    const mismatch = make('POST', { origin: 'https://dev-api.carteio.in', referer: 'https://attacker.example/login' });
+    guard(mismatch.req, mismatch.res, mismatch.next);
+    expect(mismatch.res.status).toHaveBeenCalledWith(403);
+    expect(mismatch.next).not.toHaveBeenCalled();
+  });
 });

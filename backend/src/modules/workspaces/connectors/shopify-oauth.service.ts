@@ -101,7 +101,7 @@ export class ShopifyOAuthService {
     if(Math.abs(Date.now()/1000-Number(scalar.timestamp))>300)throw new BadRequestException('Shopify authorization callback expired.');
     stage = 'state_lookup';
     const stateHash=createHash('sha256').update(scalar.state).digest('hex'), now=new Date();
-    const state=await this.db.shopifyOAuthState.findFirst({where:{stateHash,shopDomain:scalar.shop,expiresAt:{gt:now},consumedAt:null},include:{organization:{select:{slug:true}},connector:{select:{id:true,state:true,integrationConnectionId:true,webhookPublicId:true,verifiedCapabilities:true,credential:{select:{id:true,updatedAt:true,ciphertext:true}},commerceConnection:{select:{state:true,grantedScopes:true,externalAccountId:true}}}}}});
+    const state=await this.db.shopifyOAuthState.findFirst({where:{stateHash,shopDomain:scalar.shop,expiresAt:{gt:now},consumedAt:null},include:{organization:{select:{slug:true}},connector:{select:{id:true,state:true,updatedAt:true,integrationConnectionId:true,webhookPublicId:true,verifiedCapabilities:true,credential:{select:{id:true,updatedAt:true,ciphertext:true}},commerceConnection:{select:{state:true,grantedScopes:true,externalAccountId:true}}}}}});
     if(!state)throw new BadRequestException('Shopify install state is invalid or expired.');
     stage = 'workspace_authorization';
     const access=await this.workspaces.requireAccess(state.userId,state.organization.slug,['OWNER','ADMIN']); if(access.organizationId!==state.organizationId)throw new BadRequestException('Shopify install workspace authorization is no longer valid.');
@@ -138,6 +138,7 @@ export class ShopifyOAuthService {
     const scopeSnapshot = await this.scopeDiscovery.discover({ organizationId: state.organizationId, connectorInstanceId: state.connectorInstanceId, shopDomain: scalar.shop, accessToken: token.access_token });
     if (!scopeSnapshot.scopes.some((scope) => scope.handle === 'read_products')) throw new BadRequestException('Shopify did not grant the required product access.');
     const scopes = scopeSnapshot.scopes.map((scope) => scope.handle);
+    if (state.connector?.commerceConnection?.externalAccountId && state.connector.commerceConnection.externalAccountId !== scopeSnapshot.shopId) throw new BadRequestException('Shopify returned a different store identity. The stored connection was left unchanged.');
     if (scopeUpgrade || preserveConnectedInstallation) {
       const requiredUpgradeScopes = getShopifyScopeUpgradeScopes();
       const previousGrants: string[] = state.connector?.commerceConnection?.grantedScopes ?? [];
@@ -150,6 +151,9 @@ export class ShopifyOAuthService {
     const encrypted=this.vault.encrypt(credentials,`carteio:connector:${state.organizationId}:${state.connectorInstanceId}:shopify_v1`);
     stage = 'credential_persistence';
     await this.db.$transaction(async(tx:any)=>{
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "ConnectorInstance" WHERE "id" = ${state.connectorInstanceId}::uuid AND "organizationId" = ${state.organizationId}::uuid FOR UPDATE`;
+      const current = locked.length ? await tx.connectorInstance.findFirst({ where: { id: state.connectorInstanceId, organizationId: state.organizationId }, select: { state: true, updatedAt: true } }) : null;
+      if (!current || !state.connector || current.updatedAt.getTime() !== state.connector.updatedAt.getTime()) throw new BadRequestException('The Shopify connection changed during authorization. Start authorization again.');
       if (preserveConnectedInstallation) {
         const replaced = await tx.connectorCredential.updateMany({where:{organizationId:state.organizationId,connectorInstanceId:state.connectorInstanceId,ciphertext:state.connector.credential.ciphertext},data:encrypted});
         if (replaced.count !== 1) throw new BadRequestException('The Shopify credential changed during this authorization. No credential was replaced; start the scope upgrade again.');

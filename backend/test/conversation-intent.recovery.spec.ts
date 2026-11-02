@@ -1,7 +1,38 @@
 import { recoverContinuityFromInvalidInterpretation, recoverCustomerLanguageAfterSemanticFailure, recoverRetrievalQueriesAfterSemanticFailure, recoverValidatedSemanticInterpretation, validateInterpretation } from '../src/modules/workspaces/conversation-intent';
 import { resolveConversationReference } from '../src/modules/workspaces/conversation-context';
+import { decideClarification } from '../src/modules/workspaces/clarification-guard';
 
 describe('semantic interpretation recovery metadata', () => {
+  const unresolved = () => ({ language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] },
+    responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'UNKNOWN', businessScopeAssessment: 'UNKNOWN',
+    intents: [{ category: 'UNKNOWN', polarity: 'NOT_APPLICABLE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false });
+
+  it.each(['UNKNOWN', 'CLARIFICATION'])('accepts unresolved %s without manufacturing factual aspects or social intent', (category) => {
+    const message = 'An unresolved request';
+    const semantics = { ...unresolved(), intents: [{ category, polarity: 'NOT_APPLICABLE' }] };
+    const raw = JSON.stringify({ language: 'English', intent: 'unknown', retrievalQueries: [message], answerAspects: [], semantics });
+    const result = validateInterpretation(raw, message);
+    expect(result.reason).toBe('valid');
+    expect(result.value).toMatchObject({ intent: 'unknown', answerAspects: [], semantics });
+    expect(decideClarification(result.value!.semantics, result.value!.intent).required).toBe(true);
+    expect(recoverValidatedSemanticInterpretation(raw, message)).toMatchObject({ answerAspects: [], semantics });
+  });
+
+  it.each(['PRODUCT_INQUIRY', 'PRICING_INQUIRY', 'AVAILABILITY_INQUIRY', 'KNOWLEDGE_QUESTION'])('does not exempt %s from factual aspects merely because informationNeed is UNKNOWN', (category) => {
+    const message = 'A substantive request';
+    const semantics = { ...unresolved(), intents: [{ category, polarity: 'AFFIRMATIVE' }] };
+    const raw = JSON.stringify({ language: 'English', intent: 'business', retrievalQueries: [message], answerAspects: [], semantics });
+    expect(validateInterpretation(raw, message)).toMatchObject({ value: null, reason: 'invalid_answer_aspects' });
+    expect(recoverValidatedSemanticInterpretation(raw, message)).toBeNull();
+  });
+
+  it('does not accept invented factual aspects for unresolved meaning', () => {
+    const message = 'An unresolved request';
+    const raw = JSON.stringify({ language: 'English', intent: 'unknown', retrievalQueries: [message],
+      answerAspects: [{ questionSpan: message, retrievalQuery: message }], semantics: unresolved() });
+    expect(validateInterpretation(raw, message)).toMatchObject({ value: null, reason: 'invalid_answer_aspects' });
+    expect(recoverValidatedSemanticInterpretation(raw, message)).toBeNull();
+  });
   it('does not manufacture factual aspects from structurally valid UNKNOWN semantics', () => {
     const semantics = { language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] }, responseLanguagePreference: null,
       socialClassification: 'OTHER', informationNeed: 'UNKNOWN', businessScopeAssessment: 'UNKNOWN',

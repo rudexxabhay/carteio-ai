@@ -149,6 +149,21 @@ describe('Google and email OTP authentication', () => {
     expect(db.userSession.create).toHaveBeenCalled();
   });
 
+  it('creates a session for an existing active account from an unauthenticated OTP login', async () => {
+    const { service, db } = setup({ user: { findUnique: jest.fn().mockResolvedValue(activeUser) } });
+    const result = await service.verifyOtp(activeUser.email, '00000000-0000-4000-8000-000000000001', '123456');
+    expect(result).toMatchObject({ status: 'authenticated', session: { user: { email: activeUser.email } } });
+    expect(db.emailOtpChallenge.updateMany.mock.calls[0][0].where).toMatchObject({ id: '00000000-0000-4000-8000-000000000001', email: activeUser.email, consumedAt: null });
+    expect(db.userSession.create).toHaveBeenCalled();
+  });
+
+  it('reports no account only after consuming a valid OTP for an unknown login email', async () => {
+    const { service, db } = setup();
+    await expect(service.verifyOtp('unknown@example.invalid', '00000000-0000-4000-8000-000000000001', '123456')).rejects.toMatchObject({ response: { code: 'ACCOUNT_NOT_FOUND' }, status: 401 });
+    expect(db.emailOtpChallenge.updateMany.mock.calls[0][0].where).toMatchObject({ email: 'unknown@example.invalid', consumedAt: null });
+    expect(db.userSession.create).not.toHaveBeenCalled();
+  });
+
   it('does not create a duplicate account or session when a signup code belongs to an existing account', async () => {
     const { service, db } = setup({ user: { findUnique: jest.fn().mockResolvedValue(activeUser), create: jest.fn() } });
     await expect(service.verifyOtp(activeUser.email, '00000000-0000-4000-8000-000000000001', '123456', undefined, 'signup', 'Another Person')).resolves.toMatchObject({ status: 'account_exists', session: null });

@@ -1724,6 +1724,49 @@ describe('AssistantService Playground chat', () => {
     expect(result.reply).toBe(scenario.answer.replace(' [C1]', ''));
   });
 
+  it.each([
+    { outcome: 'permission denied', readiness: [{ eligible: true, reason: null, recordCount: 1 }, { eligible: false, reason: 'ASSISTANT_PERMISSION_DISABLED', recordCount: 1 }], search: undefined, expected: 'PERMISSION_DENIED', language: 'English', script: 'Latin', reply: 'I cannot confirm current catalog details right now.' },
+    { outcome: 'authorized no match', readiness: [{ eligible: true, reason: null, recordCount: 1 }, { eligible: true, reason: null, recordCount: 1 }], search: [], expected: 'AUTHORIZED_NO_MATCH', language: 'Hinglish', script: 'Latin', reply: 'Main abhi current catalog details confirm nahi kar pa raha hoon.' },
+    { outcome: 'temporary retrieval failure', readiness: [{ eligible: true, reason: null, recordCount: 1 }, { eligible: true, reason: null, recordCount: 1 }], search: new Error('simulated catalog outage'), expected: 'TEMPORARY_FAILURE', language: 'English', script: 'Latin', reply: 'I cannot confirm current catalog details right now.' },
+  ] as const)('fails closed for $outcome without converting failure into a product claim or preference question', async (scenario) => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    jest.spyOn(orchestrator.providerAdapter, 'supportsToolCalling').mockReturnValue(true);
+    orchestrator.knowledgeProcessing.eligiblePublicSourceCount.mockResolvedValue(0);
+    const readiness = jest.fn()
+      .mockResolvedValueOnce(scenario.readiness[0])
+      .mockResolvedValueOnce(scenario.readiness[1]);
+    const searchCatalog = scenario.search instanceof Error
+      ? jest.fn().mockRejectedValue(scenario.search)
+      : jest.fn().mockResolvedValue(scenario.search);
+    orchestrator.commerce = { productSearchReadiness: readiness, searchCatalog, revalidateProducts: jest.fn().mockResolvedValue([]) };
+    const mixed = scenario.language !== 'English';
+    const message = mixed ? 'Mujhe products dikhao' : 'Show me products';
+    const semantics = {
+      language: { primary: mixed ? 'Hindi' : 'English', scripts: [scenario.script], mixed, certainty: 'CLEAR', signals: [] },
+      responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'STATIC_BUSINESS_INFORMATION', businessScopeAssessment: 'IN_SCOPE',
+      intents: [{ category: 'PRODUCT_INQUIRY', polarity: 'AFFIRMATIVE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false,
+    };
+    fetchMock.mockResolvedValueOnce(providerResponse(JSON.stringify({ retrievalQueries: [message], language: scenario.language, script: scenario.script, style: mixed ? 'natural Hinglish' : 'plain', intent: 'business', needsClarification: false, semantics })));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: null, tool_calls: [{ id: 'commerce-failure-1', type: 'function', function: { name: 'search_store_products', arguments: JSON.stringify({ query: message, browse: true }) } }] }, finish_reason: 'tool_calls' }] }), { status: 200 }));
+    fetchMock.mockImplementationOnce(async (_url, init) => {
+      const request = JSON.parse(String(init?.body));
+      const limitationSystemMessage = request.messages.find((item: any) => item.role === 'system')?.content ?? '';
+      const serverContext = request.messages.find((item: any) => item.role === 'user' && item.content.includes('server_computed_no_evidence_context'))?.content ?? '';
+      expect(limitationSystemMessage).toContain('do not ask for product preferences as a substitute for lookup');
+      expect(serverContext).toContain(`"productLookupOutcome":"${scenario.expected}"`);
+      return providerResponse(scenario.reply);
+    });
+
+    const result = await service.playgroundChat(userId, 'workspace', assistantId, { message }, `request-commerce-${scenario.expected.toLowerCase()}`);
+
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(searchCatalog).toHaveBeenCalledTimes(scenario.expected === 'PERMISSION_DENIED' ? 0 : 1);
+    expect(result).toMatchObject({ responseType: 'knowledge_fallback', sources: [], responseLanguage: scenario.language });
+    expect(result.reply).toBe(scenario.reply);
+    expect(result.reply).not.toMatch(/available|in stock|\$|₹|\[C\d+\]/i);
+  });
+
   it('keeps the exact anonymous order question outside customer order lookup and exposes no order tool', async () => {
     const orchestrator = (service as any).conversationOrchestrator;
     jest.spyOn(orchestrator.providerAdapter, 'supportsToolCalling').mockReturnValue(true);
@@ -1905,6 +1948,28 @@ describe('AssistantService Playground chat', () => {
   });
 
 
+  it.each(['PLAYGROUND', 'PUBLIC_WIDGET'])('clarifies validated unresolved meaning without repair or retrieval in %s', async (channel) => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    const message = 'An unresolved request';
+    const semantics = { language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] },
+      responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'UNKNOWN', businessScopeAssessment: 'UNKNOWN',
+      intents: [{ category: 'UNKNOWN', polarity: 'NOT_APPLICABLE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false };
+    fetchMock.mockResolvedValueOnce(providerResponse(JSON.stringify({ retrievalQueries: [message], answerAspects: [], language: 'English', script: 'Latin', intent: 'unknown', semantics })));
+    fetchMock.mockResolvedValueOnce(providerResponse('What would you like help understanding?'));
+    const context = { requestId: `unresolved-${channel}`, organizationId, assistantId, userId, channel, sessionId: 'unresolved-session', clientTurnId: 'unresolved-turn', message, requestDeadline: performance.now() + 60_000 };
+    const result = await orchestrator.executeSharedAI({
+      context, assistant: { ...assistant, providerMode: 'MANUAL', providerFallbacks: [] },
+      session: { id: 'unresolved-session', lockId: 'lock', organizationId, assistantId, userId, nextSequence: 0, turns: [] },
+      userId, slug: 'workspace', assistantId, requestId: context.requestId,
+      persistTurn: jest.fn().mockResolvedValue({ id: 'unresolved-response', createdAt: new Date() }), releaseSession: jest.fn().mockResolvedValue(undefined),
+    });
+    expect(result).toMatchObject({ responseType: 'clarification', retrievalMode: 'not_required', sources: [], answerOrigin: 'MODEL_GENERATED' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(searchPreview).not.toHaveBeenCalled();
+    const generation = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(generation.messages[0].content).toContain('Do not answer factual or business questions');
+  });
+
   describe('Phase 06 semantic conversation and tool contracts', () => {
     const continuationInterpretation = (message: string, language = 'Hinglish') => JSON.stringify({
       retrievalQueries: [message], answerAspects: [], language, script: language === 'Hindi' ? 'Devanagari' : 'Latin', style: 'natural', intent: 'conversation_continuation',
@@ -2019,8 +2084,8 @@ describe('AssistantService Playground chat', () => {
     it('retains the whole bounded history and a separate current message in no-evidence generation', async () => {
       const orchestrator = (service as any).conversationOrchestrator;
       jest.spyOn(orchestrator.providerAdapter, 'supportsToolCalling').mockReturnValue(false);
-      const history = Array.from({ length: 8 }, (_, index) => ({ id: `h-${index}`, role: index % 2 ? 'assistant' : 'user', content: `Earlier turn ${index}`, responseCategory: index % 2 ? 'social' : null, sourceReferences: null }));
-      orchestrator.db.playgroundConversation.findFirst.mockResolvedValue({ id: 'no-evidence-session', organizationId, assistantId, userId, channel: 'PLAYGROUND', expiresAt: new Date(Date.now() + 60_000), nextSequence: 8 });
+      const history = Array.from({ length: 40 }, (_, index) => ({ id: `h-${index}`, role: index % 2 ? 'assistant' : 'user', content: `Earlier turn ${index}`, responseCategory: index % 2 ? 'social' : null, sourceReferences: null }));
+      orchestrator.db.playgroundConversation.findFirst.mockResolvedValue({ id: 'no-evidence-session', organizationId, assistantId, userId, channel: 'PLAYGROUND', expiresAt: new Date(Date.now() + 60_000), nextSequence: 40 });
       orchestrator.db.playgroundMessage.findMany.mockResolvedValue([...history].reverse());
       searchPreview.mockResolvedValueOnce({ mode: 'lexical_only', results: [], eligibleSourceCount: 0 });
       fetchMock.mockResolvedValueOnce(factualRepair('What is the shipping policy?'));
@@ -2029,7 +2094,8 @@ describe('AssistantService Playground chat', () => {
       await service.playgroundChat(userId, 'workspace', assistantId, { message, sessionId: 'no-evidence-session' });
       const payload = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
       const envelope = payload.messages.find((item: any) => item.role === 'user' && item.content.includes('untrusted_conversation_context'));
-      expect(JSON.parse(envelope.content).priorTurns).toHaveLength(8);
+      expect(JSON.parse(envelope.content).priorTurns).toHaveLength(40);
+      expect(JSON.parse(envelope.content).priorTurns[0].content).toBe('Earlier turn 0');
       expect(payload.messages.at(-1)).toEqual({ role: 'user', content: message });
       expect(payload.messages[0].content).toContain('First understand the current conversational purpose');
       expect(fetchMock).toHaveBeenCalledTimes(2);

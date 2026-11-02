@@ -158,9 +158,16 @@ describe('bounded conversation context resolution', () => {
     const turns: PlaygroundTurn[] = [{ role: 'user', content: 'refund policy' }, { role: 'assistant', content: 'I can help.' }];
     const base = { retrievalQueries: ['refund duration'], language: 'English', intent: 'follow_up', referenceTurnOffset: 0 };
     expect(validateInterpretation(JSON.stringify(base), 'How long?', turns).value?.referenceTurnOffset).toBe(0);
-    expect(validateInterpretation(JSON.stringify({ ...base, referenceTurnOffset: 1 }), 'How long?', turns).value).toBeNull();
-    expect(validateInterpretation(JSON.stringify({ ...base, referenceTurnOffset: 2 }), 'How long?', turns).value).toBeNull();
+    expect(validateInterpretation(JSON.stringify({ ...base, referenceTurnOffset: 1 }), 'How long?', turns)).toMatchObject({ value: { referenceTurnOffset: null }, metadataWarnings: ['invalid_reference_turn_offset'] });
+    expect(validateInterpretation(JSON.stringify({ ...base, referenceTurnOffset: 2 }), 'How long?', turns)).toMatchObject({ value: { referenceTurnOffset: null }, metadataWarnings: ['invalid_reference_turn_offset'] });
     expect(validateInterpretation(JSON.stringify({ ...base, authorizationGranted: true }), 'How long?', turns).value).toBeNull();
+  });
+
+  it('validates references to older user turns retained in the wider bounded context', () => {
+    const turns: PlaygroundTurn[] = Array.from({ length: 40 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const, content: `Earlier turn ${index}` }));
+    const base = { retrievalQueries: ['current detail'], language: 'English', intent: 'follow_up' };
+    expect(validateInterpretation(JSON.stringify({ ...base, referenceTurnOffset: 0 }), 'Can you expand on that?', turns).value?.referenceTurnOffset).toBe(0);
+    expect(validateInterpretation(JSON.stringify({ ...base, referenceTurnOffset: 40 }), 'Can you expand on that?', turns).value?.referenceTurnOffset).toBeNull();
   });
 
   it('validates bounded answer aspects as exact current-message spans', () => {

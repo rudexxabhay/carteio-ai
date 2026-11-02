@@ -16,7 +16,12 @@ describe('ConnectorSyncWorker lease behavior', () => {
     expect(() => validateConnectorSyncPage({ itemCount: 1, records: [{ kind: 'PRODUCT', variantsComplete: true, imagesComplete: false }], complete: true }, 'shopify_v1')).toThrow('CONNECTOR_NESTED_PAGINATION_INCOMPLETE');
   });
   it('accepts a complete Shopify product page with complete variants and images', () => {
-    expect(() => validateConnectorSyncPage({ itemCount: 1, records: [{ kind: 'PRODUCT', variantsComplete: true, imagesComplete: true }], complete: true }, 'shopify_v1')).not.toThrow();
+    expect(() => validateConnectorSyncPage({ itemCount: 1, records: [{ kind: 'PRODUCT', variantsComplete: true, imagesComplete: true, collectionsComplete: true }], complete: true }, 'shopify_v1')).not.toThrow();
+  });
+  it('rejects incomplete Shopify collection pages and accepts a full provider page of 250 products', () => {
+    expect(() => validateConnectorSyncPage({ itemCount: 1, records: [{ kind: 'PRODUCT', variantsComplete: true, imagesComplete: true, collectionsComplete: false }], complete: true }, 'shopify_v1')).toThrow('CONNECTOR_NESTED_PAGINATION_INCOMPLETE');
+    const products = Array.from({ length: 250 }, () => ({ kind: 'PRODUCT', variantsComplete: true, imagesComplete: true, collectionsComplete: true }));
+    expect(() => validateConnectorSyncPage({ itemCount: 250, records: products, complete: true }, 'shopify_v1')).not.toThrow();
   });
   it('locks the tenant-scoped Shopify connector before checking a leased sync for publication', async () => {
     const now = new Date();

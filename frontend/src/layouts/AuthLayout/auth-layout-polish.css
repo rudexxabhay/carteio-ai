@@ -1,39 +1,21 @@
-/* Auth pages use the same cool blue and violet palette as the public Velora
-   landing page, scoped here so dashboard and shared application styles stay put. */
+/* Auth-specific presentation stays scoped to the authentication shell. */
 .auth-shell.auth-shell-polished {
-  --auth-primary: #245dff;
-  --auth-primary-hover: #1649e5;
-  --auth-primary-soft: #edf2ff;
+  --auth-primary: var(--brand-primary);
+  --auth-primary-hover: var(--brand-primary-hover);
+  --auth-primary-soft: var(--brand-primary-soft);
   --auth-line: #e5e9f2;
   --auth-ink: #121827;
   --auth-muted: #687386;
   position: relative;
   isolation: isolate;
   min-height: 100svh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: clamp(20px, 4vh, 38px) clamp(16px, 4vw, 32px);
-  background:
-    radial-gradient(ellipse at 12% 7%, rgb(36 93 255 / 10%), transparent 31%),
-    radial-gradient(ellipse at 90% 88%, rgb(112 84 232 / 9%), transparent 33%),
-    linear-gradient(145deg, #fbfcff 0%, #f6f8ff 54%, #f9f8ff 100%);
+  background: linear-gradient(145deg, #fbfbfc 0%, #f5f6f8 100%);
   color: var(--auth-ink);
   font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
 }
-
-.auth-shell-polished > .auth-wordmark {
-  position: relative;
-  z-index: 1;
-  align-self: flex-start;
-  margin: 0 max(calc((100vw - 1120px) / 2), 0px);
-  color: #111827;
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.045em;
-  line-height: 1;
-  transition: opacity 150ms ease;
-}
-
-.auth-shell-polished > .auth-wordmark:hover { opacity: .78; }
 
 .auth-shell-polished > .auth-card-polished {
   position: relative;
@@ -142,8 +124,8 @@
 .auth-card-polished .auth-button {
   min-height: 46px;
   border-radius: 9px;
-  background: linear-gradient(110deg, #245dff, #4f61ed 58%, #7054e8);
-  box-shadow: 0 6px 15px rgb(61 85 217 / 22%);
+  background: var(--brand-primary);
+  box-shadow: 0 6px 15px rgba(var(--brand-shadow), .2);
   color: white;
   font-family: inherit;
   font-size: 13px;
@@ -152,9 +134,10 @@
 }
 .auth-card-polished .auth-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgb(61 85 217 / 27%);
-  filter: saturate(1.06);
+  background: var(--brand-primary-hover);
+  box-shadow: 0 8px 20px rgba(var(--brand-shadow), .25);
 }
+.auth-card-polished .auth-button:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 7px rgba(var(--brand-shadow), .18); }
 .auth-card-polished .auth-button:disabled { opacity: .66; cursor: wait; transform: none; }
 .auth-card-polished .auth-inline-link,
 .auth-card-polished .auth-switch a { color: #315be0; transition: color 140ms ease; }
@@ -167,6 +150,86 @@
   line-height: 1.6;
 }
 .auth-card-polished .auth-switch a { font-weight: 650; }
+.auth-card-brand {
+  display: flex;
+  width: fit-content;
+  margin: 0 auto 24px;
+  font-size: 18px;
+  letter-spacing: -.04em;
+}
+.auth-card-brand .brand-mark { width: 25px; height: 25px; border-radius: 8px; }
+.auth-login-card { width: min(370px, 100%) !important; padding: 24px !important; }
+.auth-login-card .auth-card-brand { margin-bottom: 15px; font-size: 16px; }
+.auth-login-card .auth-card-brand .brand-mark { width: 22px; height: 22px; }
+.auth-login-card .simple-icon,
+.auth-login-card > .eyebrow { display: none; }
+.auth-login-card > h1 { margin: 0 0 6px; text-align: center; font-size: clamp(25px, 5vw, 29px); font-weight: 650; }
+.auth-login-card > p { max-width: none; margin: 0; text-align: center; font-size: 12px; }
+.auth-login-card .auth-methods { gap: 11px; margin-top: 17px; }
+.auth-social-row { display: flex; justify-content: center; gap: 10px; }
+.auth-social-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #e2e5eb;
+  border-radius: 50%;
+  background: #fff;
+  color: #222936;
+  box-shadow: 0 2px 5px rgb(28 39 58 / 4%);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.auth-social-button svg { width: 17px; height: 17px; fill: currentColor; }
+.auth-social-button:disabled { opacity: .58; cursor: not-allowed; }
+.auth-social-google { cursor: pointer; }
+.auth-social-google.is-disabled { pointer-events: none; opacity: .55; }
+.auth-social-google .google-signin { display: grid; place-items: center; width: 40px; height: 40px; min-height: 40px; }
+.auth-social-google iframe { width: 40px !important; height: 40px !important; max-width: 40px !important; }
+.auth-social-button .auth-google-mark { width: 19px; height: 19px; fill: none; }
+.auth-social-button .auth-google-mark path:nth-child(1) { fill: #4285f4; }
+.auth-social-button .auth-google-mark path:nth-child(2) { fill: #34a853; }
+.auth-social-button .auth-google-mark path:nth-child(3) { fill: #fbbc05; }
+.auth-social-button .auth-google-mark path:nth-child(4) { fill: #ea4335; }
+.auth-login-card .google-loading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.auth-login-card .auth-divider { gap: 11px; font-size: 9px; font-weight: 650; letter-spacing: .13em; }
+.auth-login-card .auth-method-switch { margin-top: 1px; }
+.auth-login-card .auth-method-switch button { min-height: 34px; padding: 7px 6px; font-size: 10px; }
+.auth-login-form { gap: 12px; margin-top: 15px !important; }
+.auth-login-card .auth-form { gap: 12px; margin-top: 15px; }
+.auth-login-card .auth-form > label { gap: 6px; font-size: 11px; }
+.auth-login-card .auth-form input:not(.otp-code-input) { height: 42px; border-radius: 9px; font-size: 13px; }
+.auth-login-form > label { gap: 6px; font-size: 11px; }
+.auth-login-form .auth-input-wrap input { height: 42px; border-radius: 9px; font-size: 13px; }
+.auth-login-form .auth-input-wrap > svg + input { padding-left: 39px; }
+.auth-login-form .auth-input-wrap > input { padding-left: 12px; padding-right: 44px; }
+.auth-login-form .auth-input-wrap input[type="password"] { padding-right: 44px; }
+.auth-login-options { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: -2px; }
+.auth-login-options .auth-inline-link { justify-self: auto; font-size: 10px; }
+.auth-remember { display: inline-flex !important; align-items: center; gap: 7px !important; color: #576174 !important; font-size: 10px !important; font-weight: 500 !important; cursor: default; }
+.auth-remember input { width: 14px !important; height: 14px !important; margin: 0; padding: 0 !important; accent-color: var(--brand-primary); opacity: .82; }
+.auth-login-card .auth-button { width: 100%; min-height: 42px; margin-top: 1px; border-radius: 9px; background: var(--brand-primary); box-shadow: 0 4px 10px rgba(var(--brand-shadow), .2); font-size: 13px; }
+.auth-login-card .auth-button:hover:not(:disabled) { background: var(--brand-primary-hover); filter: none; }
+.auth-login-card .auth-button:active:not(:disabled) { transform: translateY(0); box-shadow: 0 2px 7px rgba(var(--brand-shadow), .18); }
+.auth-login-card .auth-switch { margin-top: 15px; text-align: center; font-size: 11px; }
+.auth-login-card .auth-login-form input:focus-visible,
+.auth-login-card .auth-social-button:focus-visible,
+.auth-login-card .auth-method-switch button:focus-visible,
+.auth-login-card .auth-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand-primary), white 60%); outline-offset: 3px; }
+@media (max-width: 480px) {
+  .auth-login-card { padding: 21px 18px !important; }
+  .auth-login-card .auth-social-row { gap: 9px; }
+  .auth-login-form { gap: 11px; }
+}
+.auth-social-disabled { cursor: not-allowed; }
+.auth-social-google .google-signin iframe { border-radius: 50%; }
+.auth-login-form input::placeholder { color: #9aa2af; }
+.auth-login-form .auth-button:disabled { opacity: .62; }
+.auth-social-button:not(:disabled):not(.is-disabled):hover { border-color: var(--brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 10%, transparent); }
+.auth-social-button:not(:disabled):not(.is-disabled):active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) { .auth-social-button, .auth-login-form .auth-button { transition: none; } }
 .auth-card-polished .auth-alert {
   border-color: #dce5ff;
   border-radius: 9px;
