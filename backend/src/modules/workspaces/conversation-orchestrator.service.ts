@@ -1777,13 +1777,13 @@ export class ConversationOrchestrator {
       const reason = missingConflictSource ? 'missing_conflict_sources' as const : missingAnswerAspectReference ? 'missing_answer_aspect_reference' as const : factualChecks.reason;
       return { ...factualChecks, accepted: factualChecks.accepted && !missingConflictSource && !missingAnswerAspectReference, reason };
     }, { evidenceCount: evidence.length, provider: activeRoute.provider, model: activeRoute.model }, (result) => result.accepted, (result) => ({ reason: `citation_${result.reason}`, resultCount: result.citedReferences.length, evidenceCount: evidence.length }));
+    const citationRefs = (response: string) => [...response.matchAll(/\[((?:S|C)\d+)\]/gu)].map((match) => match[1]!);
+    const unknownCitationRefs = (response: string) => citationRefs(response).filter((reference) => !evidence.some((item) => item.reference === reference));
     let verification: ConversationVerification = await verifyResponse(reply);
     context.diagnostics?.updateProtectedModelValidation(initialAnswerCallIndex, { validation: { accepted: verification.accepted, code: verification.reason, failurePhase: 'FINAL_RESPONSE_VALIDATION', unsupportedClaimCount: verification.unsupportedClaimCount ?? 0, verifiedFactCount: verification.verifiedFactCount ?? 0, citedReferences: verification.citedReferences, unknownReferences: unknownCitationRefs(reply) }, backendDecision: { status: verification.accepted ? 'ANSWER_ACCEPTED' : 'ANSWER_REPAIR_REQUIRED', reason: verification.reason } });
     const initialDraftForPreservation = reply;
     let partialPreserved = false;
     context.diagnostics?.captureDevelopmentMetadata('INITIAL_DRAFT', { characterCount: reply.length, accepted: verification.accepted, reason: verification.reason, unsupportedClaimCount: verification.unsupportedClaimCount ?? 0, verifiedFactCount: verification.verifiedFactCount ?? 0, citationRequirement: 'FACTUAL_ROUTE_RELEVANT_EVIDENCE', businessClaimAssessment: verification.unsupportedClaimCount ? 'UNSUPPORTED_STRUCTURED_CLAIM' : 'NOT_ESTABLISHED' });
-    const citationRefs = (response: string) => [...response.matchAll(/\[((?:S|C)\d+)\]/gu)].map((match) => match[1]!);
-    const unknownCitationRefs = (response: string) => citationRefs(response).filter((reference) => !evidence.some((item) => item.reference === reference));
     let verificationAttempts = 1;
     let recoveryUsedVerifiedEvidence = false;
     const initialDraftNonempty = Boolean(reply.trim());
