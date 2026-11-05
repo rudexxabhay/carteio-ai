@@ -144,6 +144,13 @@ export class UpdateConnectorSyncScheduleDto {
   @Type(() => Number) @IsInt() @Min(60) @Max(10080) intervalMinutes!: number;
 }
 export class ConnectorCredentialsDto { @IsObject() credentials!: Record<string, unknown>; }
+export class ShopifyApiTestDto {
+  @IsIn(['VERIFY_CONNECTION','SEARCH_LIVE_PRODUCTS','READ_PRODUCT_DETAILS','READ_VARIANTS','READ_PRICES','READ_PRODUCT_IMAGES','READ_INVENTORY','LIST_COLLECTIONS','READ_LOCATIONS','READ_ONLINE_STORE_PAGES','READ_STORE_POLICIES','READ_MARKETS','READ_DISCOUNTS','READ_METAOBJECT_DEFINITIONS','SEARCH_SYNCED_CATALOG','ASSISTANT_PRODUCT_READINESS'])
+  operation!: string;
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(120) query?: string;
+  @Transform(trim) @IsOptional() @IsString() @MaxLength(80) productId?: string;
+  @IsOptional() @IsUUID() assistantId?: string;
+}
 export class QueueConnectorSyncDto {
   @Transform(trim) @IsString() @Matches(/^[A-Z][A-Z0-9_]{1,63}$/) resourceType!: string;
   @IsIn(['FULL', 'INCREMENTAL']) mode!: 'FULL' | 'INCREMENTAL';

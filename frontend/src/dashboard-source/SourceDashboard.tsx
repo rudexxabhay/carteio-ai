@@ -7,6 +7,7 @@ import { useTheme } from '../app/providers/ThemeProvider';
 import { nav, extra, pageTitles, type PageId } from './data';
 import type { Workspace } from '../services/api/workspaces';
 import './source-dashboard.css';
+import './playground-dev-console.css';
 
 type Props = { workspace: Workspace; workspaces: Workspace[]; userName: string; userEmail?: string; onLogout: () => void | Promise<void>; onSwitchWorkspace: (slug: string) => void; onWorkspaceSaved?: (workspace: Workspace) => void };
 const pagePaths: Record<PageId, string> = {

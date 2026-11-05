@@ -1,6 +1,6 @@
 import { BadGatewayException, GatewayTimeoutException, HttpException, HttpStatus, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 
-export type ConversationProvider = 'groq' | 'gemini' | 'openai' | 'openrouter';
+export type ConversationProvider = 'openrouter';
 export type ConversationStage = 'intent_interpretation' | 'query_interpretation' | 'grounded_answer';
 export type ConversationProviderMessage =
   | { role: 'system' | 'user' | 'assistant'; content: string; tool_calls?: readonly Readonly<{ id: string; type: 'function'; function: { name: string; arguments: string } }>[] }
@@ -8,12 +8,9 @@ export type ConversationProviderMessage =
 /** Provider-neutral function tools. Schemas are server-authored and arguments remain untrusted until validated by a handler. */
 export type ConversationToolDefinition = Readonly<{ name: string; description: string; parameters: Readonly<Record<string, unknown>> }>;
 export type ConversationToolCall = Readonly<{ id: string; name: string; arguments: string }>;
-/** Native function calling is supported by the current Gemini GenerateContent and OpenAI-compatible adapters. */
-export const supportsProviderToolProtocol = (provider: ConversationProvider, model?: string) => provider === 'gemini'
-  ? isSupportedGeminiModel(model?.trim() ?? '')
-  : provider === 'openai'
-  ? /^gpt-(?:4o|4\.1|5)(?:[-.][A-Za-z0-9]+)*$/i.test(model?.trim() ?? '')
-  : provider === 'groq' && /^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/.test(model?.trim() ?? ''); // OpenRouter requires explicit metadata validation.
+/** OpenRouter tool support is checked against its model metadata before tools are sent. */
+export const supportsProviderToolProtocol = (provider: ConversationProvider, model?: string) => provider === 'openrouter'
+  && /^[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._:-]{1,96}$/.test(model?.trim() ?? '');
 export type ConversationProviderRequest = {
   provider: ConversationProvider;
   model: string;
@@ -32,29 +29,26 @@ export type ConversationProviderRequest = {
   tools?: readonly ConversationToolDefinition[];
   /** Internal diagnostic hook; invoked immediately before the outbound fetch. */
   onRequestDispatched?: () => void;
+  /** Server-only hook; called as soon as the provider envelope yields model output, before orchestration parsing/validation. */
+  onModelOutputReceived?: (output: { content: string | null; toolCalls?: unknown; finishReason: string | null; usage?: ConversationProviderUsage; responseStatus: number }) => void;
 };
 export type ConversationProviderUsage = { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 export type ConversationProviderResult = { provider: ConversationProvider; model: string; content: string; finishReason: 'stop' | 'tool_calls'; toolCalls?: readonly ConversationToolCall[]; usage?: ConversationProviderUsage };
 export type ProviderFailureCategory = 'missing_key' | 'authentication' | 'model_unavailable' | 'rate_limited' | 'invalid_request' | 'temporary_unavailable' | 'timeout' | 'network' | 'invalid_response' | 'incomplete' | 'empty_response' | 'truncated' | 'safety_blocked';
 export type ProviderRoute = { provider: ConversationProvider; model: string };
 
-export const SUPPORTED_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'] as const;
-export const isSupportedGeminiModel = (model: string) => (SUPPORTED_GEMINI_MODELS as readonly string[]).includes(model.trim());
 export const isCredentialLikeProviderValue = (value: string) => /(?:gsk_|sk-|sk_|AIza|sess-|Bearer\s)/i.test(value);
-const providerModelPattern = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/;
 export const isValidProviderModel = (provider: unknown, model: unknown): model is string =>
-  (provider === 'groq' || provider === 'gemini' || provider === 'openai' || provider === 'openrouter')
+  provider === 'openrouter'
   && typeof model === 'string'
   && model.trim().length > 0
-  && providerModelPattern.test(model.trim())
   && !isCredentialLikeProviderValue(model)
-  && (provider !== 'openrouter' || /^[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._:-]{1,96}$/.test(model.trim()))
-  && (provider !== 'gemini' || isSupportedGeminiModel(model));
+  && /^[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._:-]{1,96}$/.test(model.trim());
 export const isValidProviderRoute = (value: unknown): value is ProviderRoute => {
   if (typeof value !== 'object' || value === null || Array.isArray(value) || !('provider' in value) || !('model' in value)) return false;
   return isValidProviderModel(value.provider, value.model);
 };
-const isConversationProvider = (value: unknown): value is ConversationProvider => value === 'groq' || value === 'gemini' || value === 'openai' || value === 'openrouter';
+const isConversationProvider = (value: unknown): value is ConversationProvider => value === 'openrouter';
 export type EffectiveProviderConfiguration = {
   provider: ConversationProvider | null;
   model: string | null;
@@ -65,32 +59,19 @@ export type EffectiveProviderConfiguration = {
 };
 type ProviderEnvironment = {
   AI_DEFAULT_PROVIDER?: string;
-  GROQ_MODEL?: string;
-  GEMINI_MODEL?: string;
-  OPENAI_MODEL?: string;
   OPENROUTER_MODEL?: string;
   OPENROUTER_BASE_URL?: string;
-  GROQ_API_KEY?: string;
-  GEMINI_API_KEY?: string;
-  OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
 };
 let effectiveProviderSnapshot: EffectiveProviderConfiguration | undefined;
-let providerCredentialSnapshot: Record<ConversationProvider, boolean> | undefined;
-const providerCredentialPresence = (env: ProviderEnvironment): Record<ConversationProvider, boolean> => ({
-  groq: Boolean(env.GROQ_API_KEY?.trim()),
-  gemini: Boolean(env.GEMINI_API_KEY?.trim()),
-  openai: Boolean(env.OPENAI_API_KEY?.trim()),
-  openrouter: Boolean(env.OPENROUTER_API_KEY?.trim()),
-});
+let providerCredentialSnapshot: boolean | undefined;
 
 export function resolveEffectiveProviderConfiguration(env: ProviderEnvironment): EffectiveProviderConfiguration {
   const rawProvider = env.AI_DEFAULT_PROVIDER?.trim().toLowerCase();
   if (!rawProvider) return { provider: null, model: null, configurationStatus: 'MISSING_PROVIDER', configurationValid: false, keyConfigured: false, ready: false };
   if (!isConversationProvider(rawProvider)) return { provider: null, model: null, configurationStatus: 'INVALID_PROVIDER', configurationValid: false, keyConfigured: false, ready: false };
-  const keyName = rawProvider === 'groq' ? 'GROQ_API_KEY' : rawProvider === 'gemini' ? 'GEMINI_API_KEY' : rawProvider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'OPENAI_API_KEY';
-  const keyConfigured = Boolean(env[keyName]?.trim());
-  const modelValue = rawProvider === 'groq' ? env.GROQ_MODEL : rawProvider === 'gemini' ? env.GEMINI_MODEL : rawProvider === 'openrouter' ? env.OPENROUTER_MODEL : env.OPENAI_MODEL;
+  const keyConfigured = Boolean(env.OPENROUTER_API_KEY?.trim());
+  const modelValue = env.OPENROUTER_MODEL;
   if (!modelValue?.trim()) return { provider: rawProvider, model: null, configurationStatus: 'MISSING_MODEL', configurationValid: false, keyConfigured, ready: false };
   const model = modelValue.trim();
   if (!isValidProviderModel(rawProvider, model)) return { provider: rawProvider, model: null, configurationStatus: 'INVALID_MODEL', configurationValid: false, keyConfigured, ready: false };
@@ -107,7 +88,7 @@ function isSafeOpenRouterBaseUrl(value: string): boolean {
 /** Called once after the backend has loaded and validated its environment. */
 export function initializeEffectiveProviderConfiguration(env: ProviderEnvironment = process.env): EffectiveProviderConfiguration {
   effectiveProviderSnapshot = resolveEffectiveProviderConfiguration(env);
-  providerCredentialSnapshot = providerCredentialPresence(env);
+  providerCredentialSnapshot = Boolean(env.OPENROUTER_API_KEY?.trim());
   return effectiveProviderSnapshot;
 }
 
@@ -115,9 +96,9 @@ export function initializeEffectiveProviderConfiguration(env: ProviderEnvironmen
 export function getEffectiveProviderConfiguration(): EffectiveProviderConfiguration {
   return effectiveProviderSnapshot ?? initializeEffectiveProviderConfiguration();
 }
-function getProviderCredentialPresence(): Record<ConversationProvider, boolean> {
+function getProviderCredentialPresence(): boolean {
   if (!providerCredentialSnapshot) initializeEffectiveProviderConfiguration();
-  return providerCredentialSnapshot ?? providerCredentialPresence({});
+  return providerCredentialSnapshot ?? false;
 }
 export const isTransientProviderFailure = (error: unknown) => {
   if (!(error instanceof HttpException)) return false;
@@ -133,8 +114,6 @@ function boundedRetryAfterSeconds(value: string | null, now = Date.now()): numbe
   return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 3600) : undefined;
 }
 
-const isGroqGptOss = (provider: ConversationProvider, model: string) => provider === 'groq' && /^openai\/gpt-oss-(?:20b|120b)$/i.test(model.trim());
-
 type Diagnostic = Pick<ConversationProviderRequest, 'requestId' | 'organizationId' | 'assistantId' | 'stage' | 'attemptIndex'>;
 type ProviderAdapter = { readonly provider: ConversationProvider; complete(request: ConversationProviderRequest, apiKey: string): Promise<ConversationProviderResult> };
 type NormalizedProviderOutput = { text: string; finishReason: string; responseShape: 'valid' | 'empty' | 'malformed'; toolCalls?: readonly ConversationToolCall[]; usage?: ConversationProviderResult['usage']; safetyBlocked?: boolean };
@@ -142,44 +121,6 @@ type UnknownRecord = Record<string, unknown>;
 const asRecord = (value: unknown): UnknownRecord | null => typeof value === 'object' && value !== null && !Array.isArray(value) ? value as UnknownRecord : null;
 const isTokenCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const isTimeoutAbortReason = (reason: unknown): boolean => typeof reason === 'object' && reason !== null && 'name' in reason && reason.name === 'TimeoutError';
-const SAFE_GOOGLE_ERROR_STATUSES = new Set(['INVALID_ARGUMENT', 'UNAUTHENTICATED', 'PERMISSION_DENIED', 'NOT_FOUND', 'RESOURCE_EXHAUSTED', 'FAILED_PRECONDITION', 'INTERNAL', 'UNAVAILABLE', 'DEADLINE_EXCEEDED']);
-
-/** Extract only documented enum-like fields; never retain or log Google's free-form error message. */
-async function safeGeminiErrorMetadata(response: Response): Promise<{ providerStatus?: string; providerReason?: string }> {
-  if (!response.body) return {};
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let text = '';
-  let bytes = 0;
-  try {
-    while (bytes < 8192) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      const remaining = 8192 - bytes;
-      const chunk = value.subarray(0, remaining);
-      bytes += chunk.byteLength;
-      text += decoder.decode(chunk, { stream: true });
-      if (chunk.byteLength < value.byteLength) break;
-    }
-    await reader.cancel();
-  } catch {
-    // Provider diagnostics are optional and must never replace the HTTP failure.
-  } finally {
-    reader.releaseLock();
-  }
-  try {
-    const payload = asRecord(JSON.parse(text));
-    const error = asRecord(payload?.error);
-    const providerStatus = typeof error?.status === 'string' && SAFE_GOOGLE_ERROR_STATUSES.has(error.status) ? error.status : undefined;
-    const details = Array.isArray(error?.details) ? error.details : [];
-    const info = details.map(asRecord).find((detail) => detail?.['@type'] === 'type.googleapis.com/google.rpc.ErrorInfo');
-    const reason = typeof info?.reason === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(info.reason) ? info.reason : undefined;
-    return { ...(providerStatus ? { providerStatus } : {}), ...(reason ? { providerReason: reason } : {}) };
-  } catch {
-    return {};
-  }
-}
-
 /** Inspect only a bounded, known schema rejection signal; never return provider prose. */
 async function isStructuredOutputRejected(response: Response): Promise<boolean> {
   if (!response.body) return false;
@@ -247,11 +188,9 @@ abstract class BaseProviderAdapter implements ProviderAdapter {
       throw new BadGatewayException({ code, message: 'The selected AI provider request could not be completed.' });
     }
     if (!response.ok) {
-      let providerError: { providerStatus?: string; providerReason?: string } = {};
       const structuredOutputRejected = this.provider === 'openrouter' && request.responseFormat === 'json_object'
         && (response.status === 400 || response.status === 422) && await isStructuredOutputRejected(response);
-      if (this.provider === 'gemini') providerError = await safeGeminiErrorMetadata(response);
-      else if (!structuredOutputRejected && response.body) {
+      if (!structuredOutputRejected && response.body) {
         void response.body.cancel().catch(() => {
           // Keep the classified customer-safe HTTP failure if cleanup races.
         });
@@ -265,7 +204,7 @@ abstract class BaseProviderAdapter implements ProviderAdapter {
           : status === 402 ? 'PLAYGROUND_PROVIDER_PAYMENT_REQUIRED'
             : status === 400 || status === 422 ? 'PLAYGROUND_PROVIDER_REQUEST_INVALID'
               : status >= 500 ? 'PLAYGROUND_PROVIDER_TEMPORARILY_UNAVAILABLE' : 'PLAYGROUND_PROVIDER_REQUEST_FAILED';
-      this.logFailure(request, diagnostic, category, status, startedAt, undefined, providerError);
+      this.logFailure(request, diagnostic, category, status, startedAt);
       if (category === 'PLAYGROUND_PROVIDER_STRUCTURED_OUTPUT_UNSUPPORTED') throw new BadGatewayException({ code: category, message: 'The selected OpenRouter model rejected JSON response mode. Retrying this interpretation once with server-validated prompt-only JSON.' });
       if (category === 'PLAYGROUND_PROVIDER_RATE_LIMITED') throw new HttpException({ code: category, message: retryAfterSeconds ? `The selected AI provider is rate limiting requests. Retry after ${retryAfterSeconds} seconds.` : 'The selected AI provider is rate limiting requests. Try again shortly.', ...(retryAfterSeconds ? { retryAfterSeconds } : {}) }, HttpStatus.TOO_MANY_REQUESTS);
       if (category === 'PLAYGROUND_PROVIDER_PAYMENT_REQUIRED') throw new HttpException({ code: category, message: 'The selected AI provider account requires credits or billing attention.' }, HttpStatus.PAYMENT_REQUIRED);
@@ -294,6 +233,21 @@ abstract class BaseProviderAdapter implements ProviderAdapter {
       throw new BadGatewayException({ code: 'PLAYGROUND_PROVIDER_INVALID_RESPONSE', message: 'The selected AI provider returned an invalid response. Try again.' });
     }
     const normalized = this.normalize(payload);
+    // This is deliberately before safety, shape, truncation and application validation.
+    // The callback is diagnostic-only and must never affect the customer response.
+    try {
+      const root = asRecord(payload);
+      const choices = Array.isArray(root?.choices) ? root.choices : [];
+      const message = asRecord(asRecord(choices[0])?.message);
+      const rawContent = message?.content;
+      let content: string | null = null;
+      if (typeof rawContent === 'string') content = rawContent;
+      else if (Array.isArray(rawContent)) content = rawContent.flatMap((part) => {
+        const row = asRecord(part);
+        return row?.type === 'text' && typeof row.text === 'string' ? [row.text] : [];
+      }).join('');
+      request.onModelOutputReceived?.({ content, ...(message?.tool_calls !== undefined ? { toolCalls: message.tool_calls } : {}), finishReason: typeof asRecord(choices[0])?.finish_reason === 'string' ? String(asRecord(choices[0])?.finish_reason) : null, ...(normalized.usage ? { usage: normalized.usage } : {}), responseStatus: response.status });
+    } catch { /* Diagnostics must never change provider behavior. */ }
     if (normalized.safetyBlocked) {
       this.logFailure(request, diagnostic, 'PLAYGROUND_PROVIDER_SAFETY_BLOCKED', response.status, startedAt, { choicesPresent: true, usableContentPresent: false, finishReasonCategory: 'safety_blocked' });
       throw new BadGatewayException({ code: 'PLAYGROUND_PROVIDER_SAFETY_BLOCKED', message: 'The selected provider blocked this response under its safety policy. Review the request and try again.' });
@@ -343,18 +297,13 @@ abstract class BaseProviderAdapter implements ProviderAdapter {
     const choices = Array.isArray(root?.choices) ? root.choices : Array.isArray(root?.candidates) ? root.candidates : [];
     const first = asRecord(choices[0]);
     const message = asRecord(first?.message);
-    const geminiContent = asRecord(first?.content);
-    const rawContent = message && 'content' in message ? message.content : geminiContent?.parts;
+    const rawContent = message?.content;
     const contentType = rawContent === null || rawContent === undefined ? 'nullish'
       : Array.isArray(rawContent) ? 'array'
         : typeof rawContent === 'string' ? 'string'
           : typeof rawContent;
-    const geminiParts = Array.isArray(geminiContent?.parts) ? geminiContent.parts : [];
     const responseContentLength = typeof rawContent === 'string' ? rawContent.length : Array.isArray(rawContent) ? rawContent.length : null;
-    const toolCallPresent = Boolean(
-      Array.isArray(message?.tool_calls) && message.tool_calls.length
-      || geminiParts.some((part) => { const item = asRecord(part); return Boolean(asRecord(item?.functionCall)); }),
-    );
+    const toolCallPresent = Boolean(Array.isArray(message?.tool_calls) && message.tool_calls.length);
     return {
       choiceCount: choices.length,
       responseContentType: contentType,
@@ -366,31 +315,27 @@ abstract class BaseProviderAdapter implements ProviderAdapter {
     };
   }
 
-  protected logFailure(request: ConversationProviderRequest, diagnostic: Diagnostic, code: string, status: number | undefined, startedAt: number, shape?: { choicesPresent: boolean; usableContentPresent: boolean; finishReasonCategory: string; choiceCount?: number; responseContentType?: string; responseContentLength?: number | null; normalizedTextLength?: number; toolCallPresent?: boolean; normalizationOutcome?: string; usage?: ConversationProviderResult['usage'] }, providerError?: { providerStatus?: string; providerReason?: string }) {
+  protected logFailure(request: ConversationProviderRequest, diagnostic: Diagnostic, code: string, status: number | undefined, startedAt: number, shape?: { choicesPresent: boolean; usableContentPresent: boolean; finishReasonCategory: string; choiceCount?: number; responseContentType?: string; responseContentLength?: number | null; normalizedTextLength?: number; toolCallPresent?: boolean; normalizationOutcome?: string; usage?: ConversationProviderResult['usage'] }) {
     const model = isValidProviderModel(this.provider, request.model) ? request.model.trim() : 'invalid_model';
     const outcome = code === 'PLAYGROUND_REQUEST_CANCELLED' ? 'CANCELLED' : code === 'PLAYGROUND_PROVIDER_TIMEOUT' ? 'TIMED_OUT' : 'FAILED';
-    this.logger.warn(JSON.stringify({ event: 'conversation_provider_failure', ...diagnostic, provider: this.provider, model, outcome, code, ...(status ? { status } : {}), ...(shape ?? {}), ...(providerError ?? {}), durationMs: Date.now() - startedAt }));
+    this.logger.warn(JSON.stringify({ event: 'conversation_provider_failure', ...diagnostic, provider: this.provider, model, outcome, code, ...(status ? { status } : {}), ...(shape ?? {}), durationMs: Date.now() - startedAt }));
   }
   private hasCandidate(payload: unknown) {
     const root = asRecord(payload);
-    return Array.isArray(root?.choices) ? root.choices.length > 0 : Array.isArray(root?.candidates) && root.candidates.length > 0;
+    return Array.isArray(root?.choices) && root.choices.length > 0;
   }
 }
 
-export class OpenAICompatibleAdapter extends BaseProviderAdapter {
-  constructor(readonly provider: 'groq' | 'openai' | 'openrouter') { super(); }
+export class OpenRouterProviderAdapter extends BaseProviderAdapter {
+  readonly provider = 'openrouter' as const;
   protected endpoint(_model: string) {
-    if (this.provider === 'groq') return 'https://api.groq.com/openai/v1/chat/completions';
-    if (this.provider === 'openai') return 'https://api.openai.com/v1/chat/completions';
     const base = process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_OPENROUTER_BASE_URL;
     if (!isSafeOpenRouterBaseUrl(base)) throw new ServiceUnavailableException({ code: 'OPENROUTER_BASE_URL_INVALID', message: 'OpenRouter base URL must use the official HTTPS API origin.' });
     return `${base.replace(/\/$/, '')}/chat/completions`;
   }
   protected headers(apiKey: string) { return { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }; }
   protected body(request: ConversationProviderRequest) {
-    return { model: request.model, messages: request.messages, ...(this.provider === 'openrouter' ? {} : { temperature: 0.2 }),
-      ...(this.provider === 'groq' ? { max_completion_tokens: request.maxCompletionTokens } : { max_tokens: request.maxCompletionTokens }),
-      ...(isGroqGptOss(this.provider, request.model) ? { reasoning_effort: 'low', include_reasoning: false } : {}),
+    return { model: request.model, messages: request.messages, max_tokens: request.maxCompletionTokens,
       ...(request.responseFormat === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
       ...(request.tools?.length ? { tools: request.tools.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters, strict: true } })), tool_choice: 'auto', parallel_tool_calls: false } : {}),
     };
@@ -441,101 +386,11 @@ export class OpenAICompatibleAdapter extends BaseProviderAdapter {
   }
 }
 
-export class GeminiProviderAdapter extends BaseProviderAdapter {
-  readonly provider = 'gemini' as const;
-  protected endpoint(model: string) { return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`; }
-  protected headers(apiKey: string) { return { 'x-goog-api-key': apiKey, 'content-type': 'application/json' }; }
-  protected body(request: ConversationProviderRequest) {
-    const systemInstruction = request.messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n\n');
-    const schema = (value: unknown): unknown => {
-      const record = asRecord(value);
-      if (!record) return value;
-      const type = typeof record.type === 'string' ? record.type.toUpperCase() : undefined;
-      const properties = asRecord(record.properties);
-      return {
-        ...(type ? { type } : {}),
-        ...(properties ? { properties: Object.fromEntries(Object.entries(properties).map(([key, property]) => [key, schema(property)])) } : {}),
-        ...(Array.isArray(record.required) ? { required: record.required.filter((item): item is string => typeof item === 'string') } : {}),
-        ...(record.items ? { items: schema(record.items) } : {}),
-        ...(typeof record.description === 'string' ? { description: record.description } : {}),
-        ...(Array.isArray(record.enum) ? { enum: record.enum } : {}),
-      };
-    };
-    const contents = request.messages.filter((message) => message.role !== 'system').map((message) => {
-      if (message.role === 'tool') {
-        let response: unknown;
-        try { response = JSON.parse(message.content); } catch { response = { error: 'invalid_tool_result' }; }
-        return { role: 'user', parts: [{ functionResponse: { name: message.name, id: message.tool_call_id, response: asRecord(response) ?? { result: response } } }] };
-      }
-      const toolCalls = message.role === 'assistant' ? message.tool_calls ?? [] : [];
-      const parts: Array<Record<string, unknown>> = [];
-      if (message.content) parts.push({ text: message.content });
-      for (const call of toolCalls) {
-        let args: unknown;
-        try { args = JSON.parse(call.function.arguments); } catch { args = {}; }
-        parts.push({ functionCall: { id: call.id, name: call.function.name, args: asRecord(args) ?? {} } });
-      }
-      return { role: message.role === 'assistant' ? 'model' : 'user', parts };
-    });
-    return {
-      ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}),
-      contents,
-      ...(request.tools?.length ? { tools: [{ functionDeclarations: request.tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: schema(tool.parameters) })) }] } : {}),
-      generationConfig: {
-        maxOutputTokens: request.maxCompletionTokens,
-        ...(request.responseFormat === 'json_object' ? { responseMimeType: 'application/json' } : {}),
-        ...(/^gemini-3\./i.test(request.model) ? { thinkingConfig: { thinkingLevel: request.reasoningEffort || 'low', includeThoughts: false } } : {}),
-      },
-    };
-  }
-  protected normalize(payload: unknown): NormalizedProviderOutput {
-    const value = asRecord(payload);
-    if (!value) return { text: '', finishReason: 'unknown', responseShape: 'malformed' };
-    const feedback = asRecord(value.promptFeedback);
-    const blockReason = feedback?.blockReason;
-    const candidates = value.candidates;
-    const candidateList = Array.isArray(candidates) ? candidates : null;
-    const candidate = candidateList?.length ? asRecord(candidateList[0]) : null;
-    const content = asRecord(candidate?.content);
-    const parts = content?.parts;
-    const reason = candidate?.finishReason;
-    const safetyBlocked = ['SAFETY', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'RECITATION'].includes(String(reason))
-      || (typeof blockReason === 'string' && blockReason !== 'BLOCK_REASON_UNSPECIFIED');
-    const finishReason = safetyBlocked ? 'safety_blocked' : reason === 'STOP' ? 'stop' : reason === 'MAX_TOKENS' ? 'length' : typeof reason === 'string' ? 'other' : 'unknown';
-    if (candidateList === null) return { text: '', finishReason, responseShape: 'malformed', safetyBlocked };
-    if (!candidateList.length) return { text: '', finishReason, responseShape: safetyBlocked ? 'valid' : 'empty', safetyBlocked };
-    if (!candidate || !content || !Array.isArray(parts)) return { text: '', finishReason, responseShape: 'malformed', safetyBlocked };
-    const textParts: string[] = [];
-    const toolCalls: ConversationToolCall[] = [];
-    for (const partValue of parts) {
-      const part = asRecord(partValue);
-      if (!part) return { text: '', finishReason, responseShape: 'malformed', safetyBlocked };
-      if (part.thought !== true && typeof part.text === 'string') textParts.push(part.text);
-      const functionCall = asRecord(part.functionCall);
-      if (functionCall) {
-        if (typeof functionCall.name !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/u.test(functionCall.name) || (functionCall.id !== undefined && (typeof functionCall.id !== 'string' || functionCall.id.length > 128))) return { text: '', finishReason: 'unknown', responseShape: 'malformed', safetyBlocked };
-        const args = asRecord(functionCall.args);
-        if (!args) return { text: '', finishReason: 'unknown', responseShape: 'malformed', safetyBlocked };
-        toolCalls.push({ id: typeof functionCall.id === 'string' ? functionCall.id : `gemini-call-${toolCalls.length + 1}`, name: functionCall.name, arguments: JSON.stringify(args) });
-      }
-    }
-    const text = textParts.join('');
-    const usageValue = asRecord(value.usageMetadata);
-    const input = usageValue?.promptTokenCount; const output = usageValue?.candidatesTokenCount; const total = usageValue?.totalTokenCount;
-    const normalizedUsage = { ...(isTokenCount(input) ? { inputTokens: input } : {}), ...(isTokenCount(output) ? { outputTokens: output } : {}), ...(isTokenCount(total) ? { totalTokens: total } : {}) };
-    const usage = Object.keys(normalizedUsage).length ? normalizedUsage : undefined;
-    return { text, finishReason: toolCalls.length ? 'tool_calls' : finishReason, responseShape: text.trim() || toolCalls.length ? 'valid' : 'empty', ...(toolCalls.length ? { toolCalls } : {}), ...(usage ? { usage } : {}), safetyBlocked };
-  }
-}
-
 /** Server-side provider router. Keys and provider wire formats never leave this boundary. */
 @Injectable()
 export class ConversationProviderService {
   private readonly adapters: Record<ConversationProvider, ProviderAdapter> = {
-    groq: new OpenAICompatibleAdapter('groq'),
-    gemini: new GeminiProviderAdapter(),
-    openai: new OpenAICompatibleAdapter('openai'),
-    openrouter: new OpenAICompatibleAdapter('openrouter'),
+    openrouter: new OpenRouterProviderAdapter(),
   };
   private readonly openRouterModels = new Map<string, { expiresAt: number; metadata: OpenRouterModelMetadata }>();
 
@@ -551,8 +406,6 @@ export class ConversationProviderService {
   }
 
   supportsJsonObjectMode(provider: ConversationProvider, model: string): boolean {
-    if (provider === 'gemini') return true;
-    if (provider === 'openai') return /^gpt-(?:4o|4\.1|5)(?:[-.][A-Za-z0-9]+)*$/i.test(model.trim());
     if (provider !== 'openrouter') return false;
     const cached = this.openRouterModels.get(model);
     return Boolean(cached && cached.expiresAt > Date.now() && cached.metadata.available && cached.metadata.supportedParameters?.includes('response_format'));
@@ -563,17 +416,16 @@ export class ConversationProviderService {
       throw new BadGatewayException({ code: 'PLAYGROUND_PROVIDER_TOOLING_UNSUPPORTED', message: 'The selected AI model route does not support tool calling.' });
     }
     const adapter = this.adapters[request.provider];
-    const apiKey = request.provider === 'groq' ? process.env.GROQ_API_KEY?.trim() : request.provider === 'gemini' ? process.env.GEMINI_API_KEY?.trim() : request.provider === 'openrouter' ? process.env.OPENROUTER_API_KEY?.trim() : process.env.OPENAI_API_KEY?.trim();
+    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) {
       const code = 'PLAYGROUND_PROVIDER_KEY_MISSING';
-      const providerName = request.provider === 'gemini' ? 'Google Gemini' : request.provider === 'groq' ? 'Groq' : request.provider === 'openrouter' ? 'OpenRouter' : 'OpenAI';
-      throw new ServiceUnavailableException({ code, message: `${providerName} is not configured. Add its API key to the backend environment and restart the backend.` });
+      throw new ServiceUnavailableException({ code, message: 'OpenRouter is not configured. Add OPENROUTER_API_KEY to the backend environment and restart the backend.' });
     }
     return adapter.complete(request, apiKey);
   }
 
   isProviderConfigured(provider: ConversationProvider): boolean {
-    return getProviderCredentialPresence()[provider];
+    return provider === 'openrouter' && getProviderCredentialPresence();
   }
 
   /** Explicit manager-triggered validation. Never invoked in the visitor request path. */
@@ -641,10 +493,7 @@ export class ConversationProviderService {
       ready: effective.ready,
     };
     return {
-      groq: { keyConfigured: credentials.groq, status: credentials.groq ? 'READY_FOR_TESTING' : 'MISSING_API_KEY' },
-      gemini: { keyConfigured: credentials.gemini, status: credentials.gemini ? 'READY_FOR_TESTING' : 'MISSING_API_KEY', supportedModels: [...SUPPORTED_GEMINI_MODELS] },
-      openai: { keyConfigured: credentials.openai, status: credentials.openai ? 'READY_FOR_TESTING' : 'MISSING_API_KEY' },
-      openrouter: { keyConfigured: credentials.openrouter, status: credentials.openrouter ? 'READY_FOR_TESTING' : 'MISSING_API_KEY', modelValidation: effective.provider === 'openrouter' && effective.model ? (() => { const cached = this.openRouterModels.get(effective.model); return cached && cached.expiresAt > Date.now() ? cached.metadata : { model: effective.model, available: null, toolCalling: 'UNVERIFIED' as const }; })() : null },
+      openrouter: { keyConfigured: credentials, status: credentials ? 'READY_FOR_TESTING' : 'MISSING_API_KEY', modelValidation: effective.provider === 'openrouter' && effective.model ? (() => { const cached = this.openRouterModels.get(effective.model); return cached && cached.expiresAt > Date.now() ? cached.metadata : { model: effective.model, available: null, toolCalling: 'UNVERIFIED' as const }; })() : null },
       effective: publicEffective,
     } as const;
   }

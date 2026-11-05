@@ -246,6 +246,7 @@ model User {
   createdKnowledgeSources KnowledgeSource[]    @relation("KnowledgeSourceCreator")
   createdKnowledgeBases KnowledgeBase[]       @relation("KnowledgeBaseCreator")
   playgroundConversations PlaygroundConversation[]
+  playgroundDiagnosticTraces PlaygroundDiagnosticTrace[]
   platformOperator PlatformOperator?
   platformAuditEvents PlatformAuditEvent[]
   assignedInboxConversations SupportConversation[] @relation("InboxAssignee")
@@ -363,6 +364,7 @@ model Organization {
   connectorDataPermissions ConnectorDataPermission[]
   assistantConnectorDataPermissions AssistantConnectorDataPermission[]
   playgroundConversations PlaygroundConversation[]
+  playgroundDiagnosticTraces PlaygroundDiagnosticTrace[]
   integrationConnections IntegrationConnection[]
   commerceProducts CommerceProduct[]
   commerceOrders CommerceOrder[]
@@ -472,6 +474,7 @@ model Chatbot {
   knowledgeBases      AssistantKnowledgeBase[]
   businessRules       AssistantBusinessRule[]
   playgroundConversations PlaygroundConversation[]
+  playgroundDiagnosticTraces PlaygroundDiagnosticTrace[]
   supportConversations SupportConversation[]
   tickets Ticket[]
   ticketDrafts TicketDraft[]
@@ -514,13 +517,42 @@ model PlaygroundConversation {
   createdAt          DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
   expiresAt          DateTime             @db.Timestamptz(3)
+  diagnosticCaptureEnabled Boolean        @default(false)
   organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   assistant          Chatbot              @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
   user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   messages           PlaygroundMessage[]
+  diagnosticTraces   PlaygroundDiagnosticTrace[]
 
   @@unique([id, organizationId])
   @@index([organizationId, assistantId, userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model PlaygroundDiagnosticTrace {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  assistantId    String   @db.Uuid
+  conversationId String?  @db.Uuid
+  supportConversationId String? @db.Uuid
+  channel        String   @default("PLAYGROUND") @db.VarChar(32)
+  userId         String   @db.Uuid
+  requestId      String   @unique @db.Uuid
+  clientTurnId   String?  @db.Uuid
+  attempt        Int      @default(1)
+  outcome        String   @db.VarChar(16)
+  payload        Json     @db.JsonB
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assistant      Chatbot @relation(fields: [assistantId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  conversation   PlaygroundConversation? @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  supportConversation SupportConversation? @relation(fields: [supportConversationId, organizationId], references: [id, organizationId], onDelete: Cascade, onUpdate: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([conversationId, clientTurnId, attempt])
+  @@unique([supportConversationId, clientTurnId, attempt])
+  @@index([organizationId, conversationId, createdAt])
   @@index([expiresAt])
 }
 
@@ -1249,6 +1281,7 @@ model SupportConversation {
   lastCustomerMessageAt DateTime? @db.Timestamptz(3)
   lastMessagePreview String? @db.VarChar(500)
   messageCount       Int @default(0)
+  diagnosticCaptureEnabled Boolean @default(false)
   activeRequestId    String? @db.Uuid
   activeRequestUntil DateTime? @db.Timestamptz(3)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
@@ -1261,6 +1294,7 @@ model SupportConversation {
   tickets Ticket[]
   ticketDrafts TicketDraft[]
   widgetSessions WidgetSession[]
+  diagnosticTraces PlaygroundDiagnosticTrace[]
 
   @@unique([organizationId, assistantId, externalSessionHash])
   @@unique([id, organizationId])

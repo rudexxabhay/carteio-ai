@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Activity, BookOpen, Bot, ChevronDown, CircleAlert, Copy, LoaderCircle, Plus, Send, Settings2, UserRound, X } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Activity, BookOpen, Bot, ChevronDown, CircleAlert, Copy, LoaderCircle, Plus, Send, UserRound, X } from 'lucide-react';
 import { ApiError } from '../../services/api/client';
-import { GEMINI_MODEL_OPTIONS_FALLBACK, geminiModelOptionLabel, getPlaygroundConversation, getProviderConfigurationStatus, sendPlaygroundMessage, updateAssistant, type Assistant, type AssistantProvider, type ProviderConfigurationStatus, type ProviderRoute, type PlaygroundChatReply, type ResponseProvenance } from '../../services/api/assistants';
+import { getPlaygroundConversation, getProviderConfigurationStatus, sendPlaygroundMessage, type Assistant, type AssistantProvider, type ProviderConfigurationStatus, type PlaygroundChatReply, type ResponseProvenance } from '../../services/api/assistants';
 import { formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundHistory, PLAYGROUND_EXPORT_MAX_BYTES, PLAYGROUND_EXPORT_MAX_MESSAGES } from './playground-copy';
 import { resolveKnowledgeEvidenceMetadata, type KnowledgeEvidenceMetadataItem } from '../../services/api/knowledge';
 import './playground-chat.css';
@@ -14,10 +14,6 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
   const [messages, setMessages] = useState<Message[]>(() => assistant.greetingMessage ? [{ id: crypto.randomUUID(), role: 'assistant', content: assistant.greetingMessage, provenance: 'SYSTEM_RESPONSE', createdAt: Date.now() }] : []);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const [settingsError, setSettingsError] = useState('');
-  const [savingProvider, setSavingProvider] = useState(false);
-  const [providerSaved, setProviderSaved] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [captureResponseDebug, setCaptureResponseDebug] = useState(false);
   useEffect(() => {
     const expiries = messages.flatMap((message) => message.diagnostics?.protectedResponseDebug ? [Date.parse(message.diagnostics.protectedResponseDebug.expiresAt)] : []).filter(Number.isFinite);
@@ -29,8 +25,6 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     })), Math.max(0, Math.min(...expiries) - Date.now()));
     return () => clearTimeout(timer);
   }, [messages]);
-  const [providerMode, setProviderMode] = useState<'MANUAL' | 'AUTO_FALLBACK'>(assistant.providerMode || 'MANUAL');
-  const [fallbacks, setFallbacks] = useState<ProviderRoute[]>(assistant.providerFallbacks || []);
   const [providerStatus, setProviderStatus] = useState<ProviderConfigurationStatus | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<'trace' | 'sources' | 'diagnostics'>('trace');
@@ -55,7 +49,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     setSessionId(nextSessionId);
     setSessionNeedsNewChat(false);
     setMessages(assistant.greetingMessage ? [{ id: crypto.randomUUID(), role: 'assistant', content: assistant.greetingMessage, provenance: 'SYSTEM_RESPONSE', createdAt: Date.now() }] : []);
-    setProviderMode(assistant.providerMode || 'MANUAL'); setFallbacks(assistant.providerFallbacks || []); setText(''); setSettingsError(''); setSending(false); lock.current = false;
+    setText(''); setSending(false); lock.current = false;
     const loadGeneration = generation.current;
     if (!nextSessionId) return;
     const controller = new AbortController();
@@ -91,21 +85,6 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
   useEffect(() => { const input = composer.current; if (!input) return; input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 144)}px`; }, [text]);
   useEffect(() => () => { generation.current++; request.current?.abort(); copyToken.current++; copyRequest.current?.abort(); }, []);
 
-  async function saveProvider(event: FormEvent) {
-    event.preventDefault();
-    if (!manager || savingProvider || sending) return;
-    setSavingProvider(true); setSettingsError(''); setProviderSaved(false);
-    try {
-      const routesChanged = JSON.stringify(assistant.providerFallbacks || []) !== JSON.stringify(fallbacks);
-      const changed = assistant.providerMode !== providerMode || routesChanged;
-      const updated = await updateAssistant(workspaceSlug, assistant.id, { providerMode, providerFallbacks: fallbacks });
-      onAssistantUpdated(updated);
-      setProviderSaved(true);
-      setSettingsOpen(false);
-      if (changed) setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'notice', content: 'Routing settings saved. The server-managed provider and model remain unchanged.', createdAt: Date.now() }]);
-    } catch (cause) { setSettingsError(messageFor(cause)); }
-    finally { setSavingProvider(false); }
-  }
 
   async function send(raw: string, retryMessageId?: string, retryTurnId?: string) {
     const message = raw.trim();
@@ -213,18 +192,17 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); const value = text; if (value.trim() && !sending) { setText(''); void send(value); } }
   }
 
-  const providerName = (value: string) => value === 'gemini' ? 'Google Gemini' : value === 'groq' ? 'Groq' : value === 'openrouter' ? 'OpenRouter' : 'OpenAI';
+  const providerName = (_value: string) => 'OpenRouter';
   const effective = providerStatus?.effective || assistant.effectiveProviderConfiguration;
   const providerLabel = effective?.provider && effective.model ? `${providerName(effective.provider)} · ${effective.model}` : `Provider unavailable · ${effective?.status || 'configuration unavailable'}`;
-  const supportedGeminiModels = providerStatus?.gemini.supportedModels ?? [...GEMINI_MODEL_OPTIONS_FALLBACK];
   const selectedTraceMessage = messages.find((item) => item.id === selectedTraceMessageId);
   const selectedTrace = selectedTraceMessage?.diagnostics;
   return <section className="playground-panel" aria-label="AI Playground">
     {manager && <label><input type="checkbox" checked={captureResponseDebug} onChange={(event) => setCaptureResponseDebug(event.target.checked)}/> Capture Response Debugger for subsequent turns (requires server development opt-in; expires after five minutes)</label>}
-    <header className="playground-header"><div className="playground-avatar" aria-hidden="true"><Bot size={18}/></div><div className="playground-title"><h2 id="playground-dialog-title">{assistant.name}</h2><span><i/> Testing</span></div><span className="playground-provider-label" title={providerLabel}>{providerLabel}</span><button type="button" className="playground-icon-button" onClick={() => void copyHistory()} aria-label="Copy entire conversation" title="Copy entire conversation" disabled={!manager || sending || !messages.length}><Copy size={17}/></button><button type="button" className="playground-icon-button" onClick={() => startNewChat()} aria-label="Start a new chat" title="New chat"><Plus size={18}/></button>{manager && <button type="button" className="playground-icon-button" aria-label="Provider settings" aria-expanded={settingsOpen} aria-controls="playground-settings-panel" title="Settings" onClick={() => { setSettingsError(''); setSettingsOpen((open) => !open); }}><Settings2 size={17}/></button>}{manager && <button type="button" className={`playground-icon-button ${inspectorOpen ? 'is-active' : ''}`} aria-label={inspectorOpen ? 'Close Developer Inspector' : 'Open Developer Inspector'} aria-expanded={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)} title="Developer Inspector"><Activity size={17}/></button>}<button type="button" className="playground-icon-button playground-close" onClick={onClose} aria-label="Close Playground" title="Close"><X size={18}/></button></header>
+    <header className="playground-header"><div className="playground-avatar" aria-hidden="true"><Bot size={18}/></div><div className="playground-title"><h2 id="playground-dialog-title">{assistant.name}</h2><span><i/> Testing</span></div><span className="playground-provider-label" title={providerLabel}>{providerLabel}</span><button type="button" className="playground-icon-button" onClick={() => void copyHistory()} aria-label="Copy entire conversation" title="Copy entire conversation" disabled={!manager || sending || !messages.length}><Copy size={17}/></button><button type="button" className="playground-icon-button" onClick={() => startNewChat()} aria-label="Start a new chat" title="New chat"><Plus size={18}/></button>{manager && <button type="button" className={`playground-icon-button ${inspectorOpen ? 'is-active' : ''}`} aria-label={inspectorOpen ? 'Close Developer Inspector' : 'Open Developer Inspector'} aria-expanded={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)} title="Developer Inspector"><Activity size={17}/></button>}<button type="button" className="playground-icon-button playground-close" onClick={onClose} aria-label="Close Playground" title="Close"><X size={18}/></button></header>
     <div className={`playground-workspace ${inspectorOpen ? 'has-inspector' : ''}`}>
     <div className="playground-chat-column">
-    {manager && settingsOpen && <form id="playground-settings-panel" className="playground-provider" onSubmit={(event) => void saveProvider(event)}><div className="playground-settings-heading"><div><strong>Provider routing</strong><small>Credentials are configured on the backend and never sent to the browser.</small></div><button type="button" className="playground-icon-button" aria-label="Close provider settings" onClick={() => setSettingsOpen(false)}><X size={16}/></button></div><div className="playground-settings-fields"><div className="workspace-field"><strong>Provider and model</strong><span>{providerLabel}</span><small>Provider and model are managed by the server configuration.</small></div><div className="workspace-field"><strong>Credential readiness</strong><span>{effective?.ready ? "Backend key configured · connectivity not verified" : effective?.status || "Status unavailable"}</span></div></div><label className="workspace-field playground-mode-field">Selection mode<select value={providerMode} disabled={savingProvider || sending} onChange={(event) => setProviderMode(event.target.value as 'MANUAL' | 'AUTO_FALLBACK')}><option value="MANUAL">Manual · configured provider only</option><option value="AUTO_FALLBACK">Automatic fallback · transient failures only</option></select></label>{providerMode === 'AUTO_FALLBACK' && <div className="playground-fallback-fields"><p>Fallback sends authorized chat content to the approved providers below if the primary has a transient outage.</p>{[0, 1].map((index) => <div className="playground-fallback-route" key={index}><label className="workspace-field">Backup {index + 1}<select value={fallbacks[index]?.provider || ''} disabled={savingProvider || sending} onChange={(event) => { const next = [...fallbacks]; const choice = event.target.value as AssistantProvider | ''; if (!choice) next.splice(index, 1); else next[index] = { provider: choice, model: choice === 'gemini' ? supportedGeminiModels[0] || '' : '' }; setFallbacks(next.filter((route) => route.provider)); }}><option value="">No backup</option><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option></select></label><label className="workspace-field">Backup model{fallbacks[index]?.provider === 'gemini' ? <select value={fallbacks[index]?.model || ''} disabled={savingProvider || sending} onChange={(event) => setFallbacks((current) => current.map((route, position) => position === index ? { ...route, model: event.target.value } : route))}><option value="">Select model</option>{supportedGeminiModels.map((item) => <option key={item} value={item}>{geminiModelOptionLabel(item)}</option>)}</select> : <input value={fallbacks[index]?.model || ''} disabled={!fallbacks[index]?.provider || savingProvider || sending} onChange={(event) => setFallbacks((current) => current.map((route, position) => position === index ? { ...route, model: event.target.value } : route))} placeholder="Model identifier"/>}</label></div>)}<small>Only OWNER/ADMIN settings can enable this. Credentials for each backup must be configured on the backend.</small></div>}<button type="submit" className="button button-primary" disabled={savingProvider || sending}>{savingProvider ? "Saving…" : "Save routing settings"}</button>{settingsError && <p className="playground-settings-error" role="alert">{settingsError}</p>}{providerSaved && <p className="playground-provider-saved" role="status">Routing settings saved.</p>}</form>}
+
     {assistant.status !== 'active' && <p className="playground-disclaimer" role="status">Activate this assistant before running a customer conversation test.</p>}
     <div className="playground-copy-toolbar"><button type="button" className="playground-copy-history" onClick={() => void copyHistory()} disabled={!manager || sending || !messages.length}><Copy size={13}/> Copy History</button>{manager && messages.some((message) => message.diagnostics) && <button type="button" className="playground-copy-history" onClick={() => void copyHistory(true)} disabled={sending}><Activity size={13}/> Copy Chat + Diagnostics</button>}{copyFeedback && <span role={/^(?:Could not|Clipboard access failed)/.test(copyFeedback) ? 'alert' : 'status'}>{copyFeedback}</span>}</div>
     <div className="playground-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text">
@@ -236,7 +214,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     <form className="playground-composer" onSubmit={(event) => { event.preventDefault(); const value = text; if (value.trim() && !sending) { setText(''); void send(value); } }}><label className="sr-only" htmlFor="playground-message-input">Message your assistant</label><textarea id="playground-message-input" ref={composer} dir="auto" rows={1} maxLength={2000} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onInputKeyDown} placeholder={sessionNeedsNewChat ? 'Start a new chat to continue…' : configured ? 'Type a customer message…' : 'Provider configuration is unavailable…'} disabled={!manager || assistant.status !== 'active' || sending || !configured || sessionNeedsNewChat} aria-describedby="playground-composer-help"/><span id="playground-composer-help" className="sr-only">Press Enter to send. Press Shift and Enter for a new line.</span><button type="submit" aria-label="Send message" className="button button-primary" disabled={!manager || assistant.status !== 'active' || sending || !text.trim() || !configured || sessionNeedsNewChat}><Send size={17}/></button></form>
     <p className="playground-composer-hint">Enter to send <span>·</span> Shift+Enter for a new line</p>
     </div>
-    {inspectorOpen && manager && <aside className="playground-inspector" aria-label="Developer Inspector"><div className="playground-inspector-heading"><div><strong>Developer Inspector</strong><small>{selectedTrace ? `Trace ${selectedTrace.traceId.slice(0, 8)} · ${selectedTrace.totalLatencyMs} ms` : 'Select a response to inspect its execution'}</small></div><button type="button" className="playground-icon-button" aria-label="Close Developer Inspector" onClick={() => setInspectorOpen(false)}><X size={16}/></button></div><nav className="playground-inspector-tabs" aria-label="Inspector tabs">{([['trace', 'Execution Trace'], ['sources', 'Sources'], ['diagnostics', 'Diagnostics']] as const).map(([key, label]) => <button key={key} type="button" className={inspectorTab === key ? 'active' : ''} onClick={() => setInspectorTab(key)}>{label}</button>)}</nav><div className="playground-inspector-content" key={`${inspectorTab}:${selectedTraceMessageId || 'none'}`}>
+    {inspectorOpen && manager && <aside className="playground-inspector" aria-label="Developer Inspector"><div className="playground-inspector-heading"><div><strong>Developer Inspector</strong><span className="playground-inspector-dev-note" title="This temporary testing panel will be removed once the feature is stable.">Development only · temporary</span><small>{selectedTrace ? `Trace ${selectedTrace.traceId.slice(0, 8)} · ${selectedTrace.totalLatencyMs} ms` : 'Select a response to inspect its execution'}</small></div><button type="button" className="playground-icon-button" aria-label="Close Developer Inspector" onClick={() => setInspectorOpen(false)}><X size={16}/></button></div><nav className="playground-inspector-tabs" aria-label="Inspector tabs">{([['trace', 'Execution Trace'], ['sources', 'Sources'], ['diagnostics', 'Diagnostics']] as const).map(([key, label]) => <button key={key} type="button" className={inspectorTab === key ? 'active' : ''} onClick={() => setInspectorTab(key)}>{label}</button>)}</nav><div className="playground-inspector-content" key={`${inspectorTab}:${selectedTraceMessageId || 'none'}`}>
       {inspectorTab === 'trace' && <TraceInspector trace={selectedTrace} message={selectedTraceMessage} sending={sending} onCopy={() => selectedTrace && void navigator.clipboard?.writeText(selectedTrace.traceId)}/>}
       {inspectorTab === 'sources' && <SourcesInspector workspaceSlug={workspaceSlug} assistantId={assistant.id} trace={selectedTrace} message={selectedTraceMessage}/>}
       {inspectorTab === 'diagnostics' && <DiagnosticsInspector trace={selectedTrace} message={selectedTraceMessage}/>}

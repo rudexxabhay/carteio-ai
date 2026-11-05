@@ -6,10 +6,25 @@ import type { ConversationMemoryDiagnostic } from './conversation-diagnostics';
 const MAX_EVENTS = 100;
 const MAX_EVIDENCE = 12;
 const MAX_EXCERPT = 320;
+const MAX_PROTECTED_LEGACY_RECORDS = 12;
+const MAX_PROTECTED_RECORD_CHARS = 8_000;
+const MAX_PROTECTED_MODEL_CALLS = 20;
+const MAX_PROTECTED_MODEL_CALL_BYTES = 300_000;
+function protectedTraceRetentionMs(env: NodeJS.ProcessEnv = process.env): number {
+  const configured = Number.parseInt(env.PLAYGROUND_TRACE_RETENTION_HOURS ?? '24', 10);
+  const hours = Number.isFinite(configured) ? Math.max(1, Math.min(24, configured)) : 24;
+  return hours * 60 * 60_000;
+}
+const CORE_EXECUTION_STAGES = ['SECURITY_CONTEXT', 'SESSION_RESOLUTION', 'CONVERSATION_CONTEXT', 'PROVIDER_SELECTION', 'INTENT_INTERPRETATION', 'INTERPRETATION_RECOVERY', 'LANGUAGE_DETECTION', 'BUSINESS_SCOPE_DECISION', 'PRODUCT_ROUTING_DECISION', 'KNOWLEDGE_RETRIEVAL', 'KNOWLEDGE_SOURCE_ELIGIBILITY', 'RETRIEVAL_QUERY_PLANNING', 'LEXICAL_RETRIEVAL', 'SEMANTIC_RETRIEVAL', 'EVIDENCE_SELECTION', 'EVIDENCE_REVALIDATED', 'SHOPIFY_AUTHORIZATION', 'LLM_TOOL_REQUEST', 'TOOL_AUTHORIZATION', 'TOOL_EXECUTION', 'ANSWER_PLANNING', 'ANSWER_GENERATION', 'OUT_OF_SCOPE_REDIRECT_GENERATION', 'OUT_OF_SCOPE_REDIRECT_VALIDATION', 'RESPONSE_VERIFICATION', 'GROUNDING_VALIDATED', 'TURN_PERSISTENCE', 'RESPONSE_PERSISTED', 'FINAL_RESPONSE', 'SESSION_RELEASE'] as const;
 type RetrievalQueryDiagnostic = Readonly<{ query: string; origin: 'CUSTOMER_MESSAGE' | 'CONTEXT_RESOLUTION' | 'LLM_INTERPRETATION' | 'LLM_ANSWER_ASPECT' | 'LLM_RECOVERY' | 'LLM_TOOL_RETRY' | 'BACKEND_FALLBACK'; languageTarget: string | null }>;
 const SAFE_RETRIEVAL_CODES = new Set(['EMPTY_QUERY', 'NO_AUTHORIZED_SOURCES', 'NO_ELIGIBLE_SOURCES', 'INDEX_NOT_READY', 'EMPTY_INDEX', 'NO_LEXICAL_MATCH', 'NO_SEMANTIC_MATCH', 'SEMANTIC_RETRIEVAL_UNAVAILABLE', 'SEMANTIC_NOT_CONFIGURED', 'SEMANTIC_INDEX_DISABLED', 'SEMANTIC_QUERY_FAILED', 'SEMANTIC_INDEX_STATUS_UNAVAILABLE', 'SEMANTIC_INDEX_NOT_READY', 'EMBEDDING_INDEX_PROFILE_MISMATCH', 'EMBEDDING_INDEX_VECTOR_COUNT_MISMATCH', 'EMBEDDING_INDEX_DIMENSION_MISMATCH', 'ALL_CANDIDATES_FILTERED', 'NO_SELECTED_EVIDENCE', 'REVALIDATION_FAILED', 'EMBEDDING_PROFILE_UNSUPPORTED', 'EMBEDDING_PROVIDER_BASE_URL_INVALID', 'EMBEDDING_PROVIDER_NOT_CONFIGURED', 'EMBEDDING_PROVIDER_UNAVAILABLE', 'EMBEDDING_PROVIDER_RETRYABLE', 'EMBEDDING_PROVIDER_AUTH_FAILED', 'EMBEDDING_PROVIDER_FORBIDDEN', 'EMBEDDING_PROVIDER_PAYMENT_REQUIRED', 'EMBEDDING_PROVIDER_MODEL_OR_ENDPOINT_NOT_FOUND', 'EMBEDDING_PROVIDER_REQUEST_FAILED', 'EMBEDDING_PROVIDER_INVALID_RESPONSE', 'EMBEDDING_DIMENSION_MISMATCH', 'NO_COMPATIBLE_SEMANTIC_INDEX', 'NO_AUTHORIZED_EVIDENCE_SELECTED']);
 const SAFE_REASONS = new Set(['committed_turn_replay', 'deterministic_social_intent', 'assistant_capability_response', 'invalid_interpretation_output', 'json_object_missing', 'malformed_json', 'invalid_root_shape', 'unsupported_interpretation_field', 'invalid_language_descriptor', 'invalid_retrieval_queries', 'invalid_answer_aspects', 'invalid_answer_aspect', 'duplicate_answer_aspect', 'invalid_language_style', 'invalid_intent', 'invalid_clarification_flag', 'invalid_semantic_interpretation', 'semantic_root_shape', 'semantic_unsupported_field', 'semantic_language_shape', 'language_object_shape', 'language_fields_shape', 'language_primary_shape', 'language_scripts_shape', 'language_mixed_shape', 'language_certainty_shape', 'language_signals_shape', 'semantic_response_language_shape', 'semantic_social_classification', 'semantic_information_need', 'semantic_scope_assessment', 'semantic_intents_shape', 'semantic_intent_shape', 'semantic_duplicate_intent', 'semantic_entities_shape', 'semantic_entity_shape', 'semantic_entity_not_exact_message_span', 'semantic_uncertainty_shape', 'semantic_uncertainty_conflict', 'invalid_scope_split', 'invalid_continuity_act', 'invalid_ticket_intent', 'invalid_reference_turn_offset', 'stage_output_rejected', 'original_query_fallback', 'recovered_retrieval_queries', 'recovery_completed', 'recovery_failed', 'product_intent_detected', 'product_intent_not_detected', 'product_intent_recovered', 'product_tool_not_supported', 'no_product_evidence_returned', 'no_public_evidence', 'no_generated_answer', 'eligible_sources_found', 'no_eligible_sources', 'knowledge_service_unavailable', 'no_selected_evidence', 'evidence_revalidation_rejected', 'provider_call_failed', 'citation_validation_rejected', 'session_release_failed', 'citation_valid_references', 'citation_missing_reference', 'citation_unknown_reference', 'citation_missing_conflict_sources', 'citation_missing_answer_aspect_reference', 'citation_unsupported_numeric_claim', 'citation_unsupported_url', 'citation_unsupported_merchant_fact', 'citation_unsupported_structured_product_fact', 'citation_evidence_authorization_changed', 'citation_retry_generation_failed', 'citation_validated', 'json_mode_unverified_or_unsupported', 'provider_rejected_json_mode', 'json_mode_provider_rejection_prompt_only_retry', 'validated_deterministic_social_recovery', 'standalone_social_recovery', 'INDEX_NOT_READY', 'EMPTY_INDEX', 'NO_LEXICAL_MATCH', 'NO_SEMANTIC_MATCH', 'SEMANTIC_RETRIEVAL_UNAVAILABLE', 'SEMANTIC_NOT_CONFIGURED', 'SEMANTIC_QUERY_FAILED', 'SEMANTIC_INDEX_STATUS_UNAVAILABLE', 'SEMANTIC_INDEX_NOT_READY', 'EMBEDDING_INDEX_PROFILE_MISMATCH', 'EMBEDDING_INDEX_DIMENSION_MISMATCH', 'ALL_CANDIDATES_FILTERED', 'NO_SELECTED_EVIDENCE', 'REVALIDATION_FAILED', 'NO_ELIGIBLE_SOURCES', 'EMPTY_QUERY', 'ai_planned_search', 'invalid_arguments', 'query_results_reused', 'tool_budget_exhausted', 'tool_not_authorized', 'tool_timeout', 'KNOWLEDGE_DATABASE_MISSING_COLUMN', 'KNOWLEDGE_DATABASE_MISSING_TABLE', 'KNOWLEDGE_SEARCH_FAILED', 'SHOPIFY_PRODUCT_SEARCH_FAILED', 'empty_limitation_response', 'limitation_response_too_long', 'citation_marker_in_limitation_response', 'url_in_limitation_response', 'unsupported_personal_status_claim', 'PERSONAL_RECORD_REQUIRES_LIVE_CONNECTOR']);
 type StoredEvent = Omit<ConversationStageEvent, 'stage'> & { stage: ConversationStageEvent['stage'] | 'FINAL_RESPONSE' | 'TOOL_EXECUTION'; sequence: number; at: string; tool?: string };
+SAFE_REASONS.add('tool_not_required');
+SAFE_REASONS.add('no_retrieval_required');
+SAFE_REASONS.add('semantic_recovery_not_required');
+SAFE_REASONS.add('validated_semantics_recovered');
+SAFE_REASONS.add('session_lease_busy');
 export type PlaygroundTraceEvent = StoredEvent & { traceId: string; operation: string; status: string };
 type CitationDiagnostic = Readonly<{ accepted: boolean; reason: string; evidenceCount: number; citedReferences: readonly string[]; unknownReferences: readonly string[]; attempts: number; expectedFormat: string; recognizedReferenceCount: number; suppliedReferences: readonly string[]; initialDraftNonempty: boolean; recoveryUsedVerifiedEvidence: boolean }>;
 type ProviderCallDiagnostic = Readonly<{ callIndex: number; purpose: NonNullable<ConversationStageEvent['purpose']>; provider: string; model: string; outcome: 'COMPLETED' | 'FAILED'; requestDispatched: boolean; durationMs: number; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; retryReason?: NonNullable<ConversationStageEvent['retryReason']>; errorCategory?: ConversationStageEvent['errorCategory'] }>;
@@ -37,12 +52,36 @@ export type PlaygroundDiagnosticEvidence = {
   cited: boolean;
 };
 
+export function playgroundRawDebugEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const appEnvironment = (env.APP_ENV ?? '').trim().toLowerCase();
+  const localDevelopment = env.NODE_ENV === 'development'
+    && (!appEnvironment || ['local', 'development'].includes(appEnvironment));
+  const explicitlyConfiguredUat = appEnvironment === 'uat'
+    && env.PLAYGROUND_DIAGNOSTICS_ENABLED === 'true';
+  return (localDevelopment || explicitlyConfiguredUat)
+    && env.PLAYGROUND_RAW_DEBUG_ENABLED === 'true';
+}
+
+export function redactProtectedDebugText(input: string): string {
+  return input
+    .replace(/(\b(?:authorization|x-api-key|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)\b\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/giu, '$1[REDACTED]')
+    .replace(/\b(?:Bearer\s+)[A-Za-z0-9._~+\/-]+=*/giu, 'Bearer [REDACTED]')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|sk_[A-Za-z0-9_-]{12,}|gsk_[A-Za-z0-9_-]{12,}|AIza[A-Za-z0-9_-]{20,})\b/gu, '[REDACTED]')
+    .replace(/\b(https?:\/\/)[^\s/@:]+:[^\s/@]+@/giu, '$1[REDACTED]@')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, '[REDACTED_EMAIL]')
+    .replace(/(?:\+?\d[\d ().-]{7,}\d)/gu, '[REDACTED_PHONE]')
+    .replace(/("(?:[^"\\]*(?:password|token|secret|api[_-]?key|authorization|email|phone|address|customer(?:name|id)?|contact|recipient|fullName|firstName|lastName|order(?:number|id)|shippingAddress|billingAddress)[^"\\]*)"\s*:\s*)(?:"(?:[^"\\]|\\.)*"|[^,}\]\s]+)/giu, '$1"[REDACTED]"');
+}
+
 export class PlaygroundTraceRecorder {
   readonly traceId: string;
+  private readonly channel: 'PLAYGROUND' | 'PUBLIC_WIDGET';
   readonly startedAt = new Date().toISOString();
   private readonly events: StoredEvent[] = [];
+  private readonly observedStageOutcomes = new Map<string, Set<ConversationStageEvent['outcome']>>();
+  private eventOverflowed = false;
   private readonly evidence = new Map<string, PlaygroundDiagnosticEvidence>();
-  private readonly captureExpiresAt = Date.now() + 5 * 60_000;
+  private readonly captureExpiresAt = Date.now() + protectedTraceRetentionMs();
   private readonly developmentChecks: Array<{ stage: 'INTERPRETATION' | 'INITIAL_DRAFT' | 'RECOVERY_DRAFT' | 'NUMERIC_CHECK' | 'COMMERCE_READINESS'; metadata: Record<string, string | number | boolean> }> = [];
   private sequence = 0;
   private organizationId: string | null = null;
@@ -62,21 +101,93 @@ export class PlaygroundTraceRecorder {
   private configuredFacts: { kind: 'support_contacts'; configured: boolean; selected: boolean; revalidated: boolean; supplied: boolean; excludedReason?: string; sourceId?: string } | null = null;
   private commerceReadiness: { connectionStatus: string; scopeSnapshotStatus: string; relevantGrantedScopes: string[]; assistantEnabledOperations: string[]; eligible: boolean; reason: string | null; recordCount: number; dataSource: 'NORMALIZED_SNAPSHOT' } | null = null;
 
-  constructor(traceId: string, private readonly onEvent?: (event: PlaygroundTraceEvent) => void, private readonly developmentCapture = false) { this.traceId = traceId; }
+  constructor(traceId: string, private readonly onEvent?: (event: PlaygroundTraceEvent) => void, private readonly developmentCapture = false, channel: 'PLAYGROUND' | 'PUBLIC_WIDGET' = 'PLAYGROUND') { this.traceId = traceId; this.channel = channel; }
 
   private readonly protectedRecords: Array<{ stage: string; attemptId: string; at: string; text: string; truncated: boolean }> = [];
+  private readonly protectedModelCalls: Array<Record<string, unknown>> = [];
+  private readonly protectedCallIndexes = new Map<number, number>();
+  private protectedModelCallBytes = 0;
+  private omittedProtectedModelCalls = 0;
   get protectedResponseCaptureEnabled(): boolean {
-    return this.developmentCapture && process.env.NODE_ENV === 'development' && process.env.PLAYGROUND_RAW_DEBUG_ENABLED === 'true' && Date.now() < this.captureExpiresAt;
+    return this.developmentCapture && playgroundRawDebugEnabled() && Date.now() < this.captureExpiresAt;
   }
   captureProtectedResponse(stage: 'PROVIDER_CONTENT' | 'VALIDATOR_INPUT' | 'VERIFICATION_DETAILS' | 'FINAL_DELIVERY', attemptId: string, text: string): void {
-    if (!this.developmentCapture || process.env.NODE_ENV !== 'development' || process.env.PLAYGROUND_RAW_DEBUG_ENABLED !== 'true'
-      || Date.now() >= this.captureExpiresAt || this.protectedRecords.length >= 24) return;
-    this.protectedRecords.push({ stage, attemptId, at: new Date().toISOString(), text: text.slice(0, 16000), truncated: text.length > 16000 });
+    if (!this.developmentCapture || !playgroundRawDebugEnabled()
+      || Date.now() >= this.captureExpiresAt || this.protectedRecords.length >= MAX_PROTECTED_LEGACY_RECORDS) return;
+    const sanitized = redactProtectedDebugText(text);
+    this.protectedRecords.push({ stage, attemptId, at: new Date().toISOString(), text: sanitized.slice(0, MAX_PROTECTED_RECORD_CHARS), truncated: sanitized.length > MAX_PROTECTED_RECORD_CHARS || text.length > MAX_PROTECTED_RECORD_CHARS });
+  }
+
+  /** Bounded, server-only model output capture. System prompt bodies are intentionally omitted. */
+  captureProtectedModelOutput(input: { requestId: string; callIndex: number; purpose: string; provider: string; model: string; stage: string; requestDispatched: boolean; requestMessages: readonly { role: string; content?: string; tool_call_id?: string; name?: string; tool_calls?: unknown }[]; requestOptions?: { maxCompletionTokens: number; responseFormat?: string; toolNames?: string[] }; content: string | null; toolCalls?: unknown; finishReason: string | null; responseStatus?: number; errorCategory?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; durationMs: number; outcome: string }): void {
+    if (!this.protectedResponseCaptureEnabled || !Number.isSafeInteger(input.callIndex) || input.callIndex < 1) return;
+    if (this.protectedModelCalls.length >= MAX_PROTECTED_MODEL_CALLS) { this.omittedProtectedModelCalls += 1; return; }
+    const truncate = (value: string, max: number) => { const sanitized = redactProtectedDebugText(value); return { value: sanitized.slice(0, max), truncated: sanitized.length > max || value.length > max }; };
+    const requestMessages = input.requestMessages.slice(-8).map((message) => message.role === 'system'
+      ? { role: 'system', content: '[SYSTEM PROMPT CONTENT OMITTED FROM DIAGNOSTIC]' }
+      : { role: message.role.slice(0, 16), ...(typeof message.content === 'string' ? { content: truncate(message.content, 750) } : {}), ...(message.tool_call_id ? { toolCallId: message.tool_call_id.slice(0, 128) } : {}), ...(message.name ? { name: message.name.slice(0, 64) } : {}), ...(message.tool_calls !== undefined ? { toolCalls: truncate(JSON.stringify(message.tool_calls), 1200) } : {}) });
+    const raw = input.content === null ? null : truncate(input.content, 8000);
+    const safeCall: Record<string, unknown> = {
+      requestId: input.requestId.slice(0, 128), traceId: this.traceId, providerCallIndex: input.callIndex,
+      purpose: input.purpose.slice(0, 64), provider: input.provider.slice(0, 32), model: input.model.slice(0, 120), stage: input.stage.slice(0, 64),
+      requestedInput: { representation: 'SANITIZED_DIAGNOSTIC; system prompt contents omitted; sensitive values redacted; bounded', requestDispatched: input.requestDispatched, omittedEarlierMessageCount: Math.max(0, input.requestMessages.length - requestMessages.length), perMessageContentCap: 750, ...(input.requestOptions ? { generation: { ...input.requestOptions, ...(input.requestOptions.toolNames?.length ? { toolSchemas: 'OMITTED_SERVER_AUTHORED_SCHEMA' } : {}) } } : {}), messages: requestMessages },
+      response: { representation: raw?.truncated ? 'SANITIZED_AND_TRUNCATED_PROVIDER_CONTENT' : 'SANITIZED_PROVIDER_CONTENT', status: input.content === null ? input.toolCalls !== undefined ? 'TOOL_CALL_RESPONSE' : 'NO_RESPONSE_CONTENT' : input.content.length === 0 ? input.toolCalls !== undefined ? 'TOOL_CALL_RESPONSE' : 'EMPTY_RESPONSE' : 'RECEIVED', content: raw?.value ?? null, responseLength: input.content?.length ?? 0, truncated: raw?.truncated ?? false, ...(input.toolCalls !== undefined ? { toolCalls: truncate(JSON.stringify(input.toolCalls), 5000) } : {}), finishReason: input.finishReason, ...(input.responseStatus ? { httpStatus: input.responseStatus } : {}), ...(input.usage ? { usage: input.usage } : {}), durationMs: Math.max(0, Math.min(60_000, Math.round(input.durationMs))) },
+      outcome: input.outcome.slice(0, 64), ...(input.errorCategory && /^[A-Z0-9_-]{1,64}$/u.test(input.errorCategory) ? { errorCategory: input.errorCategory } : {}), at: new Date().toISOString(),
+    };
+    const recordBytes = Buffer.byteLength(JSON.stringify(safeCall), 'utf8');
+    if (this.protectedModelCallBytes + recordBytes > MAX_PROTECTED_MODEL_CALL_BYTES) { this.omittedProtectedModelCalls += 1; return; }
+    this.protectedCallIndexes.set(input.callIndex, this.protectedModelCalls.length);
+    this.protectedModelCalls.push(safeCall);
+    this.protectedModelCallBytes += recordBytes;
+    this.emitProtectedModelEvent('PROTECTED_MODEL_OUTPUT', safeCall);
+  }
+
+  updateProtectedModelValidation(callIndex: number, input: { parsing?: unknown; validation?: unknown; backendDecision?: unknown; repair?: unknown }): void {
+    if (!this.protectedResponseCaptureEnabled) return;
+    const index = this.protectedCallIndexes.get(callIndex);
+    if (index === undefined) return;
+    const target = this.protectedModelCalls[index];
+    if (!target) return;
+    const bounded = (value: unknown) => {
+      try {
+        const serialized = redactProtectedDebugText(JSON.stringify(value));
+        if (serialized.length > 4_000) return { representation: 'SANITIZED_VALIDATION_JSON', truncated: true, serializedPrefix: serialized.slice(0, 4_000), originalLength: serialized.length };
+        return JSON.parse(serialized);
+      }
+      catch { return { unavailable: true, reason: 'diagnostic_value_not_serializable_or_exceeded_bound' }; }
+    };
+    const previous = { parsing: target.parsing, validation: target.validation, backendDecision: target.backendDecision, repair: target.repair };
+    if (input.parsing !== undefined) target.parsing = bounded(input.parsing);
+    if (input.validation !== undefined) {
+      target.validation = bounded(input.validation);
+      if (typeof input.validation === 'object' && input.validation !== null && 'accepted' in input.validation && (input.validation as { accepted?: unknown }).accepted === false) target.outcome = 'VALIDATION_REJECTED';
+    }
+    if (input.backendDecision !== undefined) target.backendDecision = bounded(input.backendDecision);
+    if (input.repair !== undefined) target.repair = bounded(input.repair);
+    const nextTotalBytes = this.protectedModelCalls.reduce((total, call) => total + Buffer.byteLength(JSON.stringify(call), 'utf8'), 0);
+    if (nextTotalBytes > MAX_PROTECTED_MODEL_CALL_BYTES) {
+      Object.assign(target, previous);
+      const firstIncomingKey = (['parsing', 'validation', 'backendDecision', 'repair'] as const).find((key) => input[key] !== undefined && previous[key] === undefined);
+      if (firstIncomingKey) {
+        target[firstIncomingKey] = { unavailable: true, reason: 'diagnostic_payload_size_limit' };
+        const boundedTotal = this.protectedModelCalls.reduce((total, call) => total + Buffer.byteLength(JSON.stringify(call), 'utf8'), 0);
+        if (boundedTotal > MAX_PROTECTED_MODEL_CALL_BYTES) delete target[firstIncomingKey];
+      }
+    }
+    this.protectedModelCallBytes = this.protectedModelCalls.reduce((total, call) => total + Buffer.byteLength(JSON.stringify(call), 'utf8'), 0);
+    this.emitProtectedModelEvent('PROTECTED_MODEL_VALIDATION', { requestId: target.requestId, traceId: target.traceId, providerCallIndex: target.providerCallIndex, validation: target.validation, parsing: target.parsing, backendDecision: target.backendDecision, repair: target.repair });
+  }
+
+  private emitProtectedModelEvent(operation: 'PROTECTED_MODEL_OUTPUT' | 'PROTECTED_MODEL_VALIDATION', output: Record<string, unknown>): void {
+    if (this.channel !== 'PLAYGROUND' || !this.onEvent || !this.protectedResponseCaptureEnabled) return;
+    const rejected = operation === 'PROTECTED_MODEL_VALIDATION' && typeof output.validation === 'object' && output.validation !== null && 'accepted' in output.validation && (output.validation as { accepted?: unknown }).accepted === false;
+    const event = { requestId: this.traceId, traceId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: this.channel, stage: 'PROVIDER_RESPONSE_RECEIVED' as const, sequence: ++this.sequence, at: new Date().toISOString(), startedAt: this.startedAt, operation, status: rejected ? 'failed' : 'completed', outcome: rejected ? 'FAILED' as const : 'COMPLETED' as const, durationMs: 0, output };
+    try { this.onEvent(event); } catch { /* Protected live diagnostics must not alter the request. */ }
   }
 
   /** Metadata only: arbitrary model/customer text cannot be safely redacted. */
   captureDevelopmentMetadata(stage: 'INTERPRETATION' | 'INITIAL_DRAFT' | 'RECOVERY_DRAFT' | 'NUMERIC_CHECK' | 'COMMERCE_READINESS', input: Readonly<Record<string, unknown>>): void {
-    if (!this.developmentCapture || process.env.NODE_ENV !== 'development' || Date.now() >= this.captureExpiresAt || this.developmentChecks.length >= 16) return;
+    if (!this.developmentCapture || Date.now() >= this.captureExpiresAt || this.developmentChecks.length >= 16) return;
     if (stage === 'NUMERIC_CHECK' && this.developmentChecks.filter((check) => check.stage === stage).length >= 12) return;
     const counts = ['answerAspectsCount', 'semanticIntentCount', 'characterCount', 'citedReferenceCount', 'sourceCandidateCount', 'unsupportedClaimCount', 'verifiedFactCount', 'retrievalQueriesCount', 'historyMessageCount', 'usableRetrievalQueriesCount', 'durationMs'];
     const flags = ['jsonObjectPresent', 'rootObject', 'jsonParsed', 'legacyIntentAccepted', 'accepted', 'recovered', 'matched', 'semanticValid', 'repairAttempted', 'structuredOutputRequested', 'historyHasAssistant', 'historyEndsWithAssistant', 'semanticsPresent', 'retrievalQueriesPresent', 'answerAspectsPresent', 'productScopeReady', 'catalogCapabilityReady', 'commerceExecutionSkipped'];
@@ -139,14 +250,16 @@ export class PlaygroundTraceRecorder {
   }
 
   record(event: ConversationStageEvent): void {
-    if (this.events.length >= MAX_EVENTS) return;
+    const observed = this.observedStageOutcomes.get(event.stage) ?? new Set<ConversationStageEvent['outcome']>();
+    observed.add(event.outcome); this.observedStageOutcomes.set(event.stage, observed);
+    if (this.events.length >= MAX_EVENTS) { this.eventOverflowed = true; return; }
     if (event.organizationId) this.organizationId = event.organizationId.slice(0, 64);
     if (event.assistantId) this.assistantId = event.assistantId.slice(0, 64);
     const safeModel = event.model && event.model.length <= 120 && !/(?:gsk_|sk-|sk_|AIza|sess-|Bearer\s)/i.test(event.model) ? event.model : undefined;
     this.events.push({
       sequence: ++this.sequence,
       requestId: event.requestId.slice(0, 64), organizationId: event.organizationId?.slice(0, 64) ?? null,
-      assistantId: event.assistantId.slice(0, 64), channel: 'PLAYGROUND', stage: event.stage,
+      assistantId: event.assistantId.slice(0, 64), channel: this.channel, stage: event.stage,
       outcome: event.outcome, durationMs: Math.max(0, Math.min(60_000, Math.round(event.durationMs))),
       ...(event.errorCategory ? { errorCategory: event.errorCategory } : {}),
       ...(event.purpose ? { purpose: event.purpose } : {}),
@@ -155,6 +268,10 @@ export class PlaygroundTraceRecorder {
       ...(event.retryReason ? { retryReason: event.retryReason } : {}),
       ...(event.usage ? { usage: boundedUsage(event.usage) } : {}),
       ...(event.reason && SAFE_REASONS.has(event.reason) ? { reason: event.reason } : {}),
+      startedAt: typeof event.startedAt === 'string' && !Number.isNaN(Date.parse(event.startedAt)) ? event.startedAt : new Date().toISOString(),
+      ...(event.input ? { input: boundDiagnosticJson(event.input) as Record<string, unknown> } : {}),
+      ...(event.output ? { output: boundDiagnosticJson(event.output) as Record<string, unknown> } : {}),
+      ...(event.decision ? { decision: boundDiagnosticJson(event.decision) as Record<string, unknown> } : {}),
       ...(event.provider ? { provider: event.provider } : {}), ...(safeModel ? { model: safeModel } : {}),
       ...(Number.isFinite(event.resultCount) ? { resultCount: Math.max(0, Math.min(10_000, Math.round(event.resultCount!))) } : {}),
       ...(Number.isFinite(event.evidenceCount) ? { evidenceCount: Math.max(0, Math.min(MAX_EVIDENCE, Math.round(event.evidenceCount!))) } : {}),
@@ -170,7 +287,7 @@ export class PlaygroundTraceRecorder {
     const model = input.model.length <= 120 && !/(?:gsk_|sk-|sk_|AIza|sess-|Bearer\s)/i.test(input.model) ? input.model : 'unavailable';
     const call = { ...input, model, durationMs: Math.max(0, Math.min(60_000, Math.round(input.durationMs))), ...(input.usage ? { usage: boundedUsage(input.usage) } : {}) };
     this.providerCalls.push(call);
-    this.record({ requestId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: 'PLAYGROUND', stage: 'PROVIDER_RESPONSE_RECEIVED', outcome: input.outcome === 'COMPLETED' ? 'COMPLETED' : 'FAILED', durationMs: call.durationMs, provider: input.provider as ConversationStageEvent['provider'], model, purpose: input.purpose, callIndex: input.callIndex, requestDispatched: input.requestDispatched, ...(input.retryReason ? { retryReason: input.retryReason } : {}), ...(input.usage ? { usage: boundedUsage(input.usage) } : {}), ...(input.errorCategory ? { errorCategory: input.errorCategory } : {}), ...(input.outcome === 'FAILED' ? { reason: 'provider_call_failed' } : {}) });
+    this.record({ requestId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: this.channel, stage: 'PROVIDER_RESPONSE_RECEIVED', outcome: input.outcome === 'COMPLETED' ? 'COMPLETED' : 'FAILED', durationMs: call.durationMs, provider: input.provider as ConversationStageEvent['provider'], model, purpose: input.purpose, callIndex: input.callIndex, requestDispatched: input.requestDispatched, ...(input.retryReason ? { retryReason: input.retryReason } : {}), ...(input.usage ? { usage: boundedUsage(input.usage) } : {}), ...(input.errorCategory ? { errorCategory: input.errorCategory } : {}), ...(input.outcome === 'FAILED' ? { reason: 'provider_call_failed' } : {}) });
   }
 
   setAssistantConfiguration(input: { id: string; version: string | null; sections: Record<string, string | null> }): void {
@@ -221,7 +338,11 @@ export class PlaygroundTraceRecorder {
   }
 
   milestone(stage: ConversationStageEvent['stage'], input: { organizationId: string; assistantId: string; outcome?: ConversationStageEvent['outcome']; errorCategory?: ConversationStageEvent['errorCategory']; reason?: string; provider?: string; model?: string; resultCount?: number; evidenceCount?: number; durationMs?: number } ): void {
-    this.record({ requestId: this.traceId, organizationId: input.organizationId, assistantId: input.assistantId, channel: 'PLAYGROUND', stage, outcome: input.outcome ?? 'COMPLETED', durationMs: input.durationMs ?? 0, ...(input.errorCategory ? { errorCategory: input.errorCategory } : {}), ...(input.reason ? { reason: input.reason } : {}), ...(input.provider ? { provider: input.provider as ConversationStageEvent['provider'] } : {}), ...(input.model ? { model: input.model } : {}), ...(input.resultCount !== undefined ? { resultCount: input.resultCount } : {}), ...(input.evidenceCount !== undefined ? { evidenceCount: input.evidenceCount } : {}) });
+    const outcome = input.outcome ?? 'COMPLETED';
+    const safeReason = input.reason && SAFE_REASONS.has(input.reason) ? input.reason : undefined;
+    const decisionOwner = /SCOPE|ROUTE|SESSION|AUTHORIZATION|PROVIDER_SELECTION|ELIGIBILITY|TOOL/i.test(stage) ? 'BACKEND_ORCHESTRATOR' : undefined;
+    const output = { status: outcome, ...(safeReason ? { reason: safeReason } : {}), ...(input.errorCategory ? { errorCategory: input.errorCategory } : {}), ...(input.resultCount !== undefined ? { resultCount: input.resultCount } : {}), ...(input.evidenceCount !== undefined ? { evidenceCount: input.evidenceCount } : {}), ...(input.provider ? { provider: input.provider } : {}), ...(input.model ? { model: input.model } : {}) };
+    this.record({ requestId: this.traceId, organizationId: input.organizationId, assistantId: input.assistantId, channel: this.channel, stage, outcome, durationMs: input.durationMs ?? 0, output, ...(decisionOwner ? { decision: { decisionOwner, result: outcome, ...output } } : {}), ...(input.errorCategory ? { errorCategory: input.errorCategory } : {}), ...(safeReason ? { reason: safeReason } : {}), ...(input.provider ? { provider: input.provider as ConversationStageEvent['provider'] } : {}), ...(input.model ? { model: input.model } : {}), ...(input.resultCount !== undefined ? { resultCount: input.resultCount } : {}), ...(input.evidenceCount !== undefined ? { evidenceCount: input.evidenceCount } : {}) });
   }
 
   setRetrieval(input: { query: string | null; queryVariants?: readonly string[]; executedQueries?: readonly RetrievalQueryDiagnostic[]; mode: string; audience: 'PUBLIC_VISITOR' | 'INTERNAL_MANAGER_PREVIEW'; eligibleSourceCount: number; resultCount: number; semanticUnavailableCode?: string; queryPlanningMode?: string; customerLanguage?: string | null; sourceLanguageHintCount?: number; queryVariantCount?: number; assignedSourceCount?: number; rejectedSourceCount?: number; rejectionReasons?: Array<{ reason: string; count: number }>; indexReadySourceCount?: number; activeIndexChunkCount?: number; sourceIndexStates?: Array<{ sourceId: string; sourceVersion: number; activeGeneration: number | null; processingStatus: string; ready: boolean }>; lexicalCandidateCount?: number; semanticCandidateCount?: number; rankedCandidateCount?: number; filteredCandidateCount?: number; selectedEvidenceCount?: number; retrievalReason?: string; methodsAttempted?: string[] }): void {
@@ -318,14 +439,16 @@ export class PlaygroundTraceRecorder {
     const origins = ['CUSTOMER_MESSAGE', 'CONTEXT_RESOLUTION', 'LLM_INTERPRETATION', 'LLM_ANSWER_ASPECT', 'LLM_RECOVERY', 'LLM_TOOL_RETRY', 'BACKEND_FALLBACK'];
     const safeLanguageTarget = details.queryLanguageTarget && details.queryLanguageTarget.length <= 80 && /^[\p{L}\p{M}\p{N} .,+()/'&_-]+$/u.test(details.queryLanguageTarget) ? details.queryLanguageTarget : undefined;
     this.toolEvents.push({ tool: safeTool, outcome: safeOutcome, ...(boundedCount !== undefined ? { resultCount: boundedCount } : {}), ...(safeReason ? { reason: safeReason } : {}), ...(safeInput ? { input: safeInput } : {}), ...(details.dataSource ? { dataSource: details.dataSource } : {}), ...(durationMs !== undefined ? { durationMs } : {}), ...(details.queryOrigin && origins.includes(details.queryOrigin) ? { queryOrigin: details.queryOrigin } : {}), ...(safeLanguageTarget ? { queryLanguageTarget: safeLanguageTarget } : {}) });
-    if (this.events.length >= MAX_EVENTS) return;
     const mappedOutcome: ConversationStageEvent['outcome'] = safeOutcome === 'requested' ? 'STARTED'
       : safeOutcome === 'completed' ? 'COMPLETED'
         : safeOutcome === 'skipped' ? 'SKIPPED'
           : safeOutcome === 'timed_out' ? 'TIMED_OUT'
             : safeOutcome === 'denied' || safeOutcome === 'failed' ? 'FAILED' : 'SKIPPED';
+    const toolOutcomes = this.observedStageOutcomes.get('TOOL_EXECUTION') ?? new Set<ConversationStageEvent['outcome']>();
+    toolOutcomes.add(mappedOutcome); this.observedStageOutcomes.set('TOOL_EXECUTION', toolOutcomes);
+    if (this.events.length >= MAX_EVENTS) { this.eventOverflowed = true; return; }
     const event: StoredEvent = {
-      requestId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: 'PLAYGROUND', stage: 'TOOL_EXECUTION',
+      requestId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: this.channel, stage: 'TOOL_EXECUTION',
       outcome: mappedOutcome, durationMs: durationMs ?? 0, sequence: ++this.sequence, at: new Date().toISOString(), tool: safeTool,
       ...(boundedCount !== undefined ? { resultCount: boundedCount } : {}), ...(safeReason ? { reason: safeReason } : {}),
     };
@@ -333,7 +456,7 @@ export class PlaygroundTraceRecorder {
     this.emit(event);
   }
 
-  snapshot(result: { messageId?: string; answerOrigin?: string; provenance?: string; deliveryStatus?: string; sources?: readonly { reference?: string; type?: string }[]; retrievalMode?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }, terminal: { outcome?: ConversationStageEvent['outcome']; errorCategory?: ConversationStageEvent['errorCategory'] } = {}) {
+  snapshot(result: { messageId?: string; conversationId?: string; organizationId?: string; assistantId?: string; answerOrigin?: string; provenance?: string; deliveryStatus?: string; sources?: readonly { reference?: string; type?: string }[]; retrievalMode?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }, terminal: { outcome?: ConversationStageEvent['outcome']; errorCategory?: ConversationStageEvent['errorCategory'] } = {}) {
     const buildRevision = /^[a-f0-9]{40}$/iu.test(process.env.VERCEL_GIT_COMMIT_SHA ?? '') ? process.env.VERCEL_GIT_COMMIT_SHA : 'UNAVAILABLE';
     const cited = new Set((result.sources ?? []).map((source) => source.reference).filter((value): value is string => typeof value === 'string'));
     for (const [reference, item] of this.evidence) this.evidence.set(reference, { ...item, cited: cited.has(reference) });
@@ -350,16 +473,23 @@ export class PlaygroundTraceRecorder {
     const finishedAt = new Date().toISOString();
     const events = [...this.events];
     if (events.length < MAX_EVENTS && !events.some((event) => event.stage === 'FINAL_RESPONSE')) {
-      const finalEvent: StoredEvent = { requestId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: 'PLAYGROUND', stage: 'FINAL_RESPONSE', outcome: terminal.outcome ?? 'COMPLETED', durationMs: 0, ...(terminal.errorCategory ? { errorCategory: terminal.errorCategory } : {}), sequence: ++this.sequence, at: finishedAt };
+      const finalEvent: StoredEvent = { requestId: this.traceId, organizationId: this.organizationId, assistantId: this.assistantId, channel: this.channel, stage: 'FINAL_RESPONSE', outcome: terminal.outcome ?? 'COMPLETED', durationMs: 0, ...(terminal.errorCategory ? { errorCategory: terminal.errorCategory } : {}), sequence: ++this.sequence, at: finishedAt };
       events.push(finalEvent);
       this.emit(finalEvent);
     }
+    const stageCoverage = CORE_EXECUTION_STAGES.map((stage) => {
+      const matching = events.filter((event) => event.stage === stage || (stage === 'TOOL_EXECUTION' && event.tool));
+      const outcomes = this.observedStageOutcomes.get(stage) ?? new Set(matching.map((event) => event.outcome));
+      const terminalOutcomes = [...outcomes].filter((outcome) => outcome !== 'STARTED');
+      return { stage, status: terminalOutcomes.includes('FAILED') || terminalOutcomes.includes('CANCELLED') || terminalOutcomes.includes('TIMED_OUT') ? 'EXECUTED_FAILED' : terminalOutcomes.includes('COMPLETED') ? 'EXECUTED' : terminalOutcomes.includes('SKIPPED') ? 'SKIPPED' : outcomes.size ? 'IN_PROGRESS' : this.eventOverflowed ? 'NOT_RECORDED_LIMIT' : 'NOT_REACHED' };
+    });
     return {
-      protectedCaptureStatus: !this.developmentCapture ? 'NOT_REQUESTED_OR_DISABLED' : Date.now() >= this.captureExpiresAt ? 'EXPIRED' : !this.protectedResponseCaptureEnabled ? 'SERVER_DISABLED' : this.protectedRecords.length ? 'AVAILABLE' : 'NO_RECORDS_CAPTURED',
-      traceId: this.traceId, ...(result.messageId ? { messageId: result.messageId.slice(0, 64) } : {}), startedAt: this.startedAt, finishedAt,
-      ...(this.protectedRecords.length && Date.now() < this.captureExpiresAt ? { protectedResponseDebug: { expiresAt: new Date(this.captureExpiresAt).toISOString(), records: this.protectedRecords.map((record) => ({ ...record })) } } : {}),
+      protectedCaptureStatus: !this.developmentCapture ? 'NOT_REQUESTED_OR_DISABLED' : Date.now() >= this.captureExpiresAt ? 'EXPIRED' : !this.protectedResponseCaptureEnabled ? 'SERVER_DISABLED' : this.protectedRecords.length || this.protectedModelCalls.length || this.omittedProtectedModelCalls ? 'AVAILABLE' : 'NO_RECORDS_CAPTURED',
+      schemaVersion: 1, traceId: this.traceId, requestId: this.traceId, channel: this.channel, ...(this.organizationId ? { organizationId: this.organizationId } : result.organizationId ? { organizationId: result.organizationId.slice(0, 64) } : {}), ...(this.assistantId ? { assistantId: this.assistantId } : result.assistantId ? { assistantId: result.assistantId.slice(0, 64) } : {}), ...(result.conversationId ? { conversationId: result.conversationId.slice(0, 64) } : {}), ...(result.messageId ? { messageId: result.messageId.slice(0, 64) } : {}), startedAt: this.startedAt, finishedAt,
+      ...((this.protectedRecords.length || this.protectedModelCalls.length || this.omittedProtectedModelCalls) && Date.now() < this.captureExpiresAt ? { protectedResponseDebug: { expiresAt: new Date(this.captureExpiresAt).toISOString(), records: this.protectedRecords, modelCalls: this.protectedModelCalls, omittedModelCallCount: this.omittedProtectedModelCalls, modelCallCaptureStatus: this.omittedProtectedModelCalls ? 'CAPPED' : 'COMPLETE' } } : {}),
       ...(this.developmentCapture && Date.now() < this.captureExpiresAt ? { developmentCapture: { mode: 'METADATA_ONLY' as const, diagnosticVersion: 'interpretation-boundaries-v3', buildRevision, interpretationVersion: 'semantic-recovery-v2', expiresAt: new Date(this.captureExpiresAt).toISOString(), checks: this.developmentChecks.map((check) => ({ stage: check.stage, metadata: { ...check.metadata } })) } } : {}),
       totalLatencyMs: Math.max(0, Date.parse(finishedAt) - Date.parse(this.startedAt)),
+      stageCoverage,
       events: events.map((event) => ({ ...event, traceId: this.traceId, operation: event.tool ? 'TOOL_EXECUTION' : event.stage, status: event.outcome.toLowerCase() })),
       retrieval: { ...this.retrieval, ...(result.retrievalMode ? { responseRetrievalMode: result.retrievalMode } : {}) },
       ...(this.languageHandling ? { languageHandling: { ...this.languageHandling } } : {}),
@@ -378,6 +508,21 @@ export class PlaygroundTraceRecorder {
     try { this.onEvent?.({ ...event, traceId: this.traceId, operation: event.tool ? 'TOOL_EXECUTION' : event.stage, status: event.outcome.toLowerCase() }); }
     catch { /* A disconnected Inspector must not interrupt the authorized AI turn. */ }
   }
+}
+
+function boundDiagnosticJson(value: unknown, depth = 0): unknown {
+  if (depth > 5 || value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') return value.normalize('NFKC').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ' ').slice(0, 1_000);
+  if (Array.isArray(value)) return value.slice(0, 20).map(item => boundDiagnosticJson(item, depth + 1));
+  if (typeof value !== 'object') return undefined;
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 60)) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(key) || /(?:prompt|credential|token|secret|password|header|cookie|authorization|systeminstruction)/iu.test(key)) continue;
+    if (typeof item === 'string' && ['query','retrievalQueries'].includes(key)) result[key] = item.replace(/\b[\w.+-]+@[\w.-]+\.[A-Z]{2,}\b/giu, '[email]').replace(/(?:\+?\d[\d ().-]{6,}\d)/gu, '[number]').replace(/\b(?:gid:\/\/shopify\/[^\s"']+|#?\d{5,})\b/giu, '[id]').slice(0, 180);
+    else result[key] = boundDiagnosticJson(item, depth + 1);
+  }
+  return result;
 }
 
 function boundedUsage(usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number }) {
@@ -400,5 +545,5 @@ export function playgroundDiagnosticsEnabled(env: NodeJS.ProcessEnv = process.en
 }
 
 export function playgroundDevelopmentCaptureEnabled(optIn: unknown, env: NodeJS.ProcessEnv = process.env): boolean {
-  return optIn === true && env.NODE_ENV === 'development' && playgroundDiagnosticsEnabled(env);
+  return optIn === true && playgroundDiagnosticsEnabled(env) && playgroundRawDebugEnabled(env);
 }

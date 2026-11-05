@@ -1,4 +1,5 @@
 import { CONNECTOR_DATA_CATEGORIES, ConnectorService } from './connector.service';
+import { ShopifyConnectorAdapter } from './shopify.adapter';
 
 describe('ConnectorService tenant and verification boundaries', () => {
   const workspace = { requireAccess: jest.fn() }, registry = { catalog: jest.fn(), capabilitiesFor: jest.fn(), validateConfiguration: jest.fn(), adapter: jest.fn(), assertResourceSupport: jest.fn() }, vault = { encrypt: jest.fn(), decrypt: jest.fn() };
@@ -11,6 +12,7 @@ describe('ConnectorService tenant and verification boundaries', () => {
     jest.resetAllMocks();
     db.$queryRaw.mockResolvedValue([{ requestCount: 1 }]);
     db.$transaction.mockImplementation((callback: any) => callback(db));
+    db.connectorSyncJob.findMany.mockResolvedValue([]);
   });
   const prepareVerification = () => {
     const claimedAt = new Date('2026-10-16T12:00:00.000Z');
@@ -90,6 +92,30 @@ describe('ConnectorService tenant and verification boundaries', () => {
       if (previousScopes === undefined) delete process.env.SHOPIFY_SCOPES;
       else process.env.SHOPIFY_SCOPES = previousScopes;
     }
+  });
+
+  it('runs a live Shopify test only against the owner-authorized tenant connector and never returns credentials', async () => {
+    workspace.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    const adapter = new ShopifyConnectorAdapter({} as any, {} as any, vault as any, scopeDiscovery as any);
+    jest.spyOn(adapter, 'testRead').mockResolvedValue({ operation: 'SEARCH_LIVE_PRODUCTS', source: 'LIVE_SHOPIFY_API', httpStatus: 200, graphqlErrorCount: 0, graphqlErrors: false, durationMs: 12, resultCount: 1, data: [{ title: 'Black shoes' }] });
+    registry.adapter.mockReturnValue(adapter);
+    vault.decrypt.mockReturnValue({ accessToken: 'shopify-secret-token-should-not-return' });
+    db.connectorInstance.findFirst.mockResolvedValue({ id: 'connector-a', organizationId: 'tenant-a', connectorId: 'shopify_v1', state: 'CONNECTED', configuration: { shopDomain: 'tenant-a.myshopify.com' }, credential: { ciphertext: Buffer.from('encrypted') }, commerceConnection: { state: 'CONNECTED', grantedScopes: ['read_products'], grantedScopesVerifiedAt: new Date() } });
+
+    const result = await service.shopifyApiTest('owner-a', 'tenant-a-workspace', 'connector-a', { operation: 'SEARCH_LIVE_PRODUCTS', query: 'black shoes' });
+
+    expect(db.connectorInstance.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'connector-a', organizationId: 'tenant-a', connectorId: 'shopify_v1' } }));
+    expect(adapter.testRead).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'tenant-a', connectorInstanceId: 'connector-a' }), expect.any(Object), { accessToken: 'shopify-secret-token-should-not-return' }, expect.objectContaining({ operation: 'SEARCH_LIVE_PRODUCTS', query: 'black shoes' }));
+    expect(JSON.stringify(result)).not.toContain('shopify-secret-token-should-not-return');
+    expect(result).toMatchObject({ source: 'LIVE_SHOPIFY_API', success: true, resultCount: 1 });
+  });
+
+  it('rejects cross-tenant Shopify connector identifiers before running a test', async () => {
+    workspace.requireAccess.mockResolvedValue({ organizationId: 'tenant-a' });
+    db.connectorInstance.findFirst.mockResolvedValue(null);
+    await expect(service.shopifyApiTest('owner-a', 'tenant-a-workspace', 'foreign-connector', { operation: 'VERIFY_CONNECTION' })).rejects.toMatchObject({ status: 404 });
+    expect(registry.adapter).not.toHaveBeenCalled();
+    expect(vault.decrypt).not.toHaveBeenCalled();
   });
 
   it('returns each customer organization’s own Shopify grant snapshot', async () => {

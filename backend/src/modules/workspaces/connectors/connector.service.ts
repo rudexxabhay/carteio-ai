@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
@@ -10,6 +10,8 @@ import { connectorSyncDebug } from './connector-sync-debug';
 import type { ConnectorSyncMode, ConnectorWebhookInput } from './connector.contracts';
 import { getShopifyConfiguredOAuthScopes, normalizeShopifyScopeInventory } from '../../../config/shopify-scope-inventory.config';
 import { getShopifyScopeUpgradeScopes } from '../../../config/shopify-scope-upgrade.config';
+import { CommerceReadContracts } from './commerce-read-contracts.service';
+import { ShopifyApiTestError, ShopifyConnectorAdapter, type ShopifyReadTestOperation } from './shopify.adapter';
 
 const safeErrorCode = (error: unknown) => {
   const candidate = error instanceof Error ? error.message : '';
@@ -32,7 +34,7 @@ const CONNECTOR_VERIFICATION_STALE_AFTER_MS = 120_000;
 export class ConnectorService {
   private readonly db: any;
   private readonly logger = new Logger(ConnectorService.name);
-  constructor(prisma: PrismaService, private readonly workspaces: WorkspaceService, private readonly registry: ConnectorRegistry, private readonly vault: ConnectorCredentialVault, private readonly scopeDiscovery: ShopifyGrantedScopeDiscoveryService) { this.db = prisma; }
+  constructor(prisma: PrismaService, private readonly workspaces: WorkspaceService, private readonly registry: ConnectorRegistry, private readonly vault: ConnectorCredentialVault, private readonly scopeDiscovery: ShopifyGrantedScopeDiscoveryService, @Optional() private readonly commerce?: CommerceReadContracts) { this.db = prisma; }
 
   async catalog(userId: string, slug: string) { await this.workspaces.requireAccess(userId, slug); return { items: this.registry.catalog(), capabilities: await this.capabilities(userId, slug) }; }
   async list(userId: string, slug: string) {
@@ -307,6 +309,78 @@ export class ConnectorService {
   async businessCategorySyncEnabled(organizationId: string, connectorInstanceId: string, categories: readonly ConnectorDataCategory[]): Promise<ConnectorDataCategory[]> {
     const rows = await this.db.connectorDataPermission.findMany({ where: { organizationId, connectorInstanceId, category: { in: [...categories] }, syncEnabled: true }, select: { category: true } });
     return rows.map((row: { category: ConnectorDataCategory }) => row.category);
+  }
+
+  async shopifyApiTest(userId: string, slug: string, id: string, input: { operation: ShopifyReadTestOperation | 'SEARCH_SYNCED_CATALOG' | 'ASSISTANT_PRODUCT_READINESS'; query?: string; productId?: string; assistantId?: string }) {
+    const { organizationId } = await this.owner(userId, slug);
+    await this.rate(`shopify-api-test:${organizationId}:${userId}`, 20);
+    const requestId = randomUUID();
+    const startedAt = Date.now();
+    const connector = await this.db.connectorInstance.findFirst({ where: { id, organizationId, connectorId: 'shopify_v1' }, include: { credential: true, commerceConnection: true } });
+    if (!connector) throw new NotFoundException({ code: 'CONNECTOR_NOT_FOUND', message: 'Shopify connector not found in this workspace.' });
+    const configuration = object(connector.configuration);
+    const operation = input.operation;
+    if (operation === 'ASSISTANT_PRODUCT_READINESS' || operation === 'SEARCH_SYNCED_CATALOG') {
+      if (!input.assistantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(input.assistantId)) throw new BadRequestException({ code: 'ASSISTANT_REQUIRED', message: 'Select an assistant for this catalog check.' });
+      const assistant = await this.db.chatbot.findFirst({ where: { id: input.assistantId, organizationId, archivedAt: null }, select: { id: true } });
+      if (!assistant) throw new NotFoundException({ code: 'ASSISTANT_NOT_FOUND', message: 'Assistant not found in this workspace.' });
+      if (!this.commerce) throw new ServiceUnavailableException({ code: 'COMMERCE_READINESS_UNAVAILABLE', message: 'The normalized catalog contract is unavailable.' });
+      if (operation === 'ASSISTANT_PRODUCT_READINESS') {
+        const readiness = await this.commerce.productSearchReadiness(organizationId, assistant.id);
+        const durationMs = Date.now() - startedAt;
+        this.logger.log(JSON.stringify({ event: 'shopify_api_test', requestId, organizationId, connectorInstanceId: id, assistantId: assistant.id, operation, outcome: readiness.eligible ? 'COMPLETED' : 'BLOCKED', source: 'AI_ASSISTANT_ACCESS', resultCount: readiness.recordCount, reason: readiness.reason, durationMs }));
+        return { requestId, operation, source: 'AI_ASSISTANT_ACCESS', durationMs, success: readiness.eligible, permissionStatus: readiness.eligible ? 'GRANTED' : 'DENIED', resultCount: readiness.recordCount, data: readiness, ...readiness };
+      }
+      const query = input.query?.trim();
+      if (!query || query.length > 120) throw new BadRequestException({ code: 'SHOPIFY_TEST_QUERY_INVALID', message: 'Enter a search query of at most 120 characters.' });
+      const readiness = await this.commerce.productSearchReadiness(organizationId, assistant.id);
+      if (!readiness.eligible) {
+        const durationMs = Date.now() - startedAt;
+        this.logger.warn(JSON.stringify({ event: 'shopify_api_test', requestId, organizationId, connectorInstanceId: id, assistantId: assistant.id, operation, outcome: 'BLOCKED', source: 'NORMALIZED_CATALOG_SNAPSHOT', resultCount: 0, reason: readiness.reason, durationMs }));
+        return { requestId, operation, source: 'NORMALIZED_CATALOG_SNAPSHOT', durationMs, success: false, reason: readiness.reason, resultCount: 0, data: [], readiness };
+      }
+      const data = await this.commerce.searchProducts(organizationId, assistant.id, query, 10);
+      const durationMs = Date.now() - startedAt;
+      this.logger.log(JSON.stringify({ event: 'shopify_api_test', requestId, organizationId, connectorInstanceId: id, assistantId: assistant.id, operation, outcome: 'COMPLETED', source: 'NORMALIZED_CATALOG_SNAPSHOT', resultCount: data.length, durationMs }));
+      return { requestId, operation, source: 'NORMALIZED_CATALOG_SNAPSHOT', durationMs, success: true, resultCount: data.length, data, readiness };
+    }
+
+    const operationScopes: Record<ShopifyReadTestOperation, string[]> = {
+      VERIFY_CONNECTION: [], SEARCH_LIVE_PRODUCTS: ['read_products'], READ_PRODUCT_DETAILS: ['read_products'], READ_VARIANTS: ['read_products'], READ_PRICES: ['read_products'], READ_PRODUCT_IMAGES: ['read_products'], READ_INVENTORY: ['read_products', 'read_inventory'], LIST_COLLECTIONS: ['read_products'],
+      READ_LOCATIONS: ['read_locations'], READ_ONLINE_STORE_PAGES: ['read_online_store_pages', 'read_content'], READ_STORE_POLICIES: ['read_legal_policies'], READ_MARKETS: ['read_markets'], READ_DISCOUNTS: ['read_discounts'], READ_METAOBJECT_DEFINITIONS: ['read_metaobject_definitions'],
+    };
+    const requiredScopes = operationScopes[operation];
+    const grantedScopes: string[] = Array.isArray(connector.commerceConnection?.grantedScopes) ? connector.commerceConnection.grantedScopes : [];
+    const scopeFresh = isShopifyScopeSnapshotFresh(connector.commerceConnection?.grantedScopesVerifiedAt ?? connector.lastVerifiedAt);
+    const base = { requestId, operation, source: 'LIVE_SHOPIFY_API', shopDomain: typeof configuration.shopDomain === 'string' ? configuration.shopDomain : null };
+    const fail = (reason: string, details: Record<string, unknown> = {}) => {
+      const durationMs = Date.now() - startedAt;
+      this.logger.warn(JSON.stringify({ event: 'shopify_api_test', requestId, organizationId, connectorInstanceId: id, operation, outcome: 'BLOCKED', errorCode: reason, durationMs }));
+      return { ...base, success: false, httpStatus: null, graphqlErrorCount: 0, graphqlErrors: false, permissionStatus: reason.startsWith('SHOPIFY_SCOPE') ? 'DENIED' : 'NOT_EVALUATED', durationMs, resultCount: 0, data: [], error: { code: reason }, ...details };
+    };
+    if (connector.state !== 'CONNECTED' || connector.commerceConnection?.state !== 'CONNECTED') return fail('SHOPIFY_CONNECTION_NOT_CONNECTED', { connectionStatus: connector.state, authorizationStatus: connector.commerceConnection?.state ?? 'UNAVAILABLE' });
+    if (!connector.credential) return fail('CONNECTOR_CREDENTIALS_REQUIRED');
+    if (!scopeFresh) return fail('SHOPIFY_SCOPE_SNAPSHOT_STALE', { permissionStatus: 'STALE' });
+    const missing = (requiredScopes.length === 2 && operation === 'READ_ONLINE_STORE_PAGES')
+      ? !requiredScopes.some(scope => grantedScopes.includes(scope))
+      : requiredScopes.some(scope => !grantedScopes.includes(scope));
+    if (missing) return fail('SHOPIFY_SCOPE_NOT_GRANTED', { requiredScopes, grantedScopes: grantedScopes.filter(scope => requiredScopes.includes(scope)), permissionStatus: 'DENIED' });
+    const adapter = this.registry.adapter('shopify_v1');
+    if (!(adapter instanceof ShopifyConnectorAdapter)) return fail('SHOPIFY_ADAPTER_UNAVAILABLE');
+    try {
+      const credentials = this.vault.decrypt(connector.credential, this.aad(organizationId, id, connector.connectorId));
+      const result = await adapter.testRead({ organizationId, connectorInstanceId: id, requestId }, configuration, credentials, { operation, query: input.query, productId: input.productId, includeInventory: grantedScopes.includes('read_inventory') });
+      const response = { ...base, success: true, permissionStatus: 'GRANTED', grantedScopes: requiredScopes.length ? requiredScopes.filter(scope => grantedScopes.includes(scope)) : grantedScopes, ...result };
+      this.logger.log(JSON.stringify({ event: 'shopify_api_test', requestId, organizationId, connectorInstanceId: id, operation, outcome: 'COMPLETED', httpStatus: result.httpStatus, graphqlErrorCount: result.graphqlErrorCount, resultCount: result.resultCount, durationMs: result.durationMs }));
+      return response;
+    } catch (error) {
+      const testError = error instanceof ShopifyApiTestError ? error : null;
+      const code = testError?.graphqlErrorCodes.some(value => value === 'ACCESS_DENIED' || value === 'FORBIDDEN') ? 'SHOPIFY_GRAPHQL_PERMISSION_DENIED' : testError?.safeCode ?? safeErrorCode(error);
+      const permissionStatus = ['CONNECTOR_HTTP_401', 'CONNECTOR_HTTP_403', 'SHOPIFY_GRAPHQL_PERMISSION_DENIED'].includes(code) ? 'DENIED' : 'GRANTED';
+      const response = { ...base, success: false, permissionStatus, httpStatus: testError?.httpStatus ?? null, graphqlErrorCount: testError?.graphqlErrorCount ?? 0, graphqlErrorCodes: testError?.graphqlErrorCodes ?? [], graphqlErrors: (testError?.graphqlErrorCount ?? 0) > 0, durationMs: testError?.durationMs ?? Date.now() - startedAt, resultCount: 0, data: [], error: { code } };
+      this.logger.warn(JSON.stringify({ event: 'shopify_api_test', requestId, organizationId, connectorInstanceId: id, operation, outcome: code.includes('TIMEOUT') ? 'TIMED_OUT' : 'FAILED', httpStatus: response.httpStatus, graphqlErrorCount: response.graphqlErrorCount, errorCode: code, durationMs: response.durationMs }));
+      return response;
+    }
   }
 
   async create(userId: string, slug: string, input: { connectorId: string; displayName: string; configuration: unknown; credentials?: unknown }) {

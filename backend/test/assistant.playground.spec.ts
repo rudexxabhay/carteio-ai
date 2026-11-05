@@ -45,6 +45,7 @@ describe('AssistantService Playground chat', () => {
         findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      playgroundDiagnosticTrace: { count: jest.fn().mockResolvedValue(0), create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
       playgroundMessage: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
       playgroundRateLimit: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
       $queryRaw: jest.fn().mockResolvedValue([{ requestCount: 1 }]),
@@ -135,6 +136,39 @@ describe('AssistantService Playground chat', () => {
     expect(orchestrator.playgroundChat).toHaveBeenCalledWith(userId, 'workspace', assistantId, { message: 'Hello', clientTurnId: 'turn-1' }, 'request-1', undefined, undefined, undefined);
     await facade.playgroundConversation(userId, 'workspace', assistantId, 'session-1');
     expect(orchestrator.playgroundConversation).toHaveBeenCalledWith(userId, 'workspace', assistantId, 'session-1');
+  });
+
+  it('permanently deletes only the authenticated owner’s Playground conversation and its owned records', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    const tx = {
+      playgroundConversation: { findFirst: jest.fn().mockResolvedValue({ id: 'owned-session' }), deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      playgroundDiagnosticTrace: { deleteMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      playgroundMessage: { deleteMany: jest.fn().mockResolvedValue({ count: 4 }) },
+    };
+    orchestrator.db.$transaction.mockImplementation(async (callback: (client: unknown) => unknown) => callback(tx));
+
+    await expect(service.deletePlaygroundSession(userId, 'workspace', assistantId, 'owned-session')).resolves.toEqual({ conversationId: 'owned-session', deleted: true });
+
+    expect(orchestrator.workspaces.requireAccess).toHaveBeenCalledWith(userId, 'workspace', ['OWNER', 'ADMIN']);
+    expect(tx.playgroundConversation.findFirst).toHaveBeenCalledWith({ where: { id: 'owned-session', organizationId, assistantId, userId, channel: 'PLAYGROUND' }, select: { id: true } });
+    expect(tx.playgroundDiagnosticTrace.deleteMany).toHaveBeenCalledWith({ where: { organizationId, assistantId, userId, channel: 'PLAYGROUND', conversationId: 'owned-session' } });
+    expect(tx.playgroundMessage.deleteMany).toHaveBeenCalledWith({ where: { organizationId, conversationId: 'owned-session' } });
+    expect(tx.playgroundConversation.deleteMany).toHaveBeenCalledWith({ where: { id: 'owned-session', organizationId, assistantId, userId, channel: 'PLAYGROUND' } });
+  });
+
+  it('does not delete children when workspace or exact Playground conversation ownership cannot be established', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    const tx = {
+      playgroundConversation: { findFirst: jest.fn().mockResolvedValue(null), deleteMany: jest.fn() },
+      playgroundDiagnosticTrace: { deleteMany: jest.fn() },
+      playgroundMessage: { deleteMany: jest.fn() },
+    };
+    orchestrator.db.$transaction.mockImplementation(async (callback: (client: unknown) => unknown) => callback(tx));
+
+    await expect(service.deletePlaygroundSession(userId, 'workspace', assistantId, 'foreign-session')).rejects.toBeInstanceOf(NotFoundException);
+    expect(tx.playgroundDiagnosticTrace.deleteMany).not.toHaveBeenCalled();
+    expect(tx.playgroundMessage.deleteMany).not.toHaveBeenCalled();
+    expect(tx.playgroundConversation.deleteMany).not.toHaveBeenCalled();
   });
 
   it('records a safe failed security stage without inventing a tenant identity', async () => {
@@ -1070,6 +1104,32 @@ describe('AssistantService Playground chat', () => {
 
     expect(orchestrator.db.playgroundMessage.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 20, take: 3, orderBy: { sequence: 'asc' } }));
     expect(result).toMatchObject({ sessionId: 'session-page', offset: 20, limit: 2, hasMore: true, nextOffset: 22, messages: [{ id: 'message-0' }, { id: 'message-1' }] });
+  });
+
+  it('persists conversation capture only inside the authorized owner account scope', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    const prior = process.env.PLAYGROUND_DIAGNOSTICS_ENABLED;
+    process.env.NODE_ENV = 'development'; process.env.PLAYGROUND_DIAGNOSTICS_ENABLED = 'true';
+    orchestrator.db.playgroundConversation.updateMany.mockResolvedValueOnce({ count: 1 });
+    try {
+      await service.setPlaygroundDiagnosticCapture(userId, 'workspace', assistantId, 'owned-session', true);
+      expect(orchestrator.db.playgroundConversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ id: 'owned-session', organizationId, assistantId, userId, channel: 'PLAYGROUND', expiresAt: expect.any(Object) }),
+        data: { diagnosticCaptureEnabled: true },
+      }));
+    } finally {
+      if (prior === undefined) delete process.env.PLAYGROUND_DIAGNOSTICS_ENABLED; else process.env.PLAYGROUND_DIAGNOSTICS_ENABLED = prior;
+    }
+  });
+
+  it('returns retained traces for an authorized conversation even after capture is off', async () => {
+    const orchestrator = (service as any).conversationOrchestrator;
+    orchestrator.db.playgroundConversation.findFirst.mockResolvedValueOnce({ id: 'owned-session', diagnosticCaptureEnabled: false });
+    orchestrator.db.playgroundDiagnosticTrace.findMany.mockResolvedValueOnce([{ id: 'trace-row', requestId: 'request-1', clientTurnId: 'turn-1', attempt: 2, outcome: 'FAILED', payload: { schemaVersion: 1 }, createdAt: new Date() }]);
+    const result = await service.playgroundDiagnosticTraces(userId, 'workspace', assistantId, 'owned-session', 0, 40);
+    expect(result.captureEnabled).toBe(false);
+    expect(result.items).toHaveLength(1);
+    expect(orchestrator.db.playgroundDiagnosticTrace.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId, assistantId, conversationId: 'owned-session', userId, expiresAt: expect.any(Object) }) }));
   });
 
   it('restores knowledge provenance only after historical evidence revalidation', async () => {

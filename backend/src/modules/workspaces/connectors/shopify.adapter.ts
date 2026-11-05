@@ -65,6 +65,26 @@ const graphqlErrorCodes = (body: any): string[] => {
 const SAFE_METAOBJECT_FIELD_TYPES = new Set(['single_line_text_field', 'multi_line_text_field', 'rich_text_field', 'boolean', 'number_integer', 'number_decimal', 'date', 'date_time', 'url', 'color']);
 const SENSITIVE_METAOBJECT_FIELD = /(?:customer|client|buyer|email|phone|address|postal|zip|payment|token|secret|password|birth|government|tax.?id|ip.?address|order.?id)/i;
 const safeMetaobjectType = (value: unknown) => typeof value === 'string' && value.length <= 120 && /^(?:[a-zA-Z0-9_-]{1,100}|\$app:[a-zA-Z0-9_-]{1,100})$/.test(value);
+export type ShopifyReadTestOperation = 'VERIFY_CONNECTION' | 'SEARCH_LIVE_PRODUCTS' | 'READ_PRODUCT_DETAILS' | 'READ_VARIANTS' | 'READ_PRICES' | 'READ_PRODUCT_IMAGES' | 'READ_INVENTORY' | 'LIST_COLLECTIONS' | 'READ_LOCATIONS' | 'READ_ONLINE_STORE_PAGES' | 'READ_STORE_POLICIES' | 'READ_MARKETS' | 'READ_DISCOUNTS' | 'READ_METAOBJECT_DEFINITIONS';
+export class ShopifyApiTestError extends Error {
+  constructor(readonly safeCode: string, readonly httpStatus: number | null, readonly graphqlErrorCount: number, readonly graphqlErrorCodes: string[], readonly durationMs: number) { super(safeCode); this.name = 'ShopifyApiTestError'; }
+}
+function sanitizeShopifyTestResult(data: any, operation: ShopifyReadTestOperation): { count: number; data: unknown } {
+  const rows = operation === 'VERIFY_CONNECTION' ? (data.shop ? [data.shop] : [])
+    : operation === 'SEARCH_LIVE_PRODUCTS' ? data.products?.nodes ?? []
+    : ['READ_PRODUCT_DETAILS', 'READ_VARIANTS', 'READ_PRICES', 'READ_PRODUCT_IMAGES', 'READ_INVENTORY'].includes(operation) ? (data.product ? [data.product] : [])
+        : operation === 'READ_STORE_POLICIES' ? data.shop?.shopPolicies ?? []
+          : data.collections?.nodes ?? data.locations?.nodes ?? data.pages?.nodes ?? data.markets?.nodes ?? data.discountNodes?.nodes ?? data.metaobjectDefinitions?.nodes ?? [];
+  const clean = (value: any, depth = 0): any => {
+    if (depth > 4 || value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, '').slice(0, 2_000);
+    if (Array.isArray(value)) return value.slice(0, 20).map(item => clean(item, depth + 1));
+    if (typeof value !== 'object') return undefined;
+    const allowed = new Set(['id','name','title','handle','status','enabled','isActive','myshopifyDomain','currencyCode','type','body','bodySummary','updatedAt','descriptionHtml','count','url','altText','width','height','sku','price','compareAtPrice','availableForSale','inventoryQuantity','tracked','amount','nodes','minVariantPrice','maxVariantPrice','variants','images','featuredImage','shopPolicies','discount','__typename','fieldDefinitions','key','type']);
+    return Object.fromEntries(Object.entries(value).filter(([key]) => allowed.has(key)).slice(0, 40).map(([key, item]) => [key, clean(item, depth + 1)]));
+  };
+  return { count: Array.isArray(rows) ? rows.length : 0, data: clean(rows) };
+}
 export function isPublicSafeMetaobjectDefinition(definition: any): boolean {
   if (!definition || !safeMetaobjectType(definition.type) || definition.access?.storefront !== 'PUBLIC_READ' || !Array.isArray(definition.fieldDefinitions) || definition.fieldDefinitions.length < 1 || definition.fieldDefinitions.length > 30) return false;
   return definition.fieldDefinitions.every((field: any) => typeof field?.key === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(field.key) && !SENSITIVE_METAOBJECT_FIELD.test(field.key) && SAFE_METAOBJECT_FIELD_TYPES.has(field.type?.name));
@@ -147,6 +167,54 @@ export class ShopifyConnectorAdapter implements ConnectorAdapter {
     return { verified: true, externalAccountId: scopeMetadata.shopId, storefrontUrl: scopeMetadata.storefrontUrl, grantedScopes: scopes, grantedScopeMetadata: scopeMetadata.scopes.map(({ handle, description }) => ({ handle, description })), capabilities: [...new Set(caps)] };
   }
   async disconnect() {}
+  async testRead(context: ConnectorOperationContext, configuration: Record<string, unknown>, credentials: Record<string, unknown>, input: { operation: ShopifyReadTestOperation; query?: string; productId?: string; includeInventory?: boolean }) {
+    const requestId = context.requestId ?? randomUUID();
+    const startedAt = Date.now();
+    const query = input.query?.trim().slice(0, 120) ?? '';
+    const productId = input.productId?.trim() ?? '';
+    const image = 'featuredImage{url altText} images(first:10){nodes{id url altText width height}}';
+    const prices = 'priceRangeV2{minVariantPrice{amount currencyCode} maxVariantPrice{amount currencyCode}}';
+    const inventory = input.includeInventory ? 'inventoryQuantity inventoryItem{tracked}' : '';
+    const variants = `variants(first:10){nodes{id title sku price compareAtPrice availableForSale ${inventory}}}`;
+    const productFields = `id title handle status ${image} ${prices} ${variants}`;
+    let document: string;
+    let variables: Record<string, unknown> | undefined;
+    switch (input.operation) {
+      case 'VERIFY_CONNECTION': document = '{ shop { id name myshopifyDomain currencyCode } }'; break;
+      case 'SEARCH_LIVE_PRODUCTS':
+        if (!query || query.length > 120 || /[\u0000-\u001f]/u.test(query)) throw new Error('PLAYGROUND_SHOPIFY_QUERY_INVALID');
+        document = `query($query:String!){products(first:10,query:$query,sortKey:RELEVANCE){nodes{${productFields}} pageInfo{hasNextPage}}}`; variables = { query }; break;
+      case 'READ_PRODUCT_DETAILS': case 'READ_VARIANTS': case 'READ_PRICES': case 'READ_PRODUCT_IMAGES': case 'READ_INVENTORY': {
+        if (!/^(?:gid:\/\/shopify\/Product\/\d+|\d{1,24})$/u.test(productId)) throw new Error('PLAYGROUND_SHOPIFY_PRODUCT_ID_INVALID');
+        const gid = productId.startsWith('gid://') ? productId : `gid://shopify/Product/${productId}`;
+        if (input.operation === 'READ_INVENTORY' && !input.includeInventory) throw new Error('SHOPIFY_SCOPE_NOT_GRANTED');
+        const selectedFields = input.operation === 'READ_VARIANTS' ? `id title ${variants}` : input.operation === 'READ_PRICES' ? `id title ${prices} ${variants}` : input.operation === 'READ_PRODUCT_IMAGES' ? `id title ${image}` : input.operation === 'READ_INVENTORY' ? `id title variants(first:10){nodes{id title inventoryQuantity inventoryItem{tracked}}}` : productFields;
+        document = `query($id:ID!){product(id:$id){${selectedFields}}}`; variables = { id: gid }; break;
+      }
+      case 'LIST_COLLECTIONS':
+        document = `query($query:String){collections(first:20${query ? ',query:$query' : ''}){nodes{id title handle descriptionHtml productsCount{count}} pageInfo{hasNextPage}}}`;
+        variables = query ? { query } : undefined; break;
+      case 'READ_LOCATIONS': document = '{ locations(first:20){nodes{id name isActive}} }'; break;
+      case 'READ_ONLINE_STORE_PAGES': document = '{ pages(first:20){nodes{id title handle bodySummary updatedAt}} }'; break;
+      case 'READ_STORE_POLICIES': document = '{ shop { shopPolicies { type title body } } }'; break;
+      case 'READ_MARKETS': document = '{ markets(first:20){nodes{id name enabled}} }'; break;
+      case 'READ_DISCOUNTS': document = '{ discountNodes(first:20){nodes{id discount{__typename ... on DiscountCodeBasic{title status}}}} }'; break;
+      case 'READ_METAOBJECT_DEFINITIONS': document = '{ metaobjectDefinitions(first:20){nodes{id type name fieldDefinitions{key name type{name}}}} }'; break;
+      default: throw new Error('PLAYGROUND_SHOPIFY_OPERATION_UNSUPPORTED');
+    }
+    let responseStatus: number | null = null;
+    let graphqlErrorCount = 0;
+    let safeGraphqlErrorCodes: string[] = [];
+    let data: any;
+    try {
+      data = await this.query(context, configuration, credentials, document, variables, false, { requestId, stage: `api_test_${input.operation.toLowerCase()}`, onResponse: (result) => { responseStatus = result.httpStatus; graphqlErrorCount = result.graphqlErrorCount; safeGraphqlErrorCodes = result.graphqlErrorCodes; } });
+    } catch (error) {
+      const rawCode = error instanceof Error && /^[A-Z0-9_]{1,80}$/.test(error.message) ? error.message : 'CONNECTOR_REQUEST_FAILED';
+      throw new ShopifyApiTestError(rawCode, responseStatus, graphqlErrorCount, safeGraphqlErrorCodes, Math.max(0, Date.now() - startedAt));
+    }
+    const result = sanitizeShopifyTestResult(data, input.operation);
+    return { operation: input.operation, source: 'LIVE_SHOPIFY_API', httpStatus: responseStatus ?? 200, graphqlErrorCount, graphqlErrors: graphqlErrorCount > 0, durationMs: Math.max(0, Date.now() - startedAt), resultCount: result.count, data: result.data };
+  }
   async sync(_context: ConnectorOperationContext, input: { resourceType: string; mode: 'FULL'|'INCREMENTAL'; cursor?: string|null; checkpoint?: unknown; includePrices?: boolean; includeInventory?: boolean; enabledCategories?: string[]; grantedScopes?: string[] }, config: Record<string, unknown>, credentials: Record<string, unknown>): Promise<ConnectorSyncPage> {
     const after = input.cursor || null;
     if (input.resourceType === 'PRODUCTS') {
@@ -476,7 +544,7 @@ export class ShopifyConnectorAdapter implements ConnectorAdapter {
     await this.db.connectorCredential.updateMany({where:{organizationId:context.organizationId,connectorInstanceId:context.connectorInstanceId},data:encrypted});
     return updated;
   }
-  private async query(context: ConnectorOperationContext, config: Record<string,unknown>, credentials: Record<string,unknown>, query: string, variables?: Record<string,unknown>, syncDebug = false, diagnostic?: { requestId: string; stage: string }, maxResponseBytes = 1048576) {
+  private async query(context: ConnectorOperationContext, config: Record<string,unknown>, credentials: Record<string,unknown>, query: string, variables?: Record<string,unknown>, syncDebug = false, diagnostic?: { requestId: string; stage: string; onResponse?: (result: { httpStatus: number; graphqlErrorCount: number; graphqlErrorCodes: string[] }) => void }, maxResponseBytes = 1048576) {
     const startedAt = Date.now();
     const requestId = `worker:${context.connectorInstanceId}`;
     const fields = { operation: 'connector.shopify_admin_graphql', organizationId: context.organizationId, connectorInstanceId: context.connectorInstanceId };
@@ -486,10 +554,11 @@ export class ShopifyConnectorAdapter implements ConnectorAdapter {
     const shop=String(config.shopDomain); if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.myshopify\.com$/.test(shop)) throw new Error('CONNECTOR_CONFIG_INVALID');
     const active = await this.validCredentials(context, shop, credentials);
     const response = await this.http.post(`https://${shop}/admin/api/${version}/graphql.json`, { 'Content-Type':'application/json','Accept':'application/json','X-Shopify-Access-Token':String(active.accessToken) }, JSON.stringify({query,variables}), maxResponseBytes);
+    diagnostic?.onResponse?.({ httpStatus: response.status, graphqlErrorCount: 0, graphqlErrorCodes: [] });
     if (diagnostic) this.logVerification({ requestId: diagnostic.requestId, operation: 'shopify.admin_graphql', stage: diagnostic.stage, targetHost: shop, httpStatus: response.status, elapsedMs: Date.now() - startedAt, outcome: response.status >= 200 && response.status < 300 ? 'response_received' : 'failure', ...(response.status >= 200 && response.status < 300 ? {} : { causeKind: 'PROVIDER_HTTP' }) });
     if (response.status === 429) throw new Error('CONNECTOR_RATE_LIMITED');
     if (response.status < 200 || response.status >= 300) throw new Error(`CONNECTOR_HTTP_${response.status}`);
-    const body=graphqlJson(response.body); if (diagnostic && body.errors?.length) this.logVerification({ requestId: diagnostic.requestId, operation: 'shopify.admin_graphql', stage: diagnostic.stage, targetHost: shop, httpStatus: response.status, elapsedMs: Date.now() - startedAt, outcome: 'graphql_error', graphqlErrorCount: body.errors.length, graphqlErrorCodes: graphqlErrorCodes(body) }); if (body.errors?.some((entry: any) => entry?.extensions?.code === 'THROTTLED')) throw new Error('CONNECTOR_RATE_LIMITED'); if (body.errors?.length || !body.data) throw new Error('CONNECTOR_SHOPIFY_GRAPHQL_FAILED');
+    const body=graphqlJson(response.body); diagnostic?.onResponse?.({ httpStatus: response.status, graphqlErrorCount: body.errors?.length ?? 0, graphqlErrorCodes: graphqlErrorCodes(body) }); if (diagnostic && body.errors?.length) this.logVerification({ requestId: diagnostic.requestId, operation: 'shopify.admin_graphql', stage: diagnostic.stage, targetHost: shop, httpStatus: response.status, elapsedMs: Date.now() - startedAt, outcome: 'graphql_error', graphqlErrorCount: body.errors.length, graphqlErrorCodes: graphqlErrorCodes(body) }); if (body.errors?.some((entry: any) => entry?.extensions?.code === 'THROTTLED')) throw new Error('CONNECTOR_RATE_LIMITED'); if (body.errors?.length || !body.data) throw new Error('CONNECTOR_SHOPIFY_GRAPHQL_FAILED');
     if (syncDebug) connectorSyncDebug(this.logger, '15_shopify_product_api_request', requestId, startedAt, { ...fields, httpStatus: response.status });
     return body.data;
     } catch (error) {

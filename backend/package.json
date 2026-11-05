@@ -14,7 +14,6 @@
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "eslint src test --ext .ts",
     "test": "jest --runInBand",
-    "diagnose:gemini-models": "ts-node scripts/diagnose-gemini-models.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",

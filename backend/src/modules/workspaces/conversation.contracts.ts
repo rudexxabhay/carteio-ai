@@ -12,7 +12,9 @@ export type ConversationLifecycleStage =
   | 'RESPONSE_VERIFICATION' | 'TURN_PERSISTENCE' | 'SESSION_RELEASE'
   | 'MESSAGE_RECEIVED' | 'ASSISTANT_RESOLVED' | 'KNOWLEDGE_ELIGIBILITY' | 'KNOWLEDGE_RETRIEVAL_SKIPPED' | 'STRUCTURED_OUTPUT_COMPATIBILITY' | 'RETRIEVAL_STARTED'
   | 'RETRIEVAL_COMPLETED' | 'KNOWLEDGE_BASE_ASSIGNMENT' | 'KNOWLEDGE_SOURCE_ELIGIBILITY' | 'RETRIEVAL_QUERY_PLANNING' | 'SOURCE_INDEX_READINESS' | 'LEXICAL_RETRIEVAL' | 'SEMANTIC_RETRIEVAL' | 'HYBRID_RANKING' | 'CANDIDATE_FILTERING' | 'EVIDENCE_SELECTED' | 'EVIDENCE_REVALIDATED' | 'LLM_CONTEXT_ASSEMBLED'
-  | 'PROVIDER_REQUEST_STARTED' | 'PROVIDER_RESPONSE_RECEIVED' | 'CITATION_RECOVERY' | 'GROUNDING_VALIDATED' | 'RESPONSE_PERSISTED';
+  | 'PROVIDER_REQUEST_STARTED' | 'PROVIDER_RESPONSE_RECEIVED' | 'CITATION_RECOVERY' | 'GROUNDING_VALIDATED' | 'RESPONSE_PERSISTED'
+  | 'BUSINESS_SCOPE_DECISION' | 'OUT_OF_SCOPE_REDIRECT_GENERATION' | 'OUT_OF_SCOPE_REDIRECT_VALIDATION'
+  | 'LANGUAGE_DETECTION' | 'ANSWER_PLANNING' | 'LLM_TOOL_REQUEST' | 'TOOL_AUTHORIZATION' | 'SHOPIFY_AUTHORIZATION';
 
 /** Server-created identity after membership and assistant scope checks. */
 export type AuthorizedConversationContext = Readonly<{
@@ -49,11 +51,9 @@ export type ConversationAssistantContext = Readonly<{
   organizationId: string;
   provider: ConversationProvider;
   model: string;
-  providerMode: 'MANUAL' | 'AUTO_FALLBACK';
 }>;
 export type ConversationAssistantRecord = Readonly<{
   id: string; organizationId: string; createdById: string | null; name: string; description: string | null;
-  providerMode: string | null; providerFallbacks: unknown;
   businessPurpose: string | null; systemInstructions: string | null; defaultLanguage: string | null;
   responseTone: string | null; responseStyle: string | null; fallbackMessage: string | null; greetingMessage: string | null;
   escalationMessage: string | null; status: string; updatedAt?: Date;
@@ -73,8 +73,6 @@ export type PlaygroundTurnReplay = Readonly<{
 export type ConversationSessionResolution = Readonly<{ kind: 'active'; session: PlaygroundConversationHandle } | { kind: 'replay'; response: PlaygroundTurnReplay }>;
 export type ConversationProviderSelection = Readonly<{
   primary: ProviderRoute;
-  approvedFallbacks: readonly ProviderRoute[];
-  mode: 'MANUAL' | 'AUTO_FALLBACK';
 }>;
 export type ConversationSourceAuthority = 'SHOPIFY_API_POLICY' | 'SHOPIFY_API_POLICY_STALE' | 'PUBLIC_WEBSITE' | 'MERCHANT_KNOWLEDGE';
 export type ConversationKnowledgeResult = Readonly<{
@@ -123,6 +121,10 @@ export type ConversationStageEvent = Readonly<{
   requestDispatched?: boolean;
   retryReason?: 'approved_provider_fallback' | 'provider_rejected_json_mode' | 'tool_protocol_compatibility' | 'citation_validation_rejected';
   usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  startedAt?: string;
+  input?: Readonly<Record<string, unknown>>;
+  output?: Readonly<Record<string, unknown>>;
+  decision?: Readonly<Record<string, unknown>>;
 }>;
 
 /** Safe categories only; messages, prompts, evidence, headers, and credentials are excluded. */

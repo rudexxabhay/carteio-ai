@@ -1,4 +1,7 @@
-import { HttpException, NotFoundException } from '@nestjs/common';
+import 'reflect-metadata';
+import { HttpException, NotFoundException, RequestMethod } from '@nestjs/common';
+import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { AuthSessionGuard } from '../auth/auth-session.guard';
 import { AssistantController } from './assistant.controller';
 
 describe('AssistantController live Playground trace', () => {
@@ -12,6 +15,16 @@ describe('AssistantController live Playground trace', () => {
       else process.env[key] = value;
     }
     jest.restoreAllMocks();
+  });
+
+  it('exposes conversation deletion only through the authenticated assistant-scoped route', async () => {
+    const assistants = { deletePlaygroundSession: jest.fn().mockResolvedValue({ conversationId: 'session-1', deleted: true }) };
+    const controller = new AssistantController(assistants as any);
+    await expect(controller.deletePlaygroundSession({ authSession: { userId: 'owner-1' } } as any, 'workspace', 'assistant-1', 'session-1')).resolves.toEqual({ conversationId: 'session-1', deleted: true });
+    expect(assistants.deletePlaygroundSession).toHaveBeenCalledWith('owner-1', 'workspace', 'assistant-1', 'session-1');
+    expect(Reflect.getMetadata(METHOD_METADATA, AssistantController.prototype.deletePlaygroundSession)).toBe(RequestMethod.DELETE);
+    expect(Reflect.getMetadata(PATH_METADATA, AssistantController.prototype.deletePlaygroundSession)).toBe(':assistantId/playground/sessions/:sessionId');
+    expect(Reflect.getMetadata(GUARDS_METADATA, AssistantController)).toContain(AuthSessionGuard);
   });
 
   it('sends readiness before correlated execution events and reconciles with the completed trace', async () => {

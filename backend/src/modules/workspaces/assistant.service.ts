@@ -4,8 +4,7 @@ import { WorkspaceService } from './workspace.service';
 import { KnowledgeProcessingService } from './knowledge-processing.service';
 import type { AssistantBusinessRuleDto, AssistantListQueryDto, CreateAssistantDto, UpdateAssistantDto } from './assistant.dto';
 import type { TrainingHistoryQueryDto } from './training-history.dto';
-import { ConversationProviderService, getEffectiveProviderConfiguration, isValidProviderRoute } from './conversation-provider.service';
-import type { ProviderRoute } from './conversation-provider.service';
+import { ConversationProviderService, getEffectiveProviderConfiguration } from './conversation-provider.service';
 import { ConversationOrchestrator } from './conversation-orchestrator.service';
 import type { PlaygroundTurnRequest } from './conversation.contracts';
 import type { PlaygroundTraceEvent } from './playground-diagnostics';
@@ -13,7 +12,7 @@ import type { PlaygroundTraceEvent } from './playground-diagnostics';
 const managers = ['OWNER', 'ADMIN'] as const;
 const isUniqueConflict = (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
 const assistantSelect = {
-  id: true, organizationId: true, createdById: true, name: true, description: true, providerMode: true, providerFallbacks: true, businessPurpose: true,
+  id: true, organizationId: true, createdById: true, name: true, description: true, businessPurpose: true,
   systemInstructions: true, defaultLanguage: true, responseTone: true, responseStyle: true, fallbackMessage: true, greetingMessage: true, escalationMessage: true,
   useAllEligibleWorkspaceKnowledge: true,
   status: true, archivedAt: true, createdAt: true, updatedAt: true,
@@ -43,8 +42,6 @@ export class AssistantService {
           createdById: userId,
           name,
           description: input.description?.trim() || null,
-          providerMode: 'MANUAL',
-          providerFallbacks: [],
           businessPurpose: input.businessPurpose?.trim() || null,
           systemInstructions: input.systemInstructions?.trim() || null,
           defaultLanguage: input.defaultLanguage?.trim() || 'auto',
@@ -89,12 +86,12 @@ export class AssistantService {
     return this.view(record);
   }
 
-  async update(userId: string, slug: string, assistantId: string, input: UpdateAssistantDto & { providerMode?: 'MANUAL' | 'AUTO_FALLBACK'; providerFallbacks?: ProviderRoute[] }) {
+  async update(userId: string, slug: string, assistantId: string, input: UpdateAssistantDto) {
     const membership = await this.workspaces.requireAccess(userId, slug, managers);
     if (input.useAllEligibleWorkspaceKnowledge !== undefined && membership.role !== 'OWNER') throw new ForbiddenException({ code: 'OWNER_REQUIRED', message: 'Only the workspace owner can change all-workspace knowledge access.' });
     if (Object.prototype.hasOwnProperty.call(input, 'aiProvider') || Object.prototype.hasOwnProperty.call(input, 'aiModel')) throw new BadRequestException({ code: 'PROVIDER_CONFIGURATION_SERVER_MANAGED', message: 'Provider and model are managed by the server configuration.' });
     const data: Record<string, unknown> = {};
-    for (const key of ['name', 'description', 'providerMode', 'providerFallbacks', 'businessPurpose', 'systemInstructions', 'defaultLanguage', 'responseTone', 'responseStyle', 'fallbackMessage', 'greetingMessage', 'escalationMessage', 'useAllEligibleWorkspaceKnowledge'] as const) {
+    for (const key of ['name', 'description', 'businessPurpose', 'systemInstructions', 'defaultLanguage', 'responseTone', 'responseStyle', 'fallbackMessage', 'greetingMessage', 'escalationMessage', 'useAllEligibleWorkspaceKnowledge'] as const) {
       if (input[key] !== undefined) {
         const value = input[key];
         data[key] = typeof value === 'string'
@@ -108,25 +105,9 @@ export class AssistantService {
       data.name = normalizedName;
       if (normalizedName.length < 2) throw new BadRequestException({ code: 'INVALID_ASSISTANT_NAME', message: 'Assistant name must be at least 2 characters.' });
     }
-    const existing = await this.db.chatbot.findFirst({ where: { id: assistantId, organizationId: membership.organizationId }, select: { id: true, providerMode: true, providerFallbacks: true, archivedAt: true } });
+    const existing = await this.db.chatbot.findFirst({ where: { id: assistantId, organizationId: membership.organizationId }, select: { id: true, archivedAt: true } });
     if (!existing) throw this.notFound();
     if (existing.archivedAt) throw new ConflictException({ code: 'ASSISTANT_ARCHIVED', message: 'Restore this assistant before changing its configuration.' });
-    const effective = getEffectiveProviderConfiguration();
-    const nextMode = data.providerMode !== undefined ? data.providerMode : existing.providerMode;
-    const rawBackups: unknown = data.providerFallbacks !== undefined ? data.providerFallbacks : existing.providerFallbacks;
-    const nextBackups = Array.isArray(rawBackups) ? rawBackups.filter(isValidProviderRoute) : [];
-    if (data.providerFallbacks !== undefined && (!Array.isArray(rawBackups) || rawBackups.length > 2 || nextBackups.length !== rawBackups.length)) throw new BadRequestException({ code: 'INVALID_PROVIDER_FALLBACK', message: 'Each backup must use an approved provider and valid model identifier.' });
-    if (nextMode === 'AUTO_FALLBACK') {
-      if (!effective.configurationValid || !effective.provider || !effective.model || !Array.isArray(rawBackups) || rawBackups.length > 2 || nextBackups.length !== rawBackups.length) throw new BadRequestException({ code: 'FALLBACK_CONFIGURATION_REQUIRED', message: 'Automatic fallback requires a valid server-configured primary and explicitly approved backups.' });
-      if (nextBackups.length === 0) throw new BadRequestException({ code: 'FALLBACK_CONFIGURATION_REQUIRED', message: 'Automatic fallback requires a primary provider and at least one explicitly approved backup.' });
-      const seen = new Set<string>([`${effective.provider}:${effective.model.trim().toLowerCase()}`]);
-      for (const backup of nextBackups) {
-        const key = `${backup.provider}:${backup.model.trim().toLowerCase()}`;
-        if (seen.has(key)) throw new BadRequestException({ code: 'DUPLICATE_PROVIDER_FALLBACK', message: 'Provider backup entries must be unique.' });
-        seen.add(key);
-      }
-    }
-    if (data.providerFallbacks !== undefined) data.providerFallbacks = nextBackups.map(({ provider, model }) => ({ provider, model: model.trim() }));
     const updated = await this.db.$transaction(async (tx: any) => {
       const record = await tx.chatbot.update({ where: { id_organizationId: { id: existing.id, organizationId: membership.organizationId } }, data, select: assistantSelect });
         await this.audit(tx, membership.organizationId, userId, 'assistant.behavior_updated', assistantId);
@@ -349,6 +330,34 @@ export class AssistantService {
       : this.conversationOrchestrator.playgroundConversation(userId, slug, assistantId, sessionId, offset, limit);
   }
 
+  async setPlaygroundDiagnosticCapture(userId: string, slug: string, assistantId: string, sessionId: string, enabled: boolean) {
+    return this.conversationOrchestrator.setPlaygroundDiagnosticCapture(userId, slug, assistantId, sessionId, enabled);
+  }
+
+  async playgroundDiagnosticTraces(userId: string, slug: string, assistantId: string, sessionId: string, offset?: number, limit?: number) {
+    return this.conversationOrchestrator.playgroundDiagnosticTraces(userId, slug, assistantId, sessionId, offset, limit);
+  }
+
+  async widgetDiagnosticSessions(userId: string, slug: string, assistantId: string, offset?: number, limit?: number) {
+    return this.conversationOrchestrator.widgetDiagnosticSessions(userId, slug, assistantId, offset, limit);
+  }
+
+  async widgetDiagnosticTraces(userId: string, slug: string, assistantId: string, conversationId: string, offset?: number, limit?: number) {
+    return this.conversationOrchestrator.widgetDiagnosticTraces(userId, slug, assistantId, conversationId, offset, limit);
+  }
+
+  async setWidgetDiagnosticCapture(userId: string, slug: string, assistantId: string, conversationId: string, enabled: boolean) {
+    return this.conversationOrchestrator.setWidgetDiagnosticCapture(userId, slug, assistantId, conversationId, enabled);
+  }
+
+  async playgroundSessions(userId: string, slug: string, assistantId: string, offset?: number, limit?: number) {
+    return this.conversationOrchestrator.playgroundSessions(userId, slug, assistantId, offset, limit);
+  }
+
+  async deletePlaygroundSession(userId: string, slug: string, assistantId: string, sessionId: string) {
+    return this.conversationOrchestrator.deletePlaygroundSession(userId, slug, assistantId, sessionId);
+  }
+
   private async audit(tx: any, organizationId: string, userId: string, action: string, assistantId: string) {
     await tx.auditEvent.create({ data: { organizationId, actorUserId: userId, action, entityType: 'chatbot', entityId: assistantId, metadata: null } });
   }
@@ -361,9 +370,8 @@ export class AssistantService {
 
   private view(record: any) {
     const providerConfig = getEffectiveProviderConfiguration();
-    const providerFallbacks = Array.isArray(record.providerFallbacks) ? record.providerFallbacks.filter(isValidProviderRoute) : [];
     const effectiveProviderConfiguration = { provider: providerConfig.provider, model: providerConfig.model, status: providerConfig.configurationStatus, configurationValid: providerConfig.configurationValid, keyConfigured: providerConfig.keyConfigured, ready: providerConfig.ready };
-    return { ...record, aiProvider: providerConfig.provider, aiModel: providerConfig.model, effectiveProviderConfiguration, providerFallbacks, status: record.archivedAt ? 'archived' : String(record.status).toLowerCase() };
+    return { ...record, aiProvider: providerConfig.provider, aiModel: providerConfig.model, effectiveProviderConfiguration, status: record.archivedAt ? 'archived' : String(record.status).toLowerCase() };
   }
 
   private notFound() {

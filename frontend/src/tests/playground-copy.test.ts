@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { buildPlaygroundDebugReport, formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, PLAYGROUND_EXPORT_MAX_BYTES } from '../pages/training/playground-copy';
+import { describe, expect, it, vi } from 'vitest';
+const traceMocks = vi.hoisted(() => ({ getPlaygroundDiagnosticTraces: vi.fn() }));
+vi.mock('../services/api/assistants', async importOriginal => ({ ...await importOriginal<typeof import('../services/api/assistants')>(), getPlaygroundDiagnosticTraces: traceMocks.getPlaygroundDiagnosticTraces }));
+import { buildPlaygroundDebugReport, formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundDiagnosticTraces, PLAYGROUND_EXPORT_MAX_BYTES } from '../pages/training/playground-copy';
 
 describe('Playground copy formatting', () => {
   const messages = [
@@ -44,12 +46,37 @@ describe('Playground copy formatting', () => {
 
   it('builds chronological conversation debug JSON and marks historical trace gaps explicitly', () => {
     const result = buildPlaygroundDebugReport({ assistantName: 'Carteio AI', conversationId: 'session-1', messages: [messages[0]!, messages[1]!] });
-    expect(result.report).toMatchObject({ reportVersion: 'playground-execution-debug-v1', executionIdentity: { conversationId: 'session-1' }, conversationSummary: { totalTurns: 1, successfulResponses: 1 }, turns: [{ role: 'user' }, { role: 'assistant', diagnostics: { status: 'NOT_CAPTURED' } }] });
-    expect(result.json).not.toContain('दूसरी पंक्ति');
+    expect(result.report).toMatchObject({ reportVersion: 'playground-execution-debug-v2', executionIdentity: { conversationId: 'session-1' }, conversationSummary: { totalTurns: 1, successfulResponses: 1 }, turns: [{ role: 'user' }, { role: 'assistant', diagnosticStatus: 'NOT_CAPTURED' }] });
+    expect(result.json).toContain('दूसरी पंक्ति');
   });
 
   it('reports omitted turns when the safe byte limit is exceeded', () => {
     const result = buildPlaygroundDebugReport({ assistantName: 'Carteio AI', conversationId: null, messages, maxBytes: 100 });
-    expect(result.report.diagnosticCompleteness).toMatchObject({ status: 'TRUNCATED', reason: 'BYTE_LIMIT', omittedTurnCount: messages.length });
+    expect(result.report.completeness).toMatchObject({ status: 'INCOMPLETE_BYTE_LIMIT' });
   });
+
+  it('copies failed retry attempts, successful stages, and safe trace JSON without protected provider output', () => {
+    const trace = { traceId: 'trace-2', startedAt: '', finishedAt: '', totalLatencyMs: 9, finalSource: 'AI_GENERATED' as const, events: [{ sequence: 1, at: '', operation: 'ANSWER_GENERATION', outcome: 'FAILED', status: 'failed', errorCategory: 'PROVIDER_ERROR' }], retrieval: { attempted: false, mode: 'not_attempted', resultCount: 0, eligibleSourceCount: 0 }, tools: [], evidence: [], protectedResponseDebug: { records: [{ text: 'SECRET PROVIDER PROMPT' }] } };
+    const attempts = [{ id: 'attempt-1', requestId: 'request-1', clientTurnId: 'turn-1', attempt: 1, outcome: 'FAILED' as const, payload: trace as never, createdAt: '2026-10-23T10:15:00Z' }];
+    const result = buildPlaygroundDebugReport({ assistantName: 'Carteio AI', conversationId: 'session-1', messages: [{ ...messages[0]!, clientTurnId: 'turn-1' }], attempts });
+    const report = result.report as { attempts: Array<{ attempt: number }> };
+    expect(report.attempts).toHaveLength(1);
+    expect(report.attempts[0]?.attempt).toBe(1);
+    expect(result.json).toContain('PROVIDER_ERROR');
+    expect(result.json).not.toContain('SECRET PROVIDER PROMPT');
+  });
+
+  it('loads authorized trace pages in order and deduplicates overlapping record IDs', async () => {
+    traceMocks.getPlaygroundDiagnosticTraces.mockReset()
+      .mockResolvedValueOnce({ sessionId: 'session-1', captureEnabled: true, offset: 0, limit: 100, hasMore: true, nextOffset: 1, items: [{ id: 'trace-1', requestId: 'request-1', clientTurnId: 'turn-1', attempt: 1, outcome: 'FAILED', payload: {} as never, createdAt: '2026-10-23T10:15:00Z' }] })
+      .mockResolvedValueOnce({ sessionId: 'session-1', captureEnabled: true, offset: 1, limit: 100, hasMore: false, nextOffset: null, items: [{ id: 'trace-1', requestId: 'request-1', clientTurnId: 'turn-1', attempt: 1, outcome: 'FAILED', payload: {} as never, createdAt: '2026-10-23T10:15:00Z' }, { id: 'trace-2', requestId: 'request-2', clientTurnId: 'turn-1', attempt: 2, outcome: 'COMPLETED', payload: {} as never, createdAt: '2026-10-23T10:16:00Z' }] });
+    const result = await loadCompletePlaygroundDiagnosticTraces({ workspaceSlug: 'north', assistantId: 'assistant-1', conversationId: 'session-1', signal: new AbortController().signal });
+    expect(result.traces.map(item => item.id)).toEqual(['trace-1', 'trace-2']);
+    expect(result.captureEnabled).toBe(true);
+    expect(result.incomplete).toBe(false);
+    expect(traceMocks.getPlaygroundDiagnosticTraces).toHaveBeenNthCalledWith(1, 'north', 'assistant-1', 'session-1', expect.any(AbortSignal), { offset: 0, limit: 100 });
+    expect(traceMocks.getPlaygroundDiagnosticTraces).toHaveBeenNthCalledWith(2, 'north', 'assistant-1', 'session-1', expect.any(AbortSignal), { offset: 1, limit: 100 });
+  });
+
+
 });

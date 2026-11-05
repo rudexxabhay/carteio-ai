@@ -34,14 +34,8 @@ async function bootstrap() {
   }
   initializeEffectiveProviderConfiguration({
     AI_DEFAULT_PROVIDER: config.AI_DEFAULT_PROVIDER,
-    GROQ_MODEL: config.GROQ_MODEL,
-    GEMINI_MODEL: config.GEMINI_MODEL,
-    OPENAI_MODEL: config.OPENAI_MODEL,
     OPENROUTER_MODEL: config.OPENROUTER_MODEL,
     OPENROUTER_BASE_URL: config.OPENROUTER_BASE_URL,
-    GROQ_API_KEY: process.env.GROQ_API_KEY,
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   });
   const availableLevels: LogLevel[] = ['error', 'warn', 'log', 'debug', 'verbose'];

@@ -11,7 +11,6 @@ import { PageHeader } from '../../layouts/DashboardLayout/dashboard-v2-ui';
 const emptyInput: AssistantInput = {
   name: '', description: '', businessPurpose: '', systemInstructions: '', defaultLanguage: 'auto',
   responseTone: 'professional', fallbackMessage: 'I’m not able to help with that right now. Please contact the business directly.',
-  providerMode: 'MANUAL', providerFallbacks: [],
 };
 const safeMessage = (cause: unknown, fallback: string) => cause instanceof ApiError && cause.kind === 'http' && cause.status !== undefined && cause.status < 500
   ? cause.message : fallback;
@@ -83,7 +82,6 @@ export function AssistantEditorPage() {
     try {
       if (creating) {
         const creationInput: AssistantInput = { ...normalized };
-        delete creationInput.providerMode; delete creationInput.providerFallbacks;
         const created = await createAssistant(workspace.slug, creationInput);
         navigate(`/workspace/${encodeURIComponent(workspace.slug)}/assistants/${encodeURIComponent(created.id)}`, { replace: true });
       } else if (assistantId) {
@@ -140,9 +138,7 @@ export function AssistantEditorPage() {
         <label className="workspace-field">Fallback message<input required minLength={1} maxLength={500} value={input.fallbackMessage} disabled={!manager || saving} onChange={(event) => setField('fallbackMessage', event.target.value)} placeholder="Message shown when help is unavailable"/></label>
         <div className="assistant-provider-status assistant-span-two" role="status"><strong>Server-managed provider</strong><span>{providerStatus ? effectiveProviderLabel(providerStatus.effective) : assistant ? effectiveProviderLabel(assistant.effectiveProviderConfiguration) : 'Loading server configuration…'}</span><small>Provider and model are managed by the server configuration.</small></div>
         {!creating && <>
-          <label className="workspace-field">Provider selection mode<select value={input.providerMode || 'MANUAL'} disabled={!manager || saving} onChange={(event) => setField('providerMode', event.target.value as 'MANUAL' | 'AUTO_FALLBACK')}><option value="MANUAL">Manual · configured provider only</option><option value="AUTO_FALLBACK">Automatic fallback · transient failures only</option></select></label>
-          {input.providerMode === 'AUTO_FALLBACK' && <label className="workspace-field assistant-span-two">Approved backup routes<input value={(input.providerFallbacks || []).map((route) => `${route.provider}:${route.model}`).join(', ')} disabled={!manager || saving} onChange={(event) => setField('providerFallbacks', event.target.value.split(',').map((route) => { const [provider, ...modelParts] = route.trim().split(':'); return { provider: provider as 'groq' | 'gemini' | 'openai' | 'openrouter', model: modelParts.join(':').trim() }; }).filter((route) => route.provider && route.model))} placeholder="gemini:gemini-3.8-flash"/><small>List up to two approved backups in order. Enabling fallback permits authorized request content to be sent to those providers.</small></label>}
-          <p className="assistant-provider-status assistant-span-two" role="status">{providerStatus ? (['groq', 'gemini', 'openai', 'openrouter'] as const).map((provider) => `${provider === 'gemini' ? 'Google Gemini' : provider === 'groq' ? 'Groq' : provider === 'openrouter' ? 'OpenRouter' : 'OpenAI'}: ${providerStatus[provider].keyConfigured ? 'key configured · connectivity not verified' : 'backend key missing'}`).join(' · ') : 'Provider key status is unavailable.'}</p>
+          <p className="assistant-provider-status assistant-span-two" role="status">OpenRouter is the configured provider for all assistants. Its selected model is managed by the backend.</p>
           {providerStatus?.effective.provider === 'openrouter' && <div className="assistant-provider-status assistant-span-two" role="status"><span>OpenRouter model: {providerStatus.openrouter.modelValidation?.toolCalling || 'UNVERIFIED'}{providerStatus.openrouter.modelValidation?.checkedAt ? ` · checked ${dateLabel(providerStatus.openrouter.modelValidation.checkedAt)}` : ''}</span>{manager && <button type="button" className="button button-secondary" disabled={validatingOpenRouter || saving || !providerStatus.openrouter.keyConfigured} onClick={() => void runOpenRouterValidation()}>{validatingOpenRouter ? 'Checking model…' : 'Validate OpenRouter model'}</button>}{openRouterValidation && <small>{openRouterValidation}</small>}</div>}
         </>}
       </div>
@@ -153,13 +149,12 @@ export function AssistantEditorPage() {
 }
 
 function fromAssistant(assistant: Assistant): AssistantInput {
-  return { name: assistant.name, description: assistant.description || '', businessPurpose: assistant.businessPurpose || '', systemInstructions: assistant.systemInstructions || '', defaultLanguage: assistant.defaultLanguage, responseTone: assistant.responseTone, fallbackMessage: assistant.fallbackMessage, providerMode: assistant.providerMode || 'MANUAL', providerFallbacks: assistant.providerFallbacks || [] };
+  return { name: assistant.name, description: assistant.description || '', businessPurpose: assistant.businessPurpose || '', systemInstructions: assistant.systemInstructions || '', defaultLanguage: assistant.defaultLanguage, responseTone: assistant.responseTone, fallbackMessage: assistant.fallbackMessage };
 }
 
 function effectiveProviderLabel(config: EffectiveProviderConfiguration | undefined) {
   if (!config?.provider || !config.model) return `Not configured · ${config?.status || 'status unavailable'}`;
-  const name = config.provider === 'gemini' ? 'Google Gemini' : config.provider === 'groq' ? 'Groq' : config.provider === 'openrouter' ? 'OpenRouter' : 'OpenAI';
-  return `${name} · ${config.model} · ${config.ready ? 'key configured' : config.status}`;
+  return `OpenRouter · ${config.model} · ${config.ready ? 'key configured' : config.status}`;
 }
 
 function AssistantValue({ label, value }: { label: string; value: string | null }) {

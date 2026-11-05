@@ -5,7 +5,7 @@ import { AuthSessionGuard } from '../auth/auth-session.guard';
 import type { AuthenticatedRequest } from '../auth/auth-session.guard';
 import { AssistantService } from './assistant.service';
 import { AssistantBusinessRuleDto, AssistantListQueryDto, CreateAssistantDto, UpdateAssistantBusinessRuleDto } from './assistant.dto';
-import { PlaygroundChatDto, UpdateAssistantPlaygroundDto } from './playground.dto';
+import { PlaygroundChatDto, PlaygroundDiagnosticCaptureDto, UpdateAssistantPlaygroundDto } from './playground.dto';
 import { TrainingHistoryQueryDto } from './training-history.dto';
 import { playgroundDiagnosticsEnabled, type PlaygroundTraceEvent } from './playground-diagnostics';
 
@@ -168,5 +168,44 @@ export class AssistantController {
   playgroundConversation(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string, @Query('offset') offset?: string, @Query('limit') limit?: string, @Query('latest') latest?: string) {
     const boundedInteger = (value: string | undefined, fallback: number, maximum: number) => value && /^\d{1,7}$/.test(value) ? Math.min(maximum, Number(value)) : fallback;
     return this.assistants.playgroundConversation(request.authSession.userId, slug, assistantId, sessionId, boundedInteger(offset, 0, 1_000_000), boundedInteger(limit, 40, 100), latest === 'true');
+  }
+
+  @Patch(':assistantId/playground/sessions/:sessionId/diagnostic-capture')
+  setPlaygroundDiagnosticCapture(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string, @Body() body: PlaygroundDiagnosticCaptureDto) {
+    return this.assistants.setPlaygroundDiagnosticCapture(request.authSession.userId, slug, assistantId, sessionId, body.enabled);
+  }
+
+  @Get(':assistantId/playground/sessions/:sessionId/traces')
+  playgroundDiagnosticTraces(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string, @Query('offset') offset?: string, @Query('limit') limit?: string) {
+    const boundedInteger = (value: string | undefined, fallback: number, maximum: number) => value && /^\d{1,7}$/.test(value) ? Math.min(maximum, Number(value)) : fallback;
+    return this.assistants.playgroundDiagnosticTraces(request.authSession.userId, slug, assistantId, sessionId, boundedInteger(offset, 0, 1_000_000), boundedInteger(limit, 40, 100));
+  }
+
+  @Get(':assistantId/playground/sessions')
+  playgroundSessions(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Query('offset') offset?: string, @Query('limit') limit?: string) {
+    const boundedInteger = (value: string | undefined, fallback: number, maximum: number) => value && /^\d{1,7}$/.test(value) ? Math.min(maximum, Number(value)) : fallback;
+    return this.assistants.playgroundSessions(request.authSession.userId, slug, assistantId, boundedInteger(offset, 0, 1_000_000), boundedInteger(limit, 20, 50));
+  }
+
+  @Delete(':assistantId/playground/sessions/:sessionId')
+  deletePlaygroundSession(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string) {
+    return this.assistants.deletePlaygroundSession(request.authSession.userId, slug, assistantId, sessionId);
+  }
+
+  @Get(':assistantId/inspector/widget/conversations')
+  widgetDiagnosticSessions(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Query('offset') offset?: string, @Query('limit') limit?: string) {
+    const boundedInteger = (value: string | undefined, fallback: number, maximum: number) => value && /^\d{1,7}$/.test(value) ? Math.min(maximum, Number(value)) : fallback;
+    return this.assistants.widgetDiagnosticSessions(request.authSession.userId, slug, assistantId, boundedInteger(offset, 0, 1_000_000), boundedInteger(limit, 20, 50));
+  }
+
+  @Get(':assistantId/inspector/widget/conversations/:conversationId/traces')
+  widgetDiagnosticTraces(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string, @Query('offset') offset?: string, @Query('limit') limit?: string) {
+    const boundedInteger = (value: string | undefined, fallback: number, maximum: number) => value && /^\d{1,7}$/.test(value) ? Math.min(maximum, Number(value)) : fallback;
+    return this.assistants.widgetDiagnosticTraces(request.authSession.userId, slug, assistantId, conversationId, boundedInteger(offset, 0, 1_000_000), boundedInteger(limit, 40, 100));
+  }
+
+  @Patch(':assistantId/inspector/widget/conversations/:conversationId/diagnostic-capture')
+  setWidgetDiagnosticCapture(@Req() request: AuthenticatedRequest, @Param('slug') slug: string, @Param('assistantId', ParseUUIDPipe) assistantId: string, @Param('conversationId', new ParseUUIDPipe({ version: '4' })) conversationId: string, @Body() body: PlaygroundDiagnosticCaptureDto) {
+    return this.assistants.setWidgetDiagnosticCapture(request.authSession.userId, slug, assistantId, conversationId, body.enabled);
   }
 }

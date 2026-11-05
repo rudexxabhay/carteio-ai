@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Logger, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthSessionGuard } from '../auth/auth-session.guard';
-import { CommerceListQueryDto, CreateIntegrationConnectionDto, CreateConnectorDto, ConnectorCredentialsDto, InboxListQueryDto, InboxMessagePageQueryDto, QueueConnectorSyncDto, ShopifyInstallDto, TicketAssignmentDto, TicketListQueryDto, TicketNoteDto, TicketReplyDto, UpdateConnectorDto, UpdateConnectorDataPermissionDto, UpdateConnectorSyncScheduleDto, UpdateInboxConversationDto, UpdateTicketDto } from './saas.dto';
+import { CommerceListQueryDto, CreateIntegrationConnectionDto, CreateConnectorDto, ConnectorCredentialsDto, InboxListQueryDto, InboxMessagePageQueryDto, QueueConnectorSyncDto, ShopifyApiTestDto, ShopifyInstallDto, TicketAssignmentDto, TicketListQueryDto, TicketNoteDto, TicketReplyDto, UpdateConnectorDto, UpdateConnectorDataPermissionDto, UpdateConnectorSyncScheduleDto, UpdateInboxConversationDto, UpdateTicketDto } from './saas.dto';
 import { SaasService } from './saas.service';
 import { TicketingService } from './ticketing.service';
 import { ConnectorService } from './connectors/connector.service';
@@ -25,6 +25,7 @@ export class SaasController {
   @Patch('connectors/:connectorInstanceId') connectorUpdate(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Body() body: UpdateConnectorDto) { return this.connectors.update(r.authSession!.userId, slug, id, body); }
   @Post('connectors/:connectorInstanceId/credentials') connectorCredentials(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Body() body: ConnectorCredentialsDto) { return this.connectors.replaceCredentials(r.authSession!.userId, slug, id, body.credentials); }
   @Post('connectors/:connectorInstanceId/verify') connectorVerify(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string) { return this.connectors.verify(r.authSession!.userId, slug, id); }
+  @Post('connectors/:connectorInstanceId/shopify/api-test') shopifyApiTest(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Body() body: ShopifyApiTestDto) { return this.connectors.shopifyApiTest(r.authSession!.userId, slug, id, body as any); }
   @Post('connectors/:connectorInstanceId/reconnect') connectorReconnect(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string) { return this.connectors.verify(r.authSession!.userId, slug, id); }
   @Post('connectors/:connectorInstanceId/disconnect') connectorDisconnect(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string) { return this.connectors.disconnect(r.authSession!.userId, slug, id); }
   @Get('connectors/:connectorInstanceId/permissions') connectorPermissions(@Req() r: AuthenticatedRequest, @Param('slug') slug: string, @Param('connectorInstanceId', ParseUUIDPipe) id: string, @Query('assistantId') assistantId?: string) { return this.connectors.permissions(r.authSession!.userId, slug, id, assistantId); }

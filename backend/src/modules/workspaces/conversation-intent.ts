@@ -6,7 +6,7 @@ import { decideSocialResponse } from './social-conversation';
 
 export type PlaygroundTurn = { role: 'user' | 'assistant'; content: string; responseCategory?: string | null };
 export const MAX_CONVERSATION_HISTORY_MESSAGES = 40;
-export type PlaygroundConversationHandle = { id: string; lockId: string; organizationId: string; assistantId: string; userId: string; nextSequence: number; turns: PlaygroundTurn[]; memory?: ConversationMemoryDiagnostic };
+export type PlaygroundConversationHandle = { id: string; lockId: string; organizationId: string; assistantId: string; userId: string; nextSequence: number; turns: PlaygroundTurn[]; diagnosticCaptureEnabled?: boolean; expiresAt?: Date; memory?: ConversationMemoryDiagnostic };
 export type ConversationUsage = { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 export type PlaygroundLanguage = string;
 
@@ -204,23 +204,31 @@ export function describeInterpretationSocialGuard(raw: string, originalMessage: 
   } catch { return { socialGuardStatus: 'UNKNOWN' }; }
 }
 
-export function validateInterpretation(raw: string, originalMessage = '', priorTurns: readonly PlaygroundTurn[] = []): { value: QueryInterpretation | null; reason: string; semanticValidationReason?: SemanticValidationReason; semanticValidationDetail?: SemanticValidationDetail; metadataWarnings?: readonly string[] } {
+export type InterpretationValidationIssue = Readonly<{ path: string; code: string; reason: string; expected: string; receivedType: string; received?: unknown; failurePhase: 'PARSING' | 'SCHEMA_VALIDATION' | 'SEMANTIC_VALIDATION' }>;
+export function validateInterpretation(raw: string, originalMessage = '', priorTurns: readonly PlaygroundTurn[] = []): { value: QueryInterpretation | null; reason: string; parsedResponse?: unknown; issues?: readonly InterpretationValidationIssue[]; parsing?: { parsed: boolean; rootType?: string }; semanticValidationReason?: SemanticValidationReason; semanticValidationDetail?: SemanticValidationDetail; semanticIssue?: InterpretationValidationIssue & { blocking: false }; metadataWarnings?: readonly string[] } {
+  let parsedResponse: unknown;
+  const valueType = (value: unknown) => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  const fail = (reason: string, path: string, expected: string, received: unknown, failurePhase: InterpretationValidationIssue['failurePhase'] = 'SCHEMA_VALIDATION', code = reason.toUpperCase()) => ({ value: null, reason, ...(parsedResponse !== undefined ? { parsedResponse } : {}), parsing: { parsed: failurePhase !== 'PARSING', rootType: failurePhase === 'PARSING' ? undefined : valueType(received) }, issues: [{ path, code, reason: `Rejected during ${failurePhase.toLowerCase().replaceAll('_', ' ')}.`, expected, receivedType: valueType(received), ...(received !== undefined ? { received } : {}), failurePhase }] as const });
   const json = extractJsonObject(raw);
-  if (!json) return { value: null, reason: 'json_object_missing' };
+  if (!json) return fail('json_object_missing', '$', 'A JSON object response', raw, 'PARSING');
   let parsed: unknown;
-  try { parsed = JSON.parse(json); }
-  catch { return { value: null, reason: 'malformed_json' }; }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { value: null, reason: 'invalid_root_shape' };
+  try { parsed = JSON.parse(json); parsedResponse = parsed; }
+  catch { return fail('malformed_json', '$', 'Valid JSON object syntax', raw, 'PARSING'); }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return fail('invalid_root_shape', '$', 'JSON object', parsed);
   const record = parsed as Record<string, unknown>;
   const supportedKeys = ['retrievalQueries', 'englishQuery', 'englishQueries', 'answerAspects', 'language', 'script', 'style', 'intent', 'needsClarification', 'semantics', 'scopeSplit', 'continuityAct', 'referenceTurnOffset', 'ticketIntent'];
-  if (Object.keys(record).some((key) => !supportedKeys.includes(key))) return { value: null, reason: 'unsupported_interpretation_field' };
-  if (!safeLanguageDescriptor(record.language)) return { value: null, reason: 'invalid_language_descriptor' };
+  const unsupportedKey = Object.keys(record).find((key) => !supportedKeys.includes(key));
+  if (unsupportedKey) return fail('unsupported_interpretation_field', `$.${unsupportedKey}`, 'A supported interpretation field', record[unsupportedKey]);
+  if (!safeLanguageDescriptor(record.language)) return fail('invalid_language_descriptor', '$.language', 'A safe non-empty language descriptor', record.language);
   const retrievalQueries = Array.isArray(record.retrievalQueries)
     ? record.retrievalQueries.filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0 && candidate.length <= 300).slice(0, 2)
     : [record.englishQuery, ...(Array.isArray(record.englishQueries) ? record.englishQueries : [])].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0 && candidate.length <= 300).slice(0, 2);
   const semanticValidation = record.semantics === undefined
     ? { value: unknownSemanticInterpretation(), reason: 'valid' as const }
     : validateMultilingualSemanticInterpretationDetailed(record.semantics, originalMessage);
+  const semanticDetail = semanticValidation.detail ?? semanticValidation.reason;
+  const semanticPaths: Record<string, string> = { semantic_root_shape: '$.semantics', semantic_unsupported_field: '$.semantics', language_object_shape: '$.semantics.language', language_fields_shape: '$.semantics.language', language_primary_shape: '$.semantics.language.primary', language_scripts_shape: '$.semantics.language.scripts', language_mixed_shape: '$.semantics.language.mixed', language_certainty_shape: '$.semantics.language.certainty', language_signals_shape: '$.semantics.language.signals', semantic_response_language_shape: '$.semantics.responseLanguagePreference', semantic_social_classification: '$.semantics.socialClassification', semantic_information_need: '$.semantics.informationNeed', semantic_scope_assessment: '$.semantics.businessScopeAssessment', semantic_intents_shape: '$.semantics.intents', semantic_intent_shape: '$.semantics.intents', semantic_duplicate_intent: '$.semantics.intents', semantic_entities_shape: '$.semantics.entities', semantic_entity_shape: '$.semantics.entities', semantic_entity_not_exact_message_span: '$.semantics.entities', semantic_uncertainty_shape: '$.semantics.uncertainty', semantic_uncertainty_conflict: '$.semantics.uncertainty' };
+  const semanticIssue: (InterpretationValidationIssue & { blocking: false }) | undefined = semanticValidation.value ? undefined : { path: semanticPaths[semanticDetail] ?? '$.semantics', code: semanticDetail.toUpperCase().replaceAll(/[^A-Z0-9]+/gu, '_').slice(0, 64), reason: 'Optional semantic metadata failed its strict semantic contract and was not used for routing.', expected: 'A semantically valid interpretation that satisfies the declared contract', receivedType: valueType(record.semantics), ...(record.semantics !== undefined ? { received: record.semantics } : {}), failurePhase: 'SEMANTIC_VALIDATION', blocking: false };
   // Semantic metadata is advisory. A malformed optional object must not discard
   // an otherwise valid query rewrite and force the whole turn through recovery.
   // Unknown semantics grant no shortcut or capability; the original message
@@ -251,7 +259,7 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
   // Search fields are irrelevant only after the semantic contract establishes
   // a nonfactual act. Missing/invalid semantics never grant this exemption.
   if (!retrievalQueries.length && !(semanticValidation.value && standaloneConversationalAct)) {
-    return { value: null, reason: 'invalid_retrieval_queries' };
+    return fail('invalid_retrieval_queries', '$.retrievalQueries', 'One or more non-empty query strings (unless a validated conversational turn)', record.retrievalQueries);
   }
   const unresolvedNeed = record.semantics !== undefined && Boolean(semanticValidation.value)
     && isUnresolvedSemanticNeed(semantics);
@@ -260,29 +268,30 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
   if (record.answerAspects === undefined) {
     answerAspects = emptyAspectsAllowed ? [] : [{ questionSpan: originalMessage.trim().slice(0, 2000), retrievalQuery: retrievalQueries[0]! }];
   } else {
-    if (!Array.isArray(record.answerAspects) || record.answerAspects.length > 4) return { value: null, reason: 'invalid_answer_aspects' };
+    if (!Array.isArray(record.answerAspects) || record.answerAspects.length > 4) return fail('invalid_answer_aspects', '$.answerAspects', 'An array with at most four answer aspects', record.answerAspects);
     if (record.answerAspects.length === 0) {
-      if (!emptyAspectsAllowed) return { value: null, reason: 'invalid_answer_aspects' };
+      if (!emptyAspectsAllowed) return fail('invalid_answer_aspects', '$.answerAspects', 'At least one answer aspect for a substantive request', record.answerAspects);
       answerAspects = [];
     } else {
-      if (emptyAspectsAllowed) return { value: null, reason: 'invalid_answer_aspects' };
+      if (emptyAspectsAllowed) return fail('invalid_answer_aspects', '$.answerAspects', 'An empty array for a validated conversational/non-factual turn', record.answerAspects);
       answerAspects = [];
-      for (const item of record.answerAspects) {
-        if (typeof item !== 'object' || item === null || Array.isArray(item)) return { value: null, reason: 'invalid_answer_aspect' };
+      for (const [aspectIndex, item] of record.answerAspects.entries()) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) return fail('invalid_answer_aspect', `$.answerAspects[${aspectIndex}]`, 'An object with questionSpan and retrievalQuery fields', item);
         const aspect = item as Record<string, unknown>;
-        if (Object.keys(aspect).some((key) => !['questionSpan', 'retrievalQuery'].includes(key))
-          || typeof aspect.questionSpan !== 'string' || !aspect.questionSpan.trim() || aspect.questionSpan.length > 2000
-          || !originalMessage.includes(aspect.questionSpan)
-          || typeof aspect.retrievalQuery !== 'string' || !aspect.retrievalQuery.trim() || aspect.retrievalQuery.length > 300
-          || /[\u0000-\u001f\u007f]/u.test(aspect.retrievalQuery)) return { value: null, reason: 'invalid_answer_aspect' };
+        const unsupportedAspectKey = Object.keys(aspect).find((key) => !['questionSpan', 'retrievalQuery'].includes(key));
+        if (unsupportedAspectKey) return fail('invalid_answer_aspect', `$.answerAspects[${aspectIndex}].${unsupportedAspectKey}`, 'Only questionSpan and retrievalQuery', aspect[unsupportedAspectKey]);
+        if (typeof aspect.questionSpan !== 'string' || !aspect.questionSpan.trim() || aspect.questionSpan.length > 2000) return fail('invalid_answer_aspect', `$.answerAspects[${aspectIndex}].questionSpan`, 'A non-empty string of at most 2000 characters', aspect.questionSpan, 'SCHEMA_VALIDATION', 'INVALID_QUESTION_SPAN_TYPE_OR_LENGTH');
+        if (!originalMessage.includes(aspect.questionSpan)) return fail('invalid_answer_aspect', `$.answerAspects[${aspectIndex}].questionSpan`, 'An exact substring of the current user message', aspect.questionSpan, 'SEMANTIC_VALIDATION', 'INVALID_SPAN');
+        if (typeof aspect.retrievalQuery !== 'string' || !aspect.retrievalQuery.trim() || aspect.retrievalQuery.length > 300) return fail('invalid_answer_aspect', `$.answerAspects[${aspectIndex}].retrievalQuery`, 'A non-empty string of at most 300 characters', aspect.retrievalQuery);
+        if (/[\u0000-\u001f\u007f]/u.test(aspect.retrievalQuery)) return fail('invalid_answer_aspect', `$.answerAspects[${aspectIndex}].retrievalQuery`, 'A query string without control characters', aspect.retrievalQuery);
         answerAspects.push({ questionSpan: aspect.questionSpan, retrievalQuery: aspect.retrievalQuery.trim() });
       }
-      if (new Set(answerAspects.map((aspect) => aspect.questionSpan.normalize('NFKC').toLocaleLowerCase())).size !== answerAspects.length) return { value: null, reason: 'duplicate_answer_aspect' };
+      if (new Set(answerAspects.map((aspect) => aspect.questionSpan.normalize('NFKC').toLocaleLowerCase())).size !== answerAspects.length) return fail('duplicate_answer_aspect', '$.answerAspects', 'Distinct question spans', answerAspects.map((aspect) => aspect.questionSpan), 'SEMANTIC_VALIDATION');
     }
   }
   const script = record.script === undefined ? 'not specified' : record.script;
   const style = record.style === undefined ? 'not specified' : record.style;
-  if (!safeLanguageDescriptor(script) || !safeLanguageDescriptor(style)) return { value: null, reason: 'invalid_language_style' };
+  if (!safeLanguageDescriptor(script) || !safeLanguageDescriptor(style)) return fail('invalid_language_style', !safeLanguageDescriptor(script) ? '$.script' : '$.style', 'A safe non-empty language style descriptor', !safeLanguageDescriptor(script) ? script : style);
   // Some providers emit the semantic intent enum in the legacy field (for
   // example SUPPORT_REQUEST) although the legacy enum intentionally uses
   // broader labels. Translate only from the independently validated semantic
@@ -292,9 +301,9 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
     && semanticValidation.value
     ? semanticLegacyIntent(semantics)
     : null;
-  if (!isInterpretationIntent(record.intent) && !semanticAlias) return { value: null, reason: 'invalid_intent' };
+  if (!isInterpretationIntent(record.intent) && !semanticAlias) return fail('invalid_intent', '$.intent', 'A supported interpretation intent', record.intent);
   const intent = isInterpretationIntent(record.intent) ? record.intent : semanticAlias!;
-  if (record.needsClarification !== undefined && typeof record.needsClarification !== 'boolean') return { value: null, reason: 'invalid_clarification_flag' };
+  if (record.needsClarification !== undefined && typeof record.needsClarification !== 'boolean') return fail('invalid_clarification_flag', '$.needsClarification', 'A boolean', record.needsClarification);
   // Advisory context hints may be discarded; they must not erase a valid
   // semantic interpretation. Tool/ticket arguments retain their strict checks.
   const metadataWarnings: string[] = semanticValidation.value ? [] : [semanticValidation.detail ?? semanticValidation.reason];
@@ -306,13 +315,13 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
   const rawTicketIntent = record.ticketIntent;
   let ticketIntent: TicketIntentInterpretation = { ticketRequest: 'NONE', draftAction: 'NONE' };
   if (rawTicketIntent !== undefined) {
-    if (!rawTicketIntent || typeof rawTicketIntent !== 'object' || Array.isArray(rawTicketIntent)) return { value: null, reason: 'invalid_ticket_intent' };
+    if (!rawTicketIntent || typeof rawTicketIntent !== 'object' || Array.isArray(rawTicketIntent)) return fail('invalid_ticket_intent', '$.ticketIntent', 'An object', rawTicketIntent);
     const ticket = rawTicketIntent as Record<string, unknown>;
     if (Object.keys(ticket).some((key) => !['ticketRequest', 'draftAction', 'title', 'description', 'category', 'priority'].includes(key))
       || !['EXPLICIT', 'NONE'].includes(String(ticket.ticketRequest))
-      || !['COLLECT', 'CONFIRM', 'CANCEL', 'NONE'].includes(String(ticket.draftAction))) return { value: null, reason: 'invalid_ticket_intent' };
-    for (const key of ['title', 'description', 'category'] as const) if (ticket[key] !== undefined && (typeof ticket[key] !== 'string' || !ticket[key].trim() || ticket[key].length > (key === 'description' ? 8000 : key === 'title' ? 180 : 80))) return { value: null, reason: 'invalid_ticket_intent' };
-    if (ticket.priority !== undefined && !['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(String(ticket.priority))) return { value: null, reason: 'invalid_ticket_intent' };
+      || !['COLLECT', 'CONFIRM', 'CANCEL', 'NONE'].includes(String(ticket.draftAction))) return fail('invalid_ticket_intent', '$.ticketIntent.ticketRequest', 'ticketRequest EXPLICIT/NONE and draftAction COLLECT/CONFIRM/CANCEL/NONE', ticket);
+    for (const key of ['title', 'description', 'category'] as const) if (ticket[key] !== undefined && (typeof ticket[key] !== 'string' || !ticket[key].trim() || ticket[key].length > (key === 'description' ? 8000 : key === 'title' ? 180 : 80))) return fail('invalid_ticket_intent', `$.ticketIntent.${key}`, `A non-empty string within the ${key} length limit`, ticket[key]);
+    if (ticket.priority !== undefined && !['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(String(ticket.priority))) return fail('invalid_ticket_intent', '$.ticketIntent.priority', 'LOW, MEDIUM, HIGH, or URGENT', ticket.priority);
     ticketIntent = { ticketRequest: ticket.ticketRequest as TicketIntentInterpretation['ticketRequest'], draftAction: ticket.draftAction as TicketIntentInterpretation['draftAction'], ...(typeof ticket.title === 'string' ? { title: ticket.title.trim() } : {}), ...(typeof ticket.description === 'string' ? { description: ticket.description.trim() } : {}), ...(typeof ticket.category === 'string' ? { category: ticket.category.trim() } : {}), ...(typeof ticket.priority === 'string' ? { priority: ticket.priority as TicketIntentInterpretation['priority'] } : {}) };
   }
   let referenceTurnOffset: number | null = null;
@@ -322,7 +331,7 @@ export function validateInterpretation(raw: string, originalMessage = '', priorT
       metadataWarnings.push('invalid_reference_turn_offset');
     } else referenceTurnOffset = record.referenceTurnOffset as number;
   }
-  return { value: { retrievalQueries: retrievalQueries.map((candidate) => candidate.trim()), answerAspects: Object.freeze(answerAspects.map((aspect) => Object.freeze(aspect))), language: record.language.trim(), script: script.trim(), style: style.trim(), intent, needsClarification: record.needsClarification === true, semantics, scopeSplit, continuityAct: continuityAct as ConversationContinuityAct, referenceTurnOffset, ticketIntent }, reason: 'valid', ...(metadataWarnings.length ? { metadataWarnings } : {}) };
+  return { value: { retrievalQueries: retrievalQueries.map((candidate) => candidate.trim()), answerAspects: Object.freeze(answerAspects.map((aspect) => Object.freeze(aspect))), language: record.language.trim(), script: script.trim(), style: style.trim(), intent, needsClarification: record.needsClarification === true, semantics, scopeSplit, continuityAct: continuityAct as ConversationContinuityAct, referenceTurnOffset, ticketIntent }, reason: 'valid', parsedResponse, parsing: { parsed: true, rootType: 'object' }, ...(semanticIssue ? { semanticIssue } : {}), ...(metadataWarnings.length ? { metadataWarnings } : {}) };
 }
 
 /** Unresolved meaning requires clarification, never a social or retrieval shortcut. */

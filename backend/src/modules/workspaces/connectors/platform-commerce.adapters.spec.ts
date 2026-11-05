@@ -33,6 +33,21 @@ describe('Phase 16 platform adapter security and normalization', () => {
   const scopeDiscovery: any = { discover: jest.fn().mockResolvedValue({ shopId: 'gid://shopify/Shop/1', shopDomain: 'sample.myshopify.com', scopes: [{ handle: 'read_products', description: 'Read products' }, { handle: 'read_inventory', description: 'Read inventory' }] }) };
   const shopify = new ShopifyConnectorAdapter(http, prisma, vault, scopeDiscovery), woo = new WooCommerceConnectorAdapter(http, prisma);
   beforeEach(() => jest.clearAllMocks());
+  it('runs a bounded live product search and returns sanitized Shopify result data', async () => {
+    http.post.mockResolvedValue({ status: 200, body: Buffer.from(JSON.stringify({ data: { products: { nodes: [{ id: 'gid://shopify/Product/1', title: 'Black shoes', featuredImage: { url: 'https://cdn.shopify.com/s/files/1.png', altText: 'Shoes' }, priceRangeV2: { minVariantPrice: { amount: '40.00', currencyCode: 'USD' }, maxVariantPrice: { amount: '40.00', currencyCode: 'USD' } }, variants: { nodes: [{ id: 'gid://shopify/ProductVariant/1', title: 'Black / 8', price: '40.00', availableForSale: true }] } }] } } })) });
+    const result = await shopify.testRead({ organizationId: 'org-a', connectorInstanceId: 'connector-a', requestId: 'trace-a' }, { shopDomain: 'sample.myshopify.com' }, { accessToken: 'opaque-token-value-12345' }, { operation: 'SEARCH_LIVE_PRODUCTS', query: 'black shoes' });
+    expect(result).toMatchObject({ source: 'LIVE_SHOPIFY_API', httpStatus: 200, graphqlErrorCount: 0, resultCount: 1, data: [{ title: 'Black shoes' }] });
+    const body = JSON.parse(String(http.post.mock.calls[0][2]));
+    expect(body.query).toContain('products(first:10');
+    expect(body.query.toLowerCase()).not.toContain('mutation');
+    expect(body.variables).toEqual({ query: 'black shoes' });
+    expect(JSON.stringify(result)).not.toContain('opaque-token-value-12345');
+  });
+  it('retains HTTP 200 GraphQL error status as a failed live operation', async () => {
+    http.post.mockResolvedValue({ status: 200, body: Buffer.from(JSON.stringify({ errors: [{ message: 'private provider detail', extensions: { code: 'ACCESS_DENIED' } }] })) });
+    await expect(shopify.testRead({ organizationId: 'org-a', connectorInstanceId: 'connector-a' }, { shopDomain: 'sample.myshopify.com' }, { accessToken: 'opaque-token-value-12345' }, { operation: 'READ_LOCATIONS' }))
+      .rejects.toMatchObject({ safeCode: 'CONNECTOR_SHOPIFY_GRAPHQL_FAILED', httpStatus: 200, graphqlErrorCount: 1, graphqlErrorCodes: ['ACCESS_DENIED'] });
+  });
   it('requires Shopify read_products and validates scopes through the provider response', async () => {
     http.post.mockResolvedValue({ status: 200, body: Buffer.from(JSON.stringify({ data: { products: { nodes: [{ id: 'gid://shopify/Product/1' }] } } })) });
     const verified = await shopify.verify({ organizationId: 'org', connectorInstanceId: 'connector' }, { shopDomain: 'sample.myshopify.com' }, { accessToken: 'opaque-token-value-12345' });

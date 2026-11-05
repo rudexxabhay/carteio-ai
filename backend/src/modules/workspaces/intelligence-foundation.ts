@@ -46,7 +46,7 @@ export type IntelligenceContext = Readonly<{
   capabilities: CapabilityRegistry;
   allowedSourceTypes: readonly ['PUBLIC_REFERENCE'];
   trustedSourceEligible: boolean;
-  providerPolicy: Readonly<{ mode: 'MANUAL' | 'AUTO_FALLBACK' }>;
+  providerPolicy: Readonly<{ mode: 'OPENROUTER_ONLY' }>;
   correlationId: string;
 }>;
 
@@ -63,7 +63,7 @@ export function buildIntelligenceContext(input: {
     previousContextReferences: Object.freeze([...(input.previousContextReferences ?? [])]),
     businessConfiguration: Object.freeze({ purpose: assistant.businessPurpose, defaultLanguage: assistant.defaultLanguage, tone: assistant.responseTone }),
     capabilities: registry, allowedSourceTypes: ['PUBLIC_REFERENCE'] as const, trustedSourceEligible: input.eligiblePublicKnowledgeCount > 0,
-    providerPolicy: Object.freeze({ mode: assistant.providerMode === 'AUTO_FALLBACK' ? 'AUTO_FALLBACK' : 'MANUAL' }), correlationId: authorized.requestId,
+    providerPolicy: Object.freeze({ mode: 'OPENROUTER_ONLY' }), correlationId: authorized.requestId,
   });
 }
 

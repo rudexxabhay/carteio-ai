@@ -16,11 +16,8 @@ export interface AppEnvironment {
   AUTH_OTP_RESEND_COOLDOWN_SECONDS: number;
   PLAYGROUND_USER_REQUESTS_PER_MINUTE: number;
   PLAYGROUND_WORKSPACE_REQUESTS_PER_MINUTE: number;
-  /** Non-secret provider routing values; validation is reported safely by the provider resolver. */
+  /** Non-secret OpenRouter routing values; validation is reported safely by the provider resolver. */
   AI_DEFAULT_PROVIDER?: string;
-  GROQ_MODEL?: string;
-  GEMINI_MODEL?: string;
-  OPENAI_MODEL?: string;
   OPENROUTER_MODEL?: string;
   OPENROUTER_BASE_URL?: string;
 }
@@ -196,9 +193,6 @@ export function validateEnvironment(raw: Record<string, unknown>): AppEnvironmen
     PLAYGROUND_USER_REQUESTS_PER_MINUTE: playgroundUserRateLimit,
     PLAYGROUND_WORKSPACE_REQUESTS_PER_MINUTE: playgroundWorkspaceRateLimit,
     ...(typeof raw.AI_DEFAULT_PROVIDER === 'string' ? { AI_DEFAULT_PROVIDER: raw.AI_DEFAULT_PROVIDER } : {}),
-    ...(typeof raw.GROQ_MODEL === 'string' ? { GROQ_MODEL: raw.GROQ_MODEL } : {}),
-    ...(typeof raw.GEMINI_MODEL === 'string' ? { GEMINI_MODEL: raw.GEMINI_MODEL } : {}),
-    ...(typeof raw.OPENAI_MODEL === 'string' ? { OPENAI_MODEL: raw.OPENAI_MODEL } : {}),
     ...(typeof raw.OPENROUTER_MODEL === 'string' ? { OPENROUTER_MODEL: raw.OPENROUTER_MODEL } : {}),
     OPENROUTER_BASE_URL: openRouterBaseUrl,
   };

@@ -1,6 +1,33 @@
 import { PlaygroundTraceRecorder, playgroundDiagnosticsEnabled } from './playground-diagnostics';
 
 describe('Playground diagnostics', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  beforeAll(() => { process.env.NODE_ENV = 'development'; });
+  afterAll(() => { if (originalNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = originalNodeEnv; });
+  it('retains structured JSON for successful, failed and intentionally skipped stage outcomes', () => {
+    const trace = new PlaygroundTraceRecorder('trace-stage-json');
+    trace.record({ requestId: 'trace-stage-json', organizationId: 'org-1', assistantId: 'assistant-1', channel: 'PLAYGROUND', stage: 'INTENT_INTERPRETATION', outcome: 'COMPLETED', durationMs: 12, startedAt: new Date().toISOString(), input: { message: { characterCount: 38, fingerprint: 'safe-fingerprint' } }, output: { intent: 'business', language: 'English', schemaValid: true }, decision: { decisionOwner: 'BACKEND_VALIDATOR', accepted: true } });
+    trace.record({ requestId: 'trace-stage-json', organizationId: 'org-1', assistantId: 'assistant-1', channel: 'PLAYGROUND', stage: 'SEMANTIC_RETRIEVAL', outcome: 'FAILED', durationMs: 4, errorCategory: 'KNOWLEDGE_NOT_CONFIGURED', reason: 'retrieval_unavailable' });
+    trace.milestone('TOOL_EXECUTION', { organizationId: 'org-1', assistantId: 'assistant-1', outcome: 'SKIPPED', reason: 'tool_not_required' });
+    const events = trace.snapshot({}).events;
+    expect(events[0]).toMatchObject({ operation: 'INTENT_INTERPRETATION', outcome: 'COMPLETED', input: { message: { characterCount: expect.any(Number), fingerprint: 'safe-fingerprint' } }, output: { intent: 'business', language: 'English', schemaValid: true }, decision: { decisionOwner: 'BACKEND_VALIDATOR', accepted: true } });
+    expect(events[1]).toMatchObject({ operation: 'SEMANTIC_RETRIEVAL', outcome: 'FAILED', errorCategory: 'KNOWLEDGE_NOT_CONFIGURED' });
+    expect(events[2]).toMatchObject({ operation: 'TOOL_EXECUTION', outcome: 'SKIPPED', reason: 'tool_not_required' });
+    expect(trace.snapshot({}).stageCoverage).toEqual(expect.arrayContaining([
+      { stage: 'INTENT_INTERPRETATION', status: 'EXECUTED' },
+      { stage: 'SEMANTIC_RETRIEVAL', status: 'EXECUTED_FAILED' },
+      { stage: 'TOOL_EXECUTION', status: 'SKIPPED' },
+      { stage: 'ANSWER_GENERATION', status: 'NOT_REACHED' },
+    ]));
+  });
+  it('preserves the public Widget channel on shared-orchestrator stage events without enabling raw capture', () => {
+    const trace = new PlaygroundTraceRecorder('widget-stage-parity', undefined, true, 'PUBLIC_WIDGET');
+    trace.record({ requestId: 'widget-stage-parity', organizationId: 'org-1', assistantId: 'assistant-1', channel: 'PUBLIC_WIDGET', stage: 'INTENT_INTERPRETATION', outcome: 'COMPLETED', durationMs: 3, input: { message: { characterCount: 18, fingerprint: 'safe' } }, output: { value: { informationNeed: 'UNKNOWN' } }, decision: { decisionOwner: 'BACKEND_VALIDATOR', accepted: true } });
+    const snapshot = trace.snapshot({});
+    expect(snapshot.channel).toBe('PUBLIC_WIDGET');
+    expect(snapshot.events[0]).toMatchObject({ channel: 'PUBLIC_WIDGET', outcome: 'COMPLETED', decision: { decisionOwner: 'BACKEND_VALIDATOR', accepted: true } });
+    expect(snapshot.protectedCaptureStatus).toBe('NOT_REQUESTED_OR_DISABLED');
+  });
   it('keeps commerce permission metadata allowlisted and tied to the Playground trace', () => {
     const trace = new PlaygroundTraceRecorder('commerce-trace', undefined, true);
     trace.captureCommerceReadiness({ assistantProducts: 'DISABLED', workspaceProducts: 'ENABLED', connectorReadiness: 'CONNECTED', scopeSnapshotStatus: 'FRESH', productScopeReady: true, catalogCapabilityReady: true, reason: 'ASSISTANT_PERMISSION_DISABLED', commerceExecutionSkipped: true, durationMs: 17, connectorInstanceId: 'private-connector-id', organizationId: 'private-workspace-id' });

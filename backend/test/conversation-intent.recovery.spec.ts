@@ -3,6 +3,12 @@ import { resolveConversationReference } from '../src/modules/workspaces/conversa
 import { decideClarification } from '../src/modules/workspaces/clarification-guard';
 
 describe('semantic interpretation recovery metadata', () => {
+  it('reports exact rejected answer-aspect field paths, expected rule and received value', () => {
+    const message = 'What is the delivery time?';
+    const result = validateInterpretation(JSON.stringify({ retrievalQueries: [message], language: 'English', intent: 'business', answerAspects: [{ questionSpan: 'delivery duration', retrievalQuery: message }] }), message);
+    expect(result).toMatchObject({ value: null, reason: 'invalid_answer_aspect', issues: [{ path: '$.answerAspects[0].questionSpan', code: 'INVALID_SPAN', expected: 'An exact substring of the current user message', received: 'delivery duration', failurePhase: 'SEMANTIC_VALIDATION' }] });
+    expect(result.parsedResponse).toMatchObject({ answerAspects: [{ questionSpan: 'delivery duration' }] });
+  });
   const unresolved = () => ({ language: { primary: 'English', scripts: ['Latin'], mixed: false, certainty: 'CLEAR', signals: [] },
     responseLanguagePreference: null, socialClassification: 'OTHER', informationNeed: 'UNKNOWN', businessScopeAssessment: 'UNKNOWN',
     intents: [{ category: 'UNKNOWN', polarity: 'NOT_APPLICABLE' }], entities: [], uncertainty: 'NONE', clarificationRequired: false });

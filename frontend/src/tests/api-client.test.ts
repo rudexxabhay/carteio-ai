@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiGet, apiPostEventStream, ApiError, clearPendingApiGets } from '../services/api/client';
+import { apiGet, apiPostEventStream, ApiError, clearPendingApiGets, clearPendingApiGetsByPathPrefix } from '../services/api/client';
 import { getConnectorPermissions } from '../services/api/connectors';
 
 afterEach(() => { clearPendingApiGets(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -17,6 +17,27 @@ describe('API client', () => {
     vi.stubGlobal('fetch', fetchMock);
     await apiGet('/workspaces/carteio/connectors', undefined, { cache: 'no-store' });
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store' });
+  });
+
+  it('invalidates pending reads only beneath the deleted Playground conversation path', async () => {
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal('fetch', vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+      const signal = options.signal as AbortSignal;
+      signals.push(signal);
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    })));
+    const deletedSessionRead = apiGet('/workspaces/north/assistants/a/playground/sessions/deleted-session/traces').then(() => null, error => error);
+    const otherSessionRead = apiGet('/workspaces/north/assistants/a/playground/sessions/active-session/traces').then(() => null, error => error);
+    const otherFeatureRead = apiGet('/workspaces/north/assistants/a/inspector/widget/conversations').then(() => null, error => error);
+
+    clearPendingApiGetsByPathPrefix('/workspaces/north/assistants/a/playground/sessions/deleted-session');
+
+    await expect(deletedSessionRead).resolves.toBeInstanceOf(ApiError);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+    expect(signals[2]?.aborted).toBe(false);
+    clearPendingApiGets();
+    await Promise.all([otherSessionRead, otherFeatureRead]);
   });
 
   it('always reads mutable assistant permissions without browser cache reuse', async () => {

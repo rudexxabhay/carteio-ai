@@ -10,7 +10,7 @@ export class ApiError extends Error {
 
 export type ApiRequestOptions = { timeoutMs?: number; requestId?: string; cache?: RequestCache };
 
-type InFlightGet = { controller: AbortController; promise: Promise<unknown>; subscribers: number; settled: boolean; cancelTimer?: ReturnType<typeof setTimeout> };
+type InFlightGet = { path: string; controller: AbortController; promise: Promise<unknown>; subscribers: number; settled: boolean; cancelTimer?: ReturnType<typeof setTimeout> };
 const inFlightGets = new Map<string, InFlightGet>();
 let sessionGeneration = 0;
 
@@ -25,6 +25,16 @@ export function clearPendingApiGets() {
     request.controller.abort(new DOMException('Session context changed', 'AbortError'));
   }
   inFlightGets.clear();
+}
+
+/** Cancel coalesced private GETs under one API path prefix after a scoped mutation. */
+export function clearPendingApiGetsByPathPrefix(pathPrefix: string) {
+  for (const [key, request] of inFlightGets) {
+    if (!request.path.startsWith(pathPrefix)) continue;
+    if (request.cancelTimer) clearTimeout(request.cancelTimer);
+    inFlightGets.delete(key);
+    request.controller.abort(new DOMException('Stale private API read invalidated', 'AbortError'));
+  }
 }
 
 async function apiRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown, signal?: AbortSignal, options: ApiRequestOptions = {}): Promise<T> {
@@ -84,7 +94,7 @@ export function apiGet<T>(path: string, signal?: AbortSignal, options: ApiReques
   let request = inFlightGets.get(key);
   if (!request) {
     const controller = new AbortController();
-    const next: InFlightGet = { controller, promise: Promise.resolve(), subscribers: 0, settled: false };
+    const next: InFlightGet = { path, controller, promise: Promise.resolve(), subscribers: 0, settled: false };
     next.promise = apiRequest<T>('GET', path, undefined, controller.signal, options).finally(() => {
       next.settled = true;
       if (next.cancelTimer) clearTimeout(next.cancelTimer);

@@ -3,17 +3,9 @@ import { ApiError, apiDelete, apiGet, apiPatch, apiPost, apiPostEventStream } fr
 export type AssistantStatus = 'draft' | 'active' | 'inactive' | 'archived';
 export type ResponseTone = 'professional' | 'friendly' | 'casual' | 'supportive' | 'concise' | 'empathetic';
 export type ResponseStyle = 'short' | 'balanced' | 'detailed';
-export type AssistantProvider = 'groq' | 'gemini' | 'openai' | 'openrouter';
+export type AssistantProvider = 'openrouter';
 export type ResponseProvenance = 'AI_GENERATED' | 'KNOWLEDGE_GROUNDED' | 'SYSTEM_RESPONSE';
-export type ProviderRoute = { provider: AssistantProvider; model: string };
 export interface EffectiveProviderConfiguration { provider: AssistantProvider | null; model: string | null; status: 'READY_FOR_TESTING' | 'MISSING_PROVIDER' | 'INVALID_PROVIDER' | 'MISSING_MODEL' | 'INVALID_MODEL' | 'INVALID_ENDPOINT' | 'MISSING_API_KEY'; configurationValid: boolean; keyConfigured: boolean; ready: boolean; }
-export const GEMINI_MODEL_OPTIONS_FALLBACK = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'] as const;
-export function geminiModelOptionLabel(model: string): string {
-  if (model === 'gemini-3.8-flash') return `${model} · Recommended`;
-  if (model === 'gemini-3.7-flash' || model === 'gemini-3.5-flash') return `${model} · Deprecated alias`;
-  if (model === 'gemini-2.5-flash') return `${model} · Backend default`;
-  return model;
-}
 export interface Assistant {
   id: string;
   organizationId: string;
@@ -29,8 +21,6 @@ export interface Assistant {
   aiProvider?: AssistantProvider | null;
   aiModel?: string | null;
   effectiveProviderConfiguration?: EffectiveProviderConfiguration;
-  providerMode?: 'MANUAL' | 'AUTO_FALLBACK';
-  providerFallbacks?: ProviderRoute[];
   fallbackMessage: string;
   greetingMessage: string | null;
   escalationMessage: string | null;
@@ -40,7 +30,7 @@ export interface Assistant {
   createdAt: string;
   updatedAt: string;
 }
-export type AssistantInput = Pick<Assistant, 'name' | 'description' | 'businessPurpose' | 'systemInstructions' | 'defaultLanguage' | 'responseTone' | 'fallbackMessage'> & Partial<Pick<Assistant, 'responseStyle' | 'greetingMessage' | 'escalationMessage' | 'providerMode' | 'providerFallbacks' | 'useAllEligibleWorkspaceKnowledge'>>;
+export type AssistantInput = Pick<Assistant, 'name' | 'description' | 'businessPurpose' | 'systemInstructions' | 'defaultLanguage' | 'responseTone' | 'fallbackMessage'> & Partial<Pick<Assistant, 'responseStyle' | 'greetingMessage' | 'escalationMessage' | 'useAllEligibleWorkspaceKnowledge'>>;
 export const ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH = 10_000;
 export interface AssistantPage { assistants: Assistant[]; page: number; pageSize: number; total: number; }
 
@@ -64,12 +54,10 @@ export const archiveAssistant = (slug: string, id: string) => apiPost<Assistant>
 export const restoreAssistant = (slug: string, id: string) => apiPost<Assistant>(`${base(slug)}/${encodeURIComponent(id)}/restore`);
 
 export interface ProviderConfigurationStatus {
-  groq: { keyConfigured: boolean; status: 'READY_FOR_TESTING' | 'MISSING_API_KEY' };
-  gemini: { keyConfigured: boolean; status: 'READY_FOR_TESTING' | 'MISSING_API_KEY'; supportedModels: string[] };
-  openai: { keyConfigured: boolean; status: 'READY_FOR_TESTING' | 'MISSING_API_KEY' };
   openrouter: { keyConfigured: boolean; status: 'READY_FOR_TESTING' | 'MISSING_API_KEY'; modelValidation: { model: string; available: boolean | null; toolCalling: 'SUPPORTED' | 'UNSUPPORTED' | 'UNVERIFIED'; checkedAt?: string; contextLength?: number; maxCompletionTokens?: number; inputModalities?: string[]; outputModalities?: string[]; supportedParameters?: string[]; pricing?: { prompt: string; completion: string } } | null };
   effective: EffectiveProviderConfiguration;
 }
+
 export const getProviderConfigurationStatus = (slug: string, signal?: AbortSignal) => apiGet<ProviderConfigurationStatus>(`${base(slug)}/provider-status`, signal);
 export const validateOpenRouterModel = (slug: string, signal?: AbortSignal) => apiPost<NonNullable<ProviderConfigurationStatus['openrouter']['modelValidation']>>(`${base(slug)}/provider-status/openrouter/validate`, undefined, signal);
 
@@ -132,11 +120,12 @@ export async function getAssistantTrainingOverview(slug: string, id: string, sig
   return response;
 }
 export interface PlaygroundTrace {
+  schemaVersion?: number; requestId?: string; conversationId?: string; clientTurnId?: string; organizationId?: string; assistantId?: string; attempt?: number;
   developmentCapture?: { mode: 'METADATA_ONLY'; expiresAt: string; checks: Array<{ stage: string; metadata: Record<string, string | number | boolean> }> };
-  protectedResponseDebug?: { expiresAt: string; records: Array<{ stage: string; attemptId: string; at: string; text: string; truncated: boolean }> };
+  protectedResponseDebug?: { expiresAt: string; records: Array<{ stage: string; attemptId: string; at: string; text: string; truncated: boolean }>; modelCalls?: Array<{ requestId: string; traceId: string; providerCallIndex: number; purpose: string; provider: string; model: string; stage: string; requestedInput: unknown; response: { representation: string; status: string; content: string | null; responseLength: number; truncated: boolean; toolCalls?: unknown; finishReason: string | null; httpStatus?: number; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; durationMs: number }; outcome: string; at: string; errorCategory?: string; parsing?: unknown; validation?: unknown; backendDecision?: unknown; repair?: unknown }>; omittedModelCallCount?: number; modelCallCaptureStatus?: 'COMPLETE' | 'CAPPED' };
   protectedCaptureStatus?: string;
-  traceId: string; messageId?: string; startedAt: string; finishedAt: string; totalLatencyMs: number; finalSource: 'SYSTEM_RESPONSE' | 'KNOWLEDGE_BASE' | 'SHOPIFY' | 'KNOWLEDGE_BASE_AND_SHOPIFY' | 'AI_GENERATED' | 'UNKNOWN';
-  events: Array<{ sequence: number; traceId?: string; at: string; operation: string; outcome: string; status: string; durationMs: number; reason?: string; errorCategory?: string; provider?: string; model?: string; tool?: string; resultCount?: number; evidenceCount?: number; purpose?: string; callIndex?: number; requestDispatched?: boolean; retryReason?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }>;
+  traceId: string; messageId?: string; startedAt: string; finishedAt: string; totalLatencyMs: number; retentionExpiresAt?: string; stageCoverage?: Array<{ stage: string; status: 'EXECUTED' | 'EXECUTED_FAILED' | 'SKIPPED' | 'IN_PROGRESS' | 'NOT_REACHED' | 'NOT_RECORDED_LIMIT' }>; finalSource: 'SYSTEM_RESPONSE' | 'KNOWLEDGE_BASE' | 'SHOPIFY' | 'KNOWLEDGE_BASE_AND_SHOPIFY' | 'AI_GENERATED' | 'UNKNOWN';
+  events: Array<{ sequence: number; traceId?: string; at: string; startedAt?: string; operation: string; outcome: string; status: string; durationMs: number; reason?: string; errorCategory?: string; provider?: string; model?: string; tool?: string; resultCount?: number; evidenceCount?: number; purpose?: string; callIndex?: number; requestDispatched?: boolean; retryReason?: string; input?: Record<string, unknown>; output?: Record<string, unknown>; decision?: Record<string, unknown>; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }>;
   retrieval: { attempted: boolean; queryHash: string | null; queryVariantHashes?: string[]; executedQueries?: Array<{ query: string; origin: 'CUSTOMER_MESSAGE' | 'CONTEXT_RESOLUTION' | 'LLM_INTERPRETATION' | 'LLM_ANSWER_ASPECT' | 'LLM_RECOVERY' | 'LLM_TOOL_RETRY' | 'BACKEND_FALLBACK'; languageTarget: string | null }>; mode: string; audience: 'PUBLIC_VISITOR' | 'INTERNAL_MANAGER_PREVIEW' | null; eligibilityStatus: string; eligibleSourceCount: number; resultCount: number; semanticUnavailableCode?: string; responseRetrievalMode?: string; queryPlanningMode?: string; customerLanguage?: string | null; sourceLanguageHintCount?: number; queryVariantCount?: number; assignedSourceCount?: number; rejectedSourceCount?: number; rejectionReasons?: Array<{ reason: string; count: number }>; indexReadySourceCount?: number; activeIndexChunkCount?: number; sourceIndexStates?: Array<{ sourceId: string; sourceVersion: number; activeGeneration: number | null; processingStatus: string; ready: boolean }>; lexicalCandidateCount?: number; semanticCandidateCount?: number; rankedCandidateCount?: number; filteredCandidateCount?: number; selectedEvidenceCount?: number; retrievalReason?: string; methodsAttempted?: string[] };
   languageHandling?: { customerLanguage: string | null; responseLanguage: string | null; script: string | null };
   memory?: { loadedMessageCount: number; includedMessageCount: number; contextBytes: number; droppedMessageCount: number; contentTruncationCount: number; truncationReasons: string[]; order: 'chronological'; windowAtCapacity: boolean };
@@ -154,11 +143,11 @@ export interface PlaygroundTrace {
   usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 }
 export interface ProductCard { id: string; title: string; imageUrl: string | null; imageAltText: string | null; price: string | null; currency: string | null; compareAtPrice: string | null; availability: 'IN_STOCK' | 'OUT_OF_STOCK' | null; productUrl: string | null; variants: Array<{ title: string; price: string | null; currency: string | null; availability: 'IN_STOCK' | 'OUT_OF_STOCK' | null }>; syncedAt: string; stale: boolean; }
-export interface PlaygroundChatReply { sessionId: string; messageId?: string; createdAt?: string; reply: string; sources: Array<{ reference: string; title: string; type: string; locator: string | null }>; productCards?: ProductCard[]; retrievalMode: string; responseLanguage: string; responseType?: 'greeting' | 'social' | 'business_scope_redirect' | 'policy_refusal' | 'knowledge_setup' | 'knowledge_fallback' | 'grounded_answer'; answerOrigin?: 'MODEL_GENERATED' | 'DETERMINISTIC_SOCIAL' | 'DETERMINISTIC_POLICY' | 'KNOWLEDGE_FALLBACK'; deliveryStatus?: 'SAFE_ANSWER_DELIVERED' | 'FACTUAL_VERIFICATION_REJECTED' | 'PROVIDER_UNAVAILABLE' | 'INTERNAL_EXECUTION_FAILURE'; provenance?: ResponseProvenance; providerUsed?: AssistantProvider; modelUsed?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; fallbackReason?: 'no_relevant_match' | 'uncited_or_invalid_reference'; diagnostics?: PlaygroundTrace; }
-export const sendPlaygroundMessage = (slug: string, id: string, message: string, sessionId: string | undefined, clientTurnId: string, signal?: AbortSignal, requestId = crypto.randomUUID(), diagnosticCapture = false) => apiPost<PlaygroundChatReply>(`${base(slug)}/${encodeURIComponent(id)}/playground/chat`, { message, ...(sessionId ? { sessionId } : {}), clientTurnId, ...(diagnosticCapture ? { diagnosticCapture: true } : {}) }, signal, { timeoutMs: 55_000, requestId });
+export interface PlaygroundChatReply { sessionId: string; diagnosticCaptureEnabled?: boolean; messageId?: string; createdAt?: string; reply: string; sources: Array<{ reference: string; title: string; type: string; locator: string | null }>; productCards?: ProductCard[]; retrievalMode: string; responseLanguage: string; responseType?: 'greeting' | 'social' | 'business_scope_redirect' | 'policy_refusal' | 'knowledge_setup' | 'knowledge_fallback' | 'grounded_answer'; answerOrigin?: 'MODEL_GENERATED' | 'DETERMINISTIC_SOCIAL' | 'DETERMINISTIC_POLICY' | 'KNOWLEDGE_FALLBACK'; deliveryStatus?: 'SAFE_ANSWER_DELIVERED' | 'FACTUAL_VERIFICATION_REJECTED' | 'PROVIDER_UNAVAILABLE' | 'INTERNAL_EXECUTION_FAILURE'; provenance?: ResponseProvenance; providerUsed?: AssistantProvider; modelUsed?: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; fallbackReason?: 'no_relevant_match' | 'uncited_or_invalid_reference'; diagnostics?: PlaygroundTrace; }
+export const sendPlaygroundMessage = (slug: string, id: string, message: string, sessionId: string | undefined, clientTurnId: string, signal?: AbortSignal, requestId = crypto.randomUUID(), diagnosticCapture = false) => apiPost<PlaygroundChatReply>(`${base(slug)}/${encodeURIComponent(id)}/playground/chat`, { message, ...(sessionId ? { sessionId } : {}), clientTurnId, diagnosticCapture }, signal, { timeoutMs: 55_000, requestId });
 export type PlaygroundLiveEvent = PlaygroundTrace['events'][number];
-export const sendPlaygroundMessageStream = (slug: string, id: string, message: string, sessionId: string | undefined, clientTurnId: string, signal: AbortSignal | undefined, requestId: string, handlers: { onReady: () => void; onEvent: (event: PlaygroundLiveEvent) => void; onTerminal: (event: { status: string; lastSequence: number }) => void }, diagnosticCapture = false) => apiPostEventStream<PlaygroundChatReply, PlaygroundLiveEvent>(`${base(slug)}/${encodeURIComponent(id)}/playground/chat/stream`, { message, ...(sessionId ? { sessionId } : {}), clientTurnId, ...(diagnosticCapture ? { diagnosticCapture: true } : {}) }, signal, { timeoutMs: 55_000, requestId }, { onReady: handlers.onReady, onEvent: handlers.onEvent, onTerminal: (payload) => handlers.onTerminal(payload as { status: string; lastSequence: number }) });
-export interface PlaygroundConversation { sessionId: string; latest?: boolean; offset?: number; limit?: number; hasMore?: boolean; nextOffset?: number | null; messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; sources: PlaygroundChatReply['sources']; productCards?: ProductCard[]; responseType?: string | null; provenance?: ResponseProvenance; providerUsed?: AssistantProvider | null; modelUsed?: string | null; usage?: { inputTokens?: number; outputTokens?: number }; createdAt: string }> }
+export const sendPlaygroundMessageStream = (slug: string, id: string, message: string, sessionId: string | undefined, clientTurnId: string, signal: AbortSignal | undefined, requestId: string, handlers: { onReady: () => void; onEvent: (event: PlaygroundLiveEvent) => void; onTerminal: (event: { status: string; lastSequence: number }) => void }, diagnosticCapture = false) => apiPostEventStream<PlaygroundChatReply, PlaygroundLiveEvent>(`${base(slug)}/${encodeURIComponent(id)}/playground/chat/stream`, { message, ...(sessionId ? { sessionId } : {}), clientTurnId, diagnosticCapture }, signal, { timeoutMs: 55_000, requestId }, { onReady: handlers.onReady, onEvent: handlers.onEvent, onTerminal: (payload) => handlers.onTerminal(payload as { status: string; lastSequence: number }) });
+export interface PlaygroundConversation { sessionId: string; diagnosticCaptureEnabled?: boolean; latest?: boolean; offset?: number; limit?: number; hasMore?: boolean; nextOffset?: number | null; messages: Array<{ id: string; clientTurnId?: string | null; role: 'user' | 'assistant'; content: string; sources: PlaygroundChatReply['sources']; productCards?: ProductCard[]; responseType?: string | null; provenance?: ResponseProvenance; providerUsed?: AssistantProvider | null; modelUsed?: string | null; usage?: { inputTokens?: number; outputTokens?: number }; createdAt: string }> }
 export const getPlaygroundConversation = (slug: string, id: string, sessionId: string, signal?: AbortSignal, page?: { offset?: number; limit?: number; latest?: boolean }) => {
   const params = new URLSearchParams();
   if (page?.latest) params.set('latest', 'true');
@@ -166,4 +155,36 @@ export const getPlaygroundConversation = (slug: string, id: string, sessionId: s
   if (page?.limit !== undefined) params.set('limit', String(page.limit));
   const query = params.toString();
   return apiGet<PlaygroundConversation>(`${base(slug)}/${encodeURIComponent(id)}/playground/sessions/${encodeURIComponent(sessionId)}${query ? `?${query}` : ''}`, signal);
+};
+export type PlaygroundDiagnosticTrace = { id: string; requestId: string; clientTurnId: string | null; attempt: number; outcome: 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'TIMED_OUT'; payload: PlaygroundTrace; createdAt: string; expiresAt?: string };
+export const setPlaygroundDiagnosticCapture = (slug: string, id: string, sessionId: string, enabled: boolean) => apiPatch<{ sessionId: string; enabled: boolean }>(`${base(slug)}/${encodeURIComponent(id)}/playground/sessions/${encodeURIComponent(sessionId)}/diagnostic-capture`, { enabled });
+export const getPlaygroundDiagnosticTraces = (slug: string, id: string, sessionId: string, signal?: AbortSignal, page?: { offset?: number; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (page?.offset !== undefined) params.set('offset', String(page.offset));
+  if (page?.limit !== undefined) params.set('limit', String(page.limit));
+  const query = params.toString();
+  return apiGet<{ sessionId: string; captureEnabled: boolean; offset: number; limit: number; hasMore: boolean; nextOffset: number | null; items: PlaygroundDiagnosticTrace[] }>(`${base(slug)}/${encodeURIComponent(id)}/playground/sessions/${encodeURIComponent(sessionId)}/traces${query ? `?${query}` : ''}`, signal, { cache: 'no-store' });
+};
+export const listPlaygroundSessions = (slug: string, id: string, signal?: AbortSignal, page?: { offset?: number; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (page?.offset !== undefined) params.set('offset', String(page.offset));
+  if (page?.limit !== undefined) params.set('limit', String(page.limit));
+  const query = params.toString();
+  return apiGet<{ offset: number; limit: number; hasMore: boolean; nextOffset: number | null; captureAvailable: boolean; items: Array<{ id: string; captureEnabled: boolean; createdAt: string; updatedAt: string; expiresAt: string; messageCount: number; traceCount: number; preview: string }> }>(`${base(slug)}/${encodeURIComponent(id)}/playground/sessions${query ? `?${query}` : ''}`, signal, { cache: 'no-store' });
+};
+export async function deletePlaygroundSession(slug: string, id: string, sessionId: string) {
+  const sessionsPath = `${base(slug)}/${encodeURIComponent(id)}/playground/sessions`;
+  return apiDelete<{ conversationId: string; deleted: boolean }>(`${sessionsPath}/${encodeURIComponent(sessionId)}`);
+}
+export type WidgetDiagnosticSession = { id: string; captureEnabled: boolean; createdAt: string; updatedAt: string; preview: string; messageCount: number; traceCount: number };
+export const setWidgetDiagnosticCapture = (slug: string, id: string, conversationId: string, enabled: boolean) => apiPatch<{ conversationId: string; enabled: boolean }>(`${base(slug)}/${encodeURIComponent(id)}/inspector/widget/conversations/${encodeURIComponent(conversationId)}/diagnostic-capture`, { enabled });
+export const listWidgetDiagnosticSessions = (slug: string, id: string, signal?: AbortSignal, page?: { offset?: number; limit?: number }) => {
+  const params = new URLSearchParams(); if (page?.offset !== undefined) params.set('offset', String(page.offset)); if (page?.limit !== undefined) params.set('limit', String(page.limit));
+  const query = params.toString();
+  return apiGet<{ channel: 'Widget'; offset: number; limit: number; hasMore: boolean; nextOffset: number | null; captureAvailable: boolean; items: WidgetDiagnosticSession[] }>(`${base(slug)}/${encodeURIComponent(id)}/inspector/widget/conversations${query ? `?${query}` : ''}`, signal, { cache: 'no-store' });
+};
+export const getWidgetDiagnosticTraces = (slug: string, id: string, conversationId: string, signal?: AbortSignal, page?: { offset?: number; limit?: number }) => {
+  const params = new URLSearchParams(); if (page?.offset !== undefined) params.set('offset', String(page.offset)); if (page?.limit !== undefined) params.set('limit', String(page.limit));
+  const query = params.toString();
+  return apiGet<{ sessionId: string; channel: 'Widget'; captureEnabled: boolean; offset: number; limit: number; hasMore: boolean; nextOffset: number | null; messages: Array<{ id: string; role: string; content: string; createdAt: string }>; items: PlaygroundDiagnosticTrace[] }>(`${base(slug)}/${encodeURIComponent(id)}/inspector/widget/conversations/${encodeURIComponent(conversationId)}/traces${query ? `?${query}` : ''}`, signal, { cache: 'no-store' });
 };

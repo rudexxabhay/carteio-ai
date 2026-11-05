@@ -1,7 +1,8 @@
-import { getPlaygroundConversation, type PlaygroundTrace } from '../../services/api/assistants';
+import { getPlaygroundConversation, getPlaygroundDiagnosticTraces, type PlaygroundDiagnosticTrace, type PlaygroundTrace } from '../../services/api/assistants';
 
 export type CopyableChatMessage = {
   id: string;
+  clientTurnId?: string | null;
   role: 'user' | 'visitor' | 'assistant' | 'notice' | 'error';
   content: string;
   createdAt?: number | null;
@@ -16,6 +17,39 @@ export type CopyableChatMessage = {
 
 export const PLAYGROUND_EXPORT_MAX_MESSAGES = 1000;
 export const PLAYGROUND_EXPORT_MAX_BYTES = 2 * 1024 * 1024;
+export const PLAYGROUND_DIAGNOSTIC_PAGE_LIMIT = 100;
+export const PLAYGROUND_DIAGNOSTIC_MAX_RECORDS = 1000;
+
+function exportSafeTrace(trace: PlaygroundTrace): PlaygroundTrace {
+  // This module is used only by authenticated Playground manager export flows;
+  // protected fields arrive redacted and bounded from the authorized trace API.
+  return trace;
+}
+
+export async function loadCompletePlaygroundDiagnosticTraces(input: { workspaceSlug: string; assistantId: string; conversationId: string; signal: AbortSignal; firstPage?: Awaited<ReturnType<typeof getPlaygroundDiagnosticTraces>> }): Promise<{ traces: PlaygroundDiagnosticTrace[]; incomplete: boolean; captureEnabled: boolean }> {
+  const traces: PlaygroundDiagnosticTrace[] = [];
+  const seenIds = new Set<string>();
+  let page = input.firstPage ?? await getPlaygroundDiagnosticTraces(input.workspaceSlug, input.assistantId, input.conversationId, input.signal, { offset: 0, limit: PLAYGROUND_DIAGNOSTIC_PAGE_LIMIT });
+  if (page.sessionId !== input.conversationId || !Array.isArray(page.items)) throw new Error('The requested conversation traces could not be confirmed.');
+  const captureEnabled = page.captureEnabled === true;
+  let nextOffset = page.nextOffset;
+  let hasMore = page.hasMore === true;
+  const addPage = (items: PlaygroundDiagnosticTrace[]) => {
+    for (const item of items) if (!seenIds.has(item.id) && traces.length < PLAYGROUND_DIAGNOSTIC_MAX_RECORDS) { seenIds.add(item.id); traces.push(item); }
+  };
+  addPage(page.items);
+  while (hasMore && traces.length < PLAYGROUND_DIAGNOSTIC_MAX_RECORDS) {
+    if (nextOffset === null || nextOffset === undefined || nextOffset <= page.offset) throw new Error('Diagnostic trace pagination did not advance safely.');
+    page = await getPlaygroundDiagnosticTraces(input.workspaceSlug, input.assistantId, input.conversationId, input.signal, { offset: nextOffset, limit: PLAYGROUND_DIAGNOSTIC_PAGE_LIMIT });
+    if (page.sessionId !== input.conversationId || !Array.isArray(page.items)) throw new Error('The requested conversation traces could not be confirmed.');
+    addPage(page.items);
+    hasMore = page.hasMore === true;
+    if (page.nextOffset !== null && page.nextOffset !== undefined && page.nextOffset <= nextOffset && hasMore) throw new Error('Diagnostic trace pagination did not advance safely.');
+    nextOffset = page.nextOffset;
+    if (page.items.length === 0 && hasMore) throw new Error('Diagnostic trace pagination returned no progress.');
+  }
+  return { traces, incomplete: hasMore || traces.length >= PLAYGROUND_DIAGNOSTIC_MAX_RECORDS && page.hasMore === true, captureEnabled };
+}
 
 export async function loadCompletePlaygroundHistory(input: { workspaceSlug: string; assistantId: string; conversationId: string; signal: AbortSignal; localMessages?: readonly CopyableChatMessage[] }): Promise<{ messages: CopyableChatMessage[]; incomplete: boolean }> {
   const output: CopyableChatMessage[] = [];
@@ -27,7 +61,7 @@ export async function loadCompletePlaygroundHistory(input: { workspaceSlug: stri
     if (page.sessionId !== input.conversationId || !Array.isArray(page.messages)) throw new Error('The requested conversation history could not be confirmed.');
     output.push(...page.messages.map((item) => {
       const local = localById.get(item.id);
-      return { id: item.id, role: item.responseType === 'knowledge_setup' ? 'notice' as const : item.role, content: item.content, sources: item.sources, provenance: item.provenance, providerUsed: item.providerUsed, modelUsed: item.modelUsed, diagnostics: local?.diagnostics, requestId: local?.requestId, liveEvents: local?.liveEvents, createdAt: new Date(item.createdAt).getTime() };
+      return { id: item.id, clientTurnId: item.clientTurnId, role: item.responseType === 'knowledge_setup' ? 'notice' as const : item.role, content: item.content, sources: item.sources, provenance: item.provenance, providerUsed: item.providerUsed, modelUsed: item.modelUsed, diagnostics: local?.diagnostics, requestId: local?.requestId, liveEvents: local?.liveEvents, createdAt: new Date(item.createdAt).getTime() };
     }));
     hasMore = page.hasMore === true;
     if (hasMore && (page.nextOffset === null || page.nextOffset === undefined || page.nextOffset <= offset)) throw new Error('Conversation history pagination did not advance safely.');
@@ -118,46 +152,74 @@ export function formatPlaygroundDiagnostics(messages: readonly CopyableChatMessa
   return `${prefix}${suffix}`;
 }
 
-/** Structured, bounded export. Historical turns without captured traces stay explicitly untraced. */
-export function buildPlaygroundDebugReport(input: { assistantName: string; conversationId: string | null; messages: readonly CopyableChatMessage[]; incomplete?: boolean; maxBytes?: number }): { report: Record<string, unknown>; json: string } {
+/** Structured, explicitly bounded export. Attempts remain independent of turns so failed retries are never overwritten. */
+export function buildPlaygroundDebugReport(input: {
+  assistantName: string;
+  conversationId: string | null;
+  messages: readonly CopyableChatMessage[];
+  attempts?: readonly PlaygroundDiagnosticTrace[];
+  liveAttempts?: readonly { requestId: string; clientTurnId: string | null; status: string; startedAt: string; events: PlaygroundTrace['events'] }[];
+  incomplete?: boolean;
+  maxBytes?: number;
+}): { report: Record<string, unknown>; json: string; incomplete: boolean } {
   const maxBytes = input.maxBytes ?? PLAYGROUND_EXPORT_MAX_BYTES;
   const turns = input.messages.filter((message) => message.role === 'user' || message.role === 'visitor' || message.role === 'assistant' || message.role === 'error');
   const items = turns.map((message) => ({
     messageId: message.id,
+    clientTurnId: message.clientTurnId ?? null,
     role: message.role === 'visitor' ? 'user' : message.role,
     timestamp: typeof message.createdAt === 'number' ? new Date(message.createdAt).toISOString() : null,
     requestId: message.requestId ?? null,
     traceId: message.diagnostics?.traceId ?? message.liveEvents?.find((event) => event.traceId)?.traceId ?? null,
-    safeMessagePreview: 'REDACTED',
+    content: message.content,
     answer: message.role === 'assistant' ? { provenance: message.provenance ?? 'NOT_CAPTURED', sourceCount: message.sources?.length ?? 0 } : 'NOT_APPLICABLE',
-    diagnostics: message.diagnostics ? {
-      developmentCapture: message.diagnostics.developmentCapture ?? 'NOT_CAPTURED',
-      events: message.diagnostics.events,
-      retrieval: message.diagnostics.retrieval,
-      tools: message.diagnostics.tools,
-      providerCalls: message.diagnostics.providerCalls ?? 'NOT_CAPTURED',
-      evidence: message.diagnostics.evidence.map(({ excerpt: _excerpt, ...safe }) => safe),
-      citationValidation: message.diagnostics.citationValidation ?? 'NOT_CAPTURED',
-      persistence: message.diagnostics.events.find((event) => event.operation === 'TURN_PERSISTENCE') ?? 'NOT_CAPTURED',
-      finalAnswer: message.diagnostics.finalAnswer,
-    } : { status: 'NOT_CAPTURED', liveEvents: message.liveEvents?.length ? message.liveEvents : 'NOT_CAPTURED' },
+    diagnosticStatus: message.diagnostics ? 'RECORDED' : message.liveEvents?.length ? 'LIVE_EVENTS_ONLY' : 'NOT_CAPTURED',
   }));
-  const failed = items.filter((item) => item.role === 'error');
+  const attempts = [...(input.attempts ?? [])].map((item) => ({
+    recordId: item.id,
+    requestId: item.requestId,
+    clientTurnId: item.clientTurnId,
+    attempt: item.attempt,
+    outcome: item.outcome,
+    createdAt: item.createdAt,
+    expiresAt: item.expiresAt ?? null,
+    trace: exportSafeTrace(item.payload),
+  }));
+  const liveAttempts = [...(input.liveAttempts ?? [])].map((item) => ({ ...item }));
+  const failed = attempts.filter((item) => item.outcome !== 'COMPLETED');
   const categories = new Map<string, number>();
-  for (const message of turns) for (const event of message.diagnostics?.events ?? []) if (event.errorCategory) categories.set(event.errorCategory, (categories.get(event.errorCategory) ?? 0) + 1);
-  const omittedCount = input.incomplete ? 1 : 0;
+  for (const item of attempts) for (const event of item.trace.events) if (event.errorCategory) categories.set(event.errorCategory, (categories.get(event.errorCategory) ?? 0) + 1);
   const report: Record<string, unknown> = {
-    reportVersion: 'playground-execution-debug-v1',
+    reportVersion: 'playground-execution-debug-v2',
     executionIdentity: { conversationId: input.conversationId, assistantName: input.assistantName, exportedAt: new Date().toISOString() },
-    conversationSummary: { totalTurns: turns.filter((message) => message.role === 'visitor' || message.role === 'user').length, successfulResponses: turns.filter((message) => message.role === 'assistant').length, failedRequests: failed.length, errorCategories: Object.fromEntries(categories), recurringFailurePatterns: [...categories.keys()], completeness: input.incomplete ? 'TRUNCATED' : 'COMPLETE' },
-    turns: items,
-    diagnosticCompleteness: { unavailableHistoricalDiagnostics: turns.filter((message) => !message.diagnostics).length, omittedTurnCount: omittedCount },
+    conversationSummary: { totalTurns: turns.filter((message) => message.role === 'visitor' || message.role === 'user').length, successfulResponses: turns.filter((message) => message.role === 'assistant').length, failedRequests: failed.length, errorCategories: Object.fromEntries(categories), recurringFailurePatterns: [...categories.keys()] },
+    completeness: { status: input.incomplete ? 'INCOMPLETE_PAGE_LIMIT' : 'COMPLETE', configuredByteLimit: maxBytes, omittedTurns: 0, omittedAttempts: 0, omittedLiveAttempts: 0 },
+    turns: [] as typeof items,
+    attempts: [] as typeof attempts,
+    liveAttempts: [] as typeof liveAttempts,
   };
-  let json = JSON.stringify(report, null, 2);
-  if (new TextEncoder().encode(json).byteLength > maxBytes) {
-    report.turns = [];
-    report.diagnosticCompleteness = { status: 'TRUNCATED', reason: 'BYTE_LIMIT', omittedTurnCount: items.length };
-    json = JSON.stringify(report, null, 2);
+
+  const encoder = new TextEncoder();
+  const used = encoder.encode(JSON.stringify(report)).byteLength;
+  const candidates: Array<{ kind: 'turns' | 'attempts' | 'liveAttempts'; value: (typeof items)[number] | (typeof attempts)[number] | (typeof liveAttempts)[number]; at: number; bytes: number }> = [
+    ...items.map((value) => ({ kind: 'turns' as const, value, at: value.timestamp ? Date.parse(value.timestamp) : 0, bytes: encoder.encode(JSON.stringify(value)).byteLength + 1 })),
+    ...attempts.map((value) => ({ kind: 'attempts' as const, value, at: Date.parse(value.createdAt), bytes: encoder.encode(JSON.stringify(value)).byteLength + 1 })),
+    ...liveAttempts.map((value) => ({ kind: 'liveAttempts' as const, value, at: Date.parse(value.startedAt), bytes: encoder.encode(JSON.stringify(value)).byteLength + 1 })),
+  ].sort((left, right) => right.at - left.at);
+  let remainingBytes = Math.max(0, maxBytes - used);
+  for (const item of candidates) {
+    if (item.bytes <= remainingBytes) {
+      (report[item.kind] as unknown[]).push(item.value);
+      remainingBytes -= item.bytes;
+    } else {
+      const completeness = report.completeness as Record<string, unknown>;
+      completeness.status = 'INCOMPLETE_BYTE_LIMIT';
+      const key = item.kind === 'turns' ? 'omittedTurns' : item.kind === 'attempts' ? 'omittedAttempts' : 'omittedLiveAttempts';
+      completeness[key] = Number(completeness[key]) + 1;
+    }
   }
-  return { report, json };
+  for (const key of ['turns', 'attempts', 'liveAttempts']) (report[key] as Array<{ timestamp?: string; createdAt?: string; startedAt?: string }>).sort((left, right) => Date.parse(left.timestamp ?? left.createdAt ?? left.startedAt ?? '') - Date.parse(right.timestamp ?? right.createdAt ?? right.startedAt ?? ''));
+  const incomplete = input.incomplete === true || (report.completeness as Record<string, unknown>).status !== 'COMPLETE';
+  const json = JSON.stringify(report, null, 2);
+  return { report, json, incomplete };
 }

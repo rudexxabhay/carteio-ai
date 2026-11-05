@@ -1,5 +1,6 @@
 import { HttpException, ServiceUnavailableException } from '@nestjs/common';
 import { ConversationOrchestrator } from './conversation-orchestrator.service';
+import { PlaygroundTraceRecorder } from './playground-diagnostics';
 
 describe('ConversationOrchestrator Playground failures', () => {
   const env = { node: process.env.NODE_ENV, diagnostics: process.env.PLAYGROUND_DIAGNOSTICS_ENABLED };
@@ -15,6 +16,18 @@ describe('ConversationOrchestrator Playground failures', () => {
     const orchestrator = new ConversationOrchestrator({} as any, {} as any);
     const failure = new ServiceUnavailableException({ code: 'PLAYGROUND_LIVE_RECORD_LIMITATION_INVALID' });
     expect((orchestrator as any).safeErrorCategory(failure)).toBe('PROVIDER_INVALID_RESPONSE');
+  });
+
+  it('retains safe input, failed output, and backend decision metadata when a generic stage throws', async () => {
+    const orchestrator = new ConversationOrchestrator({} as any, {} as any);
+    const diagnostics = new PlaygroundTraceRecorder('stage-failure-json');
+    await expect((orchestrator as any).runStage(
+      { requestId: 'stage-failure-json', organizationId: 'org-1', assistantId: 'assistant-1', channel: 'PLAYGROUND', diagnostics },
+      'PROVIDER_SELECTION', { authorized: {}, assistant: { mode: 'MANUAL', fallbacks: [] } },
+      async () => { throw new ServiceUnavailableException({ code: 'PLAYGROUND_PROVIDER_CONFIGURATION_INVALID' }); },
+    )).rejects.toBeInstanceOf(ServiceUnavailableException);
+    const event = diagnostics.snapshot({}, { outcome: 'FAILED', errorCategory: 'PROVIDER_INVALID_RESPONSE' }).events.find(item => item.stage === 'PROVIDER_SELECTION' && item.outcome === 'FAILED');
+    expect(event).toMatchObject({ input: { assistant: { mode: 'MANUAL', fallbacksCount: 0 } }, output: { status: 'FAILED', errorCategory: 'PROVIDER_INVALID_RESPONSE' }, decision: { decisionOwner: 'BACKEND_ORCHESTRATOR', result: 'FAILED' } });
   });
 
   it('records a session-release failure without turning a completed turn into a request failure', async () => {

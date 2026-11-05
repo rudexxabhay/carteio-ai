@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, Search, Send, Sparkles, RotateCcw, Copy, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowUpRight, ArrowRight, ShoppingBag, ShoppingCart, Bot, Database, Layers3, MessageSquare, AlertCircle, Activity, Package, PackageCheck, CircleCheck, Check, RefreshCw, Download, Store, FileText, Search, Send, Sparkles, RotateCcw, Copy, Trash2, Headset, Clock3, ChartNoAxesCombined, TrendingUp, CreditCard, Receipt, Settings, Users, Shield, ChevronDown, BadgeCheck, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
 import { Badge, Btn, Card, PageHeader, Stat, FilterInput, SectionHeader, TableWrap, Notice, Bars, Progress, ViewAll, CircleIcon, AddButton, Empty } from './ui';
 import { sections, type PageId } from './data';
 import { useOverviewData } from './use-overview-data';
-import { apiGet, ApiError } from '../services/api/client';
+import { apiGet, ApiError, clearPendingApiGetsByPathPrefix } from '../services/api/client';
 import { getOrders, getProducts, getProduct, getSales, getBillingUsage, getConversations, getConversation, markConversationRead, addConversationNote, getTickets, getTicket, assignTicket, updateTicket, addTicketNote, replyToTicket, type Order, type Product, type SalesSummary, type BillingUsage, type InboxConversation, type InboxDetail, type TicketDetail, type TicketMessage, type TicketPage } from '../services/api/saas';
-import { getConnectors, getConnectorPermissions, getConnectorSyncHistory, queueConnectorSync, beginShopifyInstall, beginShopifyScopeUpgrade, disconnectConnector, refreshShopifyPermissions, retryConnectorSync, updateConnectorPermission, verifyConnector, type ConnectorInstance, type ConnectorPermissions, type SyncJob } from '../services/api/connectors';
+import { getConnectors, getConnectorPermissions, getConnectorSyncHistory, queueConnectorSync, beginShopifyInstall, beginShopifyScopeUpgrade, disconnectConnector, refreshShopifyPermissions, retryConnectorSync, runShopifyApiTest, updateConnectorPermission, verifyConnector, type ConnectorInstance, type ConnectorPermissions, type ShopifyApiTestOperation, type ShopifyApiTestResult, type SyncJob } from '../services/api/connectors';
 import { ShopifyPermissionsPanel } from '../pages/saas/ShopifyPermissionsPanel';
+import { ShopifyApiTestPlayground } from '../pages/saas/ShopifyApiTestPlayground';
 import { KnowledgeLibrary } from './KnowledgeLibrary';
 
 import '../pages/saas/connectors-page.css';
-import { archiveAssistant, createAssistant as createAssistantApi, getAssistant, getAssistantTrainingOverview, listAssistants, restoreAssistant, sendPlaygroundMessage, sendPlaygroundMessageStream, setAssistantActive, updateAssistant, ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH, type Assistant, type AssistantInput, type AssistantTrainingOverview, type PlaygroundChatReply, type PlaygroundTrace, type PlaygroundLiveEvent, type ResponseTone, type ResponseStyle } from '../services/api/assistants';
+import { archiveAssistant, createAssistant as createAssistantApi, deletePlaygroundSession, getAssistant, getAssistantTrainingOverview, getPlaygroundConversation, getPlaygroundDiagnosticTraces, listPlaygroundSessions, setPlaygroundDiagnosticCapture, listWidgetDiagnosticSessions, getWidgetDiagnosticTraces, setWidgetDiagnosticCapture, listAssistants, restoreAssistant, sendPlaygroundMessage, sendPlaygroundMessageStream, setAssistantActive, updateAssistant, ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH, type Assistant, type AssistantInput, type AssistantTrainingOverview, type PlaygroundChatReply, type PlaygroundTrace, type PlaygroundLiveEvent, type PlaygroundDiagnosticTrace, type ResponseTone, type ResponseStyle } from '../services/api/assistants';
 import { archiveKnowledge, attachKnowledge, getKnowledgeProcessing, getKnowledgeSource, reindexKnowledge, restoreKnowledge, type KnowledgeSource, type ProcessingDetails } from '../services/api/knowledge';
 import { getWidgetConfig, saveWidgetConfig, type WidgetConfig } from '../services/api/widget';
 import { listWorkspaceMembers, updateWorkspace, type WorkspaceMember } from '../services/api/workspaces';
@@ -19,7 +21,7 @@ import { getWidgetApiOrigin, getWidgetHostingOrigin, isWidgetApiOriginConfigurat
 import { sourceAssistantAccessStatus, type SourceAssistantAccessStatus } from './knowledge-access';
 import { ChatflowBuilder } from './ChatflowBuilder';
 import { playgroundSourceLabel } from './playground-provenance';
-import { buildPlaygroundDebugReport, formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundHistory, PLAYGROUND_EXPORT_MAX_BYTES, PLAYGROUND_EXPORT_MAX_MESSAGES, type CopyableChatMessage } from '../pages/training/playground-copy';
+import { buildPlaygroundDebugReport, formatPlaygroundDiagnostics, formatPlaygroundHistory, formatPlaygroundMessage, loadCompletePlaygroundDiagnosticTraces, loadCompletePlaygroundHistory, PLAYGROUND_EXPORT_MAX_BYTES, PLAYGROUND_EXPORT_MAX_MESSAGES, type CopyableChatMessage } from '../pages/training/playground-copy';
 type Props = { go: (p: PageId) => void; notify: (s: string) => void; workspaceSlug?: string; workspaceRole?: string; recordId?: string; recordConnectionId?: string; preferredAssistantId?: string; workspaceData?: { name: string; websiteUrl: string | null; businessType: string | null; timezone?: string; locale?: string }; onWorkspaceSaved?: (value: any) => void; openProduct?: (externalId: string, integrationId?: string) => void; openOrder?: (externalId: string) => void; openAssistant?: (id: string) => void; createAssistant?: () => void; openKnowledge?: (id: string) => void; openTicket?: (id: string) => void; openCrawl?: (id: string) => void; openShopify?: (id: string) => void };
 function TinyBadge({ status }: { status: string }) { const tone: 'green' | 'amber' | 'neutral' = /Active|Indexed|Paid|Delivered|Healthy|Connected|Visible|Synced|Enabled|Approved|Ready|Resolved/i.test(status) ? 'green' : /Pending|Draft|Unassigned|Processing|High|Review|Needs/i.test(status) ? 'amber' : 'neutral'; const darkStatus = /Failed|Error|Disconnected|Rejected|Blocked|Disabled|Inactive|Overdue/i.test(status) ? 'status-failed' : /Processing|Queued|Crawling/i.test(status) ? 'status-processing' : ''; return <Badge tone={tone} className={darkStatus}>{status}</Badge> }
 function connectorIsActive(connector: ConnectorInstance | null | undefined) { return Boolean(connector && typeof connector.state === 'string' && connector.state.toUpperCase() === 'CONNECTED'); }
@@ -36,6 +38,7 @@ function shopifyConnectionLabel(connector: ConnectorInstance | null | undefined)
     if (connector.state === 'DRAFT') return 'Setup not authorized';
     return connectorStateLabel(connector.state);
 }
+
 function shopifyConnectionTone(connector: ConnectorInstance | null | undefined): 'green' | 'amber' | 'blue' | 'neutral' {
     if (connector?.state === 'CONNECTING' && Number.isFinite(Date.parse(connector.updatedAt)) && Date.now() - Date.parse(connector.updatedAt) >= SHOPIFY_VERIFICATION_STALE_AFTER_MS) return 'amber';
     return connector ? connectorStateTone(connector.state) : 'neutral';
@@ -352,96 +355,419 @@ function Behavior({ go, notify, workspaceSlug = '', preferredAssistantId = '' }:
         {assistant && <><div className="tabs-wrapper"><PageTabs tabs={['Personality','Business scope','Conversation','Escalation','AI Provider']}/></div><div className="two-col content-sidebar"><Card className="form-card"><SectionHeader title="Response behavior" desc={`Saved settings for ${assistant.name}.`}/><label className="field field-wide"><span>Business role & instructions</span><textarea value={instructions} onChange={event => setInstructions(event.target.value)}/><small>{instructions.length.toLocaleString('en-US')} / {ASSISTANT_SYSTEM_INSTRUCTIONS_MAX_LENGTH.toLocaleString('en-US')} characters. Instructions are saved exactly as entered.</small></label><label className="field"><span>Business purpose</span><input value={purpose} onChange={event => setPurpose(event.target.value)}/></label><div className="field"><span>Tone of voice</span><div className="filter-pills">{(['professional','friendly','casual','supportive','concise','empathetic'] as ResponseTone[]).map(value => <button type="button" key={value} onClick={() => setTone(value)} className={'filter-pill '+(tone===value?'active':'')}>{value}</button>)}</div></div><div className="field"><span>Reply length</span><div className="filter-pills">{(['short','balanced','detailed'] as ResponseStyle[]).map(value => <button type="button" key={value} onClick={() => setStyle(value)} className={'filter-pill '+(style===value?'active':'')}>{value}</button>)}</div></div><label className="field"><span>Default language</span><input value={language} onChange={event => setLanguage(event.target.value)}/></label><Btn disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save behavior'}</Btn></Card><Card className="preview-card"><SectionHeader title="Saved assistant configuration" desc="Preview uses actual saved configuration values, not a sample model response."/><div className="detail-row bordered"><span>Status</span><strong>{assistant.status}</strong></div><div className="detail-row bordered"><span>Provider readiness</span><strong>{assistant.effectiveProviderConfiguration?.status ?? 'Unavailable'}</strong></div><div className="detail-row bordered"><span>Response tone</span><strong>{tone}</strong></div><div className="detail-row bordered"><span>Response style</span><strong>{style}</strong></div><div className="detail-row bordered"><span>Default language</span><strong>{language || '—'}</strong></div><Notice tone="amber">Memory controls and routing preferences are not part of the existing assistant configuration API.</Notice><button className="text-link" type="button" onClick={() => go('playground')}>Test this assistant in Playground <ArrowRight size={15}/></button></Card></div></>}
     </>;
 }
-type PlaygroundPageMessage = { id: string; role: 'visitor' | 'assistant' | 'error'; text: string; createdAt: number; sources?: PlaygroundChatReply['sources']; provenance?: PlaygroundChatReply['provenance']; diagnostics?: PlaygroundTrace; requestId?: string; streamRequestId?: string; errorCode?: string; retryText?: string; retryTurnId?: string };
+type PlaygroundPageMessage = { id: string; clientTurnId?: string | null; role: 'visitor' | 'assistant' | 'error'; text: string; createdAt: number; sources?: PlaygroundChatReply['sources']; provenance?: PlaygroundChatReply['provenance']; diagnostics?: PlaygroundTrace; requestId?: string; streamRequestId?: string; errorCode?: string; retryText?: string; retryTurnId?: string; attempt?: number };
 type LiveTraceStatus = 'CONNECTING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'DISCONNECTED' | 'DISABLED';
 function isPlaygroundTrace(value: unknown): value is PlaygroundTrace {
     if (typeof value !== 'object' || value === null) return false;
     const trace = value as Partial<PlaygroundTrace>;
     return typeof trace.traceId === 'string' && Array.isArray(trace.events) && Array.isArray(trace.evidence) && Array.isArray(trace.tools) && typeof trace.retrieval === 'object' && trace.retrieval !== null;
 }
+function mergePlaygroundTrace(current: PlaygroundDiagnosticTrace[], incoming: PlaygroundDiagnosticTrace): PlaygroundDiagnosticTrace[] {
+    const identity = (item: PlaygroundDiagnosticTrace) => item.id.startsWith('live:') ? `${item.requestId}:${item.attempt}` : item.id;
+    const key = identity(incoming);
+    const index = current.findIndex(item => identity(item) === key || item.requestId === incoming.requestId && (incoming.id.startsWith('live:') || item.id.startsWith('live:') || item.attempt === incoming.attempt));
+    if (index < 0) return [...current, incoming].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.attempt - right.attempt);
+    const next = [...current];
+    next[index] = incoming.id.startsWith('live:') ? { ...incoming, id: next[index]!.id } : incoming;
+    return next.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.attempt - right.attempt);
+}
+function isPlaygroundSmallScreen() { return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 820px)').matches; }
 function Playground({ workspaceSlug = '', workspaceRole = '' }: Props) {
     const [assistants, setAssistants] = useState<Assistant[]>([]);
     const [assistantId, setAssistantId] = useState('');
     const [value, setValue] = useState('');
     const [messages, setMessages] = useState<PlaygroundPageMessage[]>([]);
+    const [diagnosticTraces, setDiagnosticTraces] = useState<PlaygroundDiagnosticTrace[]>([]);
+    const [traceLoadError, setTraceLoadError] = useState('');
     const [liveEvents, setLiveEvents] = useState<Record<string, PlaygroundLiveEvent[]>>({});
     const [liveStatus, setLiveStatus] = useState<Record<string, LiveTraceStatus>>({});
     const [sessionId, setSessionId] = useState<string>();
+    const [sessions, setSessions] = useState<Array<{ id: string; captureEnabled: boolean; createdAt: string; updatedAt: string; expiresAt: string; messageCount: number; traceCount: number; preview: string }>>([]);
+    const [sessionsHasMore, setSessionsHasMore] = useState(false);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [sessionsError, setSessionsError] = useState('');
+    const [sessionsOffset, setSessionsOffset] = useState(0);
+    const [sessionMenuOpen, setSessionMenuOpen] = useState(false);
+    const [sessionMenuIndex, setSessionMenuIndex] = useState(0);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; preview: string } | null>(null);
+    const [deleteError, setDeleteError] = useState('');
+    const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+    const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const sessionTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const deleteCancelRef = useRef<HTMLButtonElement | null>(null);
+    const deleteDialogRef = useRef<HTMLElement | null>(null);
+    const deleteInFlightRef = useRef(false);
+    const [historyOffset, setHistoryOffset] = useState(0);
+    const [historyHasMore, setHistoryHasMore] = useState(false);
+    const [traceOffset, setTraceOffset] = useState(0);
+    const [traceHasMore, setTraceHasMore] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [conversationLoading, setConversationLoading] = useState(false);
+    const [traceLoading, setTraceLoading] = useState(false);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState('');
-    const [inspectorTab, setInspectorTab] = useState<'trace' | 'events' | 'knowledge' | 'tools'>('trace');
-    const [captureNextTurn, setCaptureNextTurn] = useState(false);
+    const [captureMetadata, setCaptureMetadata] = useState(false);
+    const [captureAvailable, setCaptureAvailable] = useState(false);
+    const [inspectorChannel, setInspectorChannel] = useState<'PLAYGROUND' | 'WIDGET'>('PLAYGROUND');
+    const [widgetSessions, setWidgetSessions] = useState<Array<{ id: string; captureEnabled: boolean; createdAt: string; updatedAt: string; preview: string; messageCount: number; traceCount: number }>>([]);
+    const [widgetSessionId, setWidgetSessionId] = useState('');
+    const [widgetTraces, setWidgetTraces] = useState<PlaygroundDiagnosticTrace[]>([]);
+    const [widgetMessages, setWidgetMessages] = useState<Array<{ id: string; role: string; content: string; createdAt: string }>>([]);
+    const [widgetTraceMore, setWidgetTraceMore] = useState(false);
+    const [widgetTraceLoading, setWidgetTraceLoading] = useState(false);
+    const [widgetTraceError, setWidgetTraceError] = useState('');
+    const [widgetSessionsMore, setWidgetSessionsMore] = useState(false);
+    const [widgetSessionsOffset, setWidgetSessionsOffset] = useState(0);
     const [followEvents, setFollowEvents] = useState(true);
-    const [eventFilter, setEventFilter] = useState<'all' | 'errors'>('all');
+    const [terminalFilter, setTerminalFilter] = useState<'all' | 'success' | 'failed'>('all');
+    const [visualMode, setVisualMode] = useState<'flow' | 'events' | 'knowledge' | 'tools'>('flow');
+    const [visualEventFilter, setVisualEventFilter] = useState<'all' | 'errors' | 'completed' | 'skipped'>('all');
+    const [visualEventSearch, setVisualEventSearch] = useState('');
+    const [visualFollow, setVisualFollow] = useState(true);
+    const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
+    const [selectedStage, setSelectedStage] = useState<string | null>(null);
+    const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
     const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
     const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
     const [copyFeedback, setCopyFeedback] = useState('');
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
     const composer = useRef<HTMLTextAreaElement | null>(null);
+    const terminalViewport = useRef<HTMLDivElement | null>(null);
+    const followRef = useRef(true);
     const streamAbort = useRef<AbortController | null>(null);
     const historyCopyLock = useRef(false);
     const historyCopyGeneration = useRef(0);
     const historyCopyController = useRef<AbortController | null>(null);
+    const conversationGeneration = useRef(0);
+    const activeConversationSession = useRef<string | undefined>(undefined);
+    const sessionsListGeneration = useRef(0);
+    const openingSessionId = useRef<string | null>(null);
+    const conversationLoadController = useRef<AbortController | null>(null);
+    const pendingTracePage = useRef<{ sessionId: string; page: Awaited<ReturnType<typeof getPlaygroundDiagnosticTraces>> } | null>(null);
+    const pendingTraceError = useRef<{ sessionId: string; message: string } | null>(null);
+    const sessionPickerRef = useRef<HTMLDivElement | null>(null);
+    const sessionMenuRef = useRef<HTMLDivElement | null>(null);
+    const sessionMenuKeyboardRef = useRef(false);
     const isWorkspaceAdmin = ['OWNER', 'ADMIN'].includes(workspaceRole.toUpperCase());
     useEffect(() => {
         if (!workspaceSlug) return;
         historyCopyGeneration.current++;
+        conversationGeneration.current++;
+        sessionsListGeneration.current++;
         historyCopyController.current?.abort(); historyCopyController.current = null; historyCopyLock.current = false;
         const controller = new AbortController();
-        setAssistants([]); setAssistantId(''); setMessages([]); setLiveEvents({}); setLiveStatus({}); setSessionId(undefined); setError(''); setCopyFeedback(''); setCopiedMessageId(null); setSelectedMessageId(null);
+        conversationLoadController.current?.abort(); conversationLoadController.current = null;
+        activeConversationSession.current = undefined; pendingTracePage.current = null; pendingTraceError.current = null;
+        setConversationLoading(false); setTraceLoading(false); setSessionsError(''); setSessionsLoading(false);
+        setAssistants([]); setAssistantId(''); setSessions([]); setSessionsHasMore(false); setSessionsOffset(0); setSessionMenuOpen(false); setDeleteTarget(null); setDeleteError(''); setDeletingSessionId(null); setMessages([]); setDiagnosticTraces([]); setTraceLoadError(''); setLiveEvents({}); setLiveStatus({}); setSessionId(undefined); setCaptureMetadata(false); setCaptureAvailable(false); setHistoryOffset(0); setHistoryHasMore(false); setTraceOffset(0); setTraceHasMore(false); setError(''); setCopyFeedback(''); setCopiedMessageId(null); setSelectedMessageId(null); setSelectedAttemptId(null); setSelectedStage(null);
         listAssistants(workspaceSlug, 1, controller.signal, 'ACTIVE').then(result => {
             if (!controller.signal.aborted) { setAssistants(result.assistants); setAssistantId(result.assistants[0]?.id ?? ''); }
         }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Assistants could not be loaded.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
         setLoading(true);
-        return () => { controller.abort(); historyCopyGeneration.current++; historyCopyController.current?.abort(); };
+        return () => { controller.abort(); conversationLoadController.current?.abort(); conversationLoadController.current = null; historyCopyGeneration.current++; historyCopyController.current?.abort(); };
     }, [workspaceSlug]);
+    useEffect(() => {
+        if (!workspaceSlug || !assistantId || !isWorkspaceAdmin) return;
+        const generation = ++sessionsListGeneration.current;
+        const controller = new AbortController();
+        setSessions([]); setSessionsHasMore(false); setSessionsOffset(0);
+        setSessionsLoading(true); setSessionsError('');
+        listPlaygroundSessions(workspaceSlug, assistantId, controller.signal, { offset: 0, limit: 20 }).then(page => {
+            if (controller.signal.aborted || generation !== sessionsListGeneration.current) return;
+            setSessions(page.items);
+            setSessionsHasMore(page.hasMore); setSessionsOffset(page.nextOffset ?? page.items.length);
+            setCaptureAvailable(page.captureAvailable === true);
+            if (page.items[0]) void openSession(page.items[0].id, controller.signal);
+        }).catch(reason => { if (!controller.signal.aborted && generation === sessionsListGeneration.current) setSessionsError(reason instanceof ApiError ? reason.message : 'Saved conversations could not be loaded.'); })
+          .finally(() => { if (!controller.signal.aborted && generation === sessionsListGeneration.current) setSessionsLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, assistantId, isWorkspaceAdmin]);
+    useEffect(() => {
+        if (!workspaceSlug || !assistantId || !isWorkspaceAdmin || inspectorChannel !== 'WIDGET') return;
+        const controller = new AbortController(); setWidgetSessions([]); setWidgetTraces([]); setWidgetMessages([]); setWidgetSessionId('');
+        listWidgetDiagnosticSessions(workspaceSlug, assistantId, controller.signal, { offset: 0, limit: 20 }).then(page => {
+            if (controller.signal.aborted) return; setWidgetSessions(page.items); setWidgetSessionsMore(page.hasMore); setWidgetSessionsOffset(page.nextOffset ?? page.items.length); setCaptureAvailable(page.captureAvailable === true);
+            if (page.items[0]) setWidgetSessionId(page.items[0].id);
+        }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof ApiError ? reason.message : 'Widget history could not be loaded.'); });
+        return () => controller.abort();
+    }, [workspaceSlug, assistantId, isWorkspaceAdmin, inspectorChannel]);
+    useEffect(() => {
+        if (!workspaceSlug || !assistantId || !widgetSessionId || inspectorChannel !== 'WIDGET') return;
+        const controller = new AbortController(); setWidgetTraces([]); setWidgetMessages([]); setWidgetTraceLoading(true); setWidgetTraceError('');
+        getWidgetDiagnosticTraces(workspaceSlug, assistantId, widgetSessionId, controller.signal, { offset: 0, limit: 40 }).then(page => {
+            if (!controller.signal.aborted) { setWidgetTraces(page.items); setWidgetMessages(page.messages); setWidgetTraceMore(page.hasMore); setCaptureMetadata(page.captureEnabled === true); }
+        }).catch(reason => { if (!controller.signal.aborted) setWidgetTraceError(reason instanceof ApiError ? reason.message : 'Widget traces could not be loaded.'); })
+          .finally(() => { if (!controller.signal.aborted) setWidgetTraceLoading(false); });
+        return () => controller.abort();
+    }, [workspaceSlug, assistantId, widgetSessionId, inspectorChannel]);
     useEffect(() => { const input = composer.current; if (!input) return; input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 112)}px`; }, [value]);
     useEffect(() => () => streamAbort.current?.abort(), []);
-    function newSession() { historyCopyGeneration.current++; historyCopyController.current?.abort(); historyCopyController.current = null; historyCopyLock.current = false; setCopyFeedback(''); setCopiedMessageId(null); streamAbort.current?.abort(); streamAbort.current = null; setSessionId(undefined); setMessages([]); setLiveEvents({}); setLiveStatus({}); setValue(''); setError(''); setSelectedMessageId(null); setMobileInspectorOpen(false); }
+    useEffect(() => {
+        if (!sessionMenuOpen) return;
+        const closeOnOutside = (event: PointerEvent | FocusEvent) => {
+            if (!sessionPickerRef.current?.contains(event.target as Node)) setSessionMenuOpen(false);
+        };
+        document.addEventListener('pointerdown', closeOnOutside);
+        document.addEventListener('focusin', closeOnOutside);
+        return () => { document.removeEventListener('pointerdown', closeOnOutside); document.removeEventListener('focusin', closeOnOutside); };
+    }, [sessionMenuOpen]);
+    useEffect(() => {
+        if (!sessionMenuOpen || !sessionMenuKeyboardRef.current) return;
+        sessionMenuKeyboardRef.current = false;
+        sessionMenuRef.current?.querySelector<HTMLButtonElement>(`[data-option-index="${sessionMenuIndex}"]`)?.focus();
+    }, [sessionMenuOpen, sessionMenuIndex]);
+    useEffect(() => {
+        if (!deleteTarget) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        deleteCancelRef.current?.focus();
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            queueMicrotask(() => {
+                const returnTarget = deleteTriggerRef.current;
+                if (returnTarget?.isConnected && !returnTarget.disabled) returnTarget.focus();
+                else sessionTriggerRef.current?.focus();
+                deleteTriggerRef.current = null;
+            });
+        };
+    }, [Boolean(deleteTarget)]);
+    function newSession() { conversationGeneration.current++; conversationLoadController.current?.abort(); conversationLoadController.current = null; pendingTracePage.current = null; pendingTraceError.current = null; setConversationLoading(false); setTraceLoading(false); setLoading(false); historyCopyGeneration.current++; historyCopyController.current?.abort(); historyCopyController.current = null; historyCopyLock.current = false; setCopyFeedback(''); setCopiedMessageId(null); streamAbort.current?.abort(); streamAbort.current = null; setSending(false); activeConversationSession.current = undefined; setSessionId(undefined); setCaptureMetadata(false); setHistoryOffset(0); setHistoryHasMore(false); setTraceOffset(0); setTraceHasMore(false); setMessages([]); setDiagnosticTraces([]); setTraceLoadError(''); setLiveEvents({}); setLiveStatus({}); setValue(''); setError(''); setSelectedMessageId(null); setSelectedAttemptId(null); setSelectedStage(null); setMobileInspectorOpen(false); setSessionMenuOpen(false); setTerminalFilter('all'); setFollowEvents(true); followRef.current = true; }
+    async function openSession(id: string, externalSignal?: AbortSignal) {
+        if (!workspaceSlug || !assistantId || !isWorkspaceAdmin || externalSignal?.aborted) return;
+        const generation = ++conversationGeneration.current;
+        conversationLoadController.current?.abort();
+        const controller = new AbortController();
+        conversationLoadController.current = controller;
+        const abortFromCaller = () => controller.abort(externalSignal?.reason);
+        externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
+        if (externalSignal?.aborted) abortFromCaller();
+        openingSessionId.current = id;
+        pendingTracePage.current = null; pendingTraceError.current = null;
+        setConversationLoading(true); setTraceLoading(false); setError(''); setSessionMenuOpen(false);
+
+        const attemptMessages = (items: PlaygroundDiagnosticTrace[]): PlaygroundPageMessage[] => items.filter(item => item.outcome !== 'COMPLETED').map(item => {
+            const capture = item.payload as unknown as { customerMessage?: string };
+            return { id: `attempt-${item.id}`, role: 'error', text: `Attempt ${item.attempt} ${item.outcome.toLowerCase()} · ${capture.customerMessage || 'Captured request'}`, createdAt: Date.parse(item.createdAt), requestId: item.requestId, diagnostics: isPlaygroundTrace(item.payload) ? item.payload : undefined, retryText: capture.customerMessage, retryTurnId: item.clientTurnId ?? undefined, attempt: item.attempt };
+        });
+        const applyTracePage = (page: Awaited<ReturnType<typeof getPlaygroundDiagnosticTraces>>) => {
+            if (page.sessionId !== id || generation !== conversationGeneration.current || controller.signal.aborted || activeConversationSession.current !== id) return;
+            setDiagnosticTraces(page.items);
+            setTraceOffset(page.nextOffset ?? page.items.length); setTraceHasMore(page.hasMore === true);
+            setCaptureMetadata(current => current || page.captureEnabled === true);
+            setTraceLoadError(''); setTraceLoading(false);
+            const failures = attemptMessages(page.items); const failureIds = new Set(failures.map(item => item.id));
+            setMessages(current => [...current.filter(item => !item.id.startsWith('attempt-') || failureIds.has(item.id)), ...failures].sort((left, right) => left.createdAt - right.createdAt));
+        };
+        const traceRequest = getPlaygroundDiagnosticTraces(workspaceSlug, assistantId, id, controller.signal, { offset: 0, limit: 40 }).then(page => {
+            if (generation !== conversationGeneration.current || controller.signal.aborted) return;
+            if (page.sessionId !== id) throw new Error('The requested conversation traces could not be confirmed.');
+            if (activeConversationSession.current === id) applyTracePage(page);
+            else pendingTracePage.current = { sessionId: id, page };
+        }).catch(reason => {
+            if (controller.signal.aborted || generation !== conversationGeneration.current) return;
+            const message = reason instanceof ApiError ? reason.message : 'Retained execution traces could not be loaded.';
+            if (activeConversationSession.current === id) { setTraceLoadError(message); setTraceLoading(false); }
+            else pendingTraceError.current = { sessionId: id, message };
+        });
+        try {
+            setLoading(true);
+            const history = await getPlaygroundConversation(workspaceSlug, assistantId, id, controller.signal, { offset: 0, limit: 40 });
+            if (generation !== conversationGeneration.current || controller.signal.aborted) return;
+            if (history.sessionId !== id || !Array.isArray(history.messages)) throw new Error('The requested conversation history could not be confirmed.');
+            const restored: PlaygroundPageMessage[] = history.messages.map(message => ({ id: message.id, clientTurnId: message.clientTurnId, role: message.role === 'user' ? 'visitor' : 'assistant', text: message.content, createdAt: Date.parse(message.createdAt), sources: message.sources, provenance: message.provenance }));
+            const earlyPage = pendingTracePage.current?.sessionId === id ? pendingTracePage.current.page : null;
+            const failures = earlyPage ? attemptMessages(earlyPage.items) : [];
+            const merged = [...restored, ...failures].sort((left, right) => left.createdAt - right.createdAt);
+            activeConversationSession.current = id;
+            setSessionId(id); setCaptureMetadata(history.diagnosticCaptureEnabled === true);
+            setHistoryOffset(history.nextOffset ?? history.messages.length); setHistoryHasMore(history.hasMore === true);
+            setDiagnosticTraces(earlyPage?.items ?? []); setTraceOffset(earlyPage?.nextOffset ?? earlyPage?.items.length ?? 0); setTraceHasMore(earlyPage?.hasMore === true);
+            setMessages(merged); setLiveEvents({}); setLiveStatus({}); setSelectedMessageId(merged.at(-1)?.id ?? null);
+            setTraceLoadError(pendingTraceError.current?.sessionId === id ? pendingTraceError.current.message : '');
+            setTraceLoading(!earlyPage && pendingTraceError.current?.sessionId !== id);
+            if (earlyPage?.captureEnabled) setCaptureMetadata(true);
+            pendingTracePage.current = null; pendingTraceError.current = null;
+        } catch (reason) {
+            if (!controller.signal.aborted && generation === conversationGeneration.current) setError(reason instanceof ApiError ? reason.message : 'Conversation history could not be restored.');
+            if (!controller.signal.aborted) controller.abort();
+        } finally {
+            if (openingSessionId.current === id) openingSessionId.current = null;
+            if (generation === conversationGeneration.current) { setLoading(false); setConversationLoading(false); }
+            if (controller.signal.aborted) externalSignal?.removeEventListener('abort', abortFromCaller);
+            else void traceRequest.finally(() => externalSignal?.removeEventListener('abort', abortFromCaller));
+        }
+        void traceRequest;
+    }
+    async function loadMoreSessions() {
+        if (!workspaceSlug || !assistantId || !sessionsHasMore || sessionsLoading) return;
+        const generation = sessionsListGeneration.current;
+        setSessionsLoading(true); setSessionsError('');
+        try {
+            const page = await listPlaygroundSessions(workspaceSlug, assistantId, undefined, { offset: sessionsOffset, limit: 20 });
+            if (generation !== sessionsListGeneration.current) return;
+            setSessions(current => { const ids = new Set(current.map(item => item.id)); return [...current, ...page.items.filter(item => !ids.has(item.id))]; });
+            setSessionsHasMore(page.hasMore); setSessionsOffset(page.nextOffset ?? sessionsOffset + page.items.length);
+        } catch (reason) { if (generation === sessionsListGeneration.current) setSessionsError(reason instanceof ApiError ? reason.message : 'More conversations could not be loaded.'); }
+        finally { if (generation === sessionsListGeneration.current) setSessionsLoading(false); }
+    }
+    async function confirmDeleteSession() {
+        if (!deleteTarget || !workspaceSlug || !assistantId || !isWorkspaceAdmin || deletingSessionId || deleteInFlightRef.current) return;
+        deleteInFlightRef.current = true;
+        const target = deleteTarget;
+        setDeletingSessionId(target.id); setDeleteError(''); setError('');
+        try {
+            await deletePlaygroundSession(workspaceSlug, assistantId, target.id);
+            const activeConversation = sessionId === target.id || openingSessionId.current === target.id;
+            if (activeConversation) { conversationGeneration.current++; conversationLoadController.current?.abort(); conversationLoadController.current = null; setConversationLoading(false); setTraceLoading(false); }
+            sessionsListGeneration.current++;
+            const sessionsPath = `/workspaces/${encodeURIComponent(workspaceSlug)}/assistants/${encodeURIComponent(assistantId)}/playground/sessions`;
+            clearPendingApiGetsByPathPrefix(`${sessionsPath}?`);
+            clearPendingApiGetsByPathPrefix(`${sessionsPath}/${encodeURIComponent(target.id)}`);
+            setLoading(false);
+            setSessions(current => current.filter(item => item.id !== target.id));
+            // Removing an item shifts the next offset by one; retain the server's
+            // known hasMore state so loading the next page cannot skip a row.
+            setSessionsOffset(current => Math.max(0, current - (sessions.some(item => item.id === target.id) ? 1 : 0)));
+            setDeleteTarget(null); setSessionMenuOpen(false);
+            if (activeConversation) {
+                historyCopyGeneration.current++; historyCopyController.current?.abort(); historyCopyController.current = null; historyCopyLock.current = false;
+                streamAbort.current?.abort(); streamAbort.current = null; setSending(false);
+                activeConversationSession.current = undefined; setSessionId(undefined); setCaptureMetadata(false); setHistoryOffset(0); setHistoryHasMore(false); setTraceOffset(0); setTraceHasMore(false);
+                setMessages([]); setDiagnosticTraces([]); setLiveEvents({}); setLiveStatus({}); setSelectedMessageId(null); setMobileInspectorOpen(false); setCopyFeedback(''); setCopiedMessageId(null);
+            }
+        } catch (reason) { setDeleteError(reason instanceof ApiError ? reason.message : 'Conversation could not be deleted.'); }
+        finally { deleteInFlightRef.current = false; setDeletingSessionId(null); }
+    }
+    async function loadEarlierHistory() {
+        if (!sessionId || (!historyHasMore && !traceHasMore) || loading || !workspaceSlug || !assistantId) return;
+        const generation = conversationGeneration.current;
+        const conversationId = sessionId;
+        const signal = conversationLoadController.current?.signal;
+        setLoading(true);
+        try {
+            const [history, traces] = await Promise.all([
+                historyHasMore ? getPlaygroundConversation(workspaceSlug, assistantId, conversationId, signal, { offset: historyOffset, limit: 40 }) : Promise.resolve(null),
+                traceHasMore ? getPlaygroundDiagnosticTraces(workspaceSlug, assistantId, conversationId, signal, { offset: traceOffset, limit: 40 }) : Promise.resolve(null),
+            ]);
+            if (generation !== conversationGeneration.current || conversationId !== activeConversationSession.current) return;
+            const traceItems = traces?.items ?? [];
+            const older: PlaygroundPageMessage[] = history ? history.messages.map(message => {
+                    const related = traceItems.filter(item => item.clientTurnId && item.clientTurnId === message.clientTurnId).sort((left, right) => left.attempt - right.attempt);
+                    const successful = related.filter(item => item.outcome === 'COMPLETED').at(-1);
+                    return { id: message.id, clientTurnId: message.clientTurnId, role: message.role === 'user' ? 'visitor' : 'assistant', text: message.content, createdAt: Date.parse(message.createdAt), sources: message.sources, provenance: message.provenance, ...(successful && isPlaygroundTrace(successful.payload) ? { diagnostics: successful.payload } : {}) };
+                }) : [];
+            for (const item of traceItems.filter(item => item.outcome !== 'COMPLETED')) {
+                const capture = item.payload as unknown as { customerMessage?: string };
+                older.push({ id: `attempt-${item.id}`, role: 'error', text: `Attempt ${item.attempt} ${item.outcome.toLowerCase()} · ${capture.customerMessage || 'Captured request'}`, createdAt: Date.parse(item.createdAt), requestId: item.requestId, diagnostics: isPlaygroundTrace(item.payload) ? item.payload : undefined, retryText: capture.customerMessage, retryTurnId: item.clientTurnId ?? undefined, attempt: item.attempt });
+            }
+            if (older.length) {
+                setMessages(current => { const ids = new Set(current.map(item => item.id)); return [...current, ...older.filter(item => !ids.has(item.id))].sort((left, right) => left.createdAt - right.createdAt); });
+            }
+            if (history) {
+                setHistoryOffset(history.nextOffset ?? historyOffset + history.messages.length); setHistoryHasMore(history.hasMore === true);
+            }
+            if (traces) {
+                setDiagnosticTraces(current => traces.items.reduce(mergePlaygroundTrace, current));
+                setTraceOffset(traces.nextOffset ?? traceOffset + traces.items.length); setTraceHasMore(traces.hasMore === true);
+            }
+        } catch (reason) { if (generation === conversationGeneration.current) setError(reason instanceof ApiError ? reason.message : 'Earlier conversation history could not be loaded.'); }
+        finally { if (generation === conversationGeneration.current) setLoading(false); }
+    }
+    async function changeCaptureMetadata(enabled: boolean) {
+        if (!isWorkspaceAdmin) return;
+        if (enabled) { setInspectorCollapsed(false); setMobileInspectorOpen(true); }
+        if (inspectorChannel === 'WIDGET' && widgetSessionId) {
+            try { await setWidgetDiagnosticCapture(workspaceSlug, assistantId, widgetSessionId, enabled); setCaptureMetadata(enabled); setWidgetSessions(current => current.map(item => item.id === widgetSessionId ? { ...item, captureEnabled: enabled } : item)); }
+            catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Capture preference could not be saved.'); }
+        } else if (sessionId) {
+            try { await setPlaygroundDiagnosticCapture(workspaceSlug, assistantId, sessionId, enabled); setCaptureMetadata(enabled); }
+            catch (reason) { setError(reason instanceof ApiError ? reason.message : 'Capture preference could not be saved.'); }
+        } else setCaptureMetadata(enabled);
+    }
+    function refreshSessions() {
+        if (!workspaceSlug || !assistantId || !isWorkspaceAdmin) return;
+        const generation = ++sessionsListGeneration.current;
+        setSessionsLoading(true); setSessionsError('');
+        void listPlaygroundSessions(workspaceSlug, assistantId, undefined, { offset: 0, limit: 20 }).then(page => { if (generation !== sessionsListGeneration.current) return; setSessions(current => { const merged = [...page.items]; const ids = new Set(merged.map(item => item.id)); return [...merged, ...current.filter(item => !ids.has(item.id))]; }); setSessionsHasMore(page.hasMore); setSessionsOffset(page.nextOffset ?? page.items.length); setCaptureAvailable(page.captureAvailable === true); }).catch(reason => { if (generation === sessionsListGeneration.current) setSessionsError(reason instanceof ApiError ? reason.message : 'Saved conversations could not be refreshed.'); }).finally(() => { if (generation === sessionsListGeneration.current) setSessionsLoading(false); });
+    }
+    function updateSessionAfterTurn(conversationId: string, preview: string, createdAt: number, captureEnabled?: boolean) {
+        const exists = sessions.some(item => item.id === conversationId);
+        if (!exists) { refreshSessions(); return; }
+        setSessions(current => current.map(item => item.id === conversationId ? { ...item, preview, updatedAt: new Date(createdAt).toISOString(), captureEnabled: typeof captureEnabled === 'boolean' ? captureEnabled : item.captureEnabled } : item));
+    }
+    function onSessionMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+        if (event.key === 'Escape' && sessionMenuOpen) { event.preventDefault(); setSessionMenuOpen(false); sessionTriggerRef.current?.focus(); return; }
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault(); sessionMenuKeyboardRef.current = true;
+        if (!sessionMenuOpen) { setSessionMenuIndex(event.key === 'ArrowUp' ? sessions.length : 0); setSessionMenuOpen(true); return; }
+        const count = sessions.length + 1;
+        setSessionMenuIndex(index => (index + (event.key === 'ArrowDown' ? 1 : -1) + count) % count);
+    }
     function appendLiveEvent(traceId: string, event: PlaygroundLiveEvent) {
         setLiveEvents(current => {
             const existing = current[traceId] ?? [];
-            if (existing.some(item => item.sequence === event.sequence)) return current;
-            if (existing.length && event.sequence <= existing[existing.length - 1]!.sequence) return current;
-            return { ...current, [traceId]: [...existing, event].slice(-100) };
+            const identity = (item: PlaygroundLiveEvent) => `${item.sequence}:${item.operation}`;
+            if (existing.some(item => identity(item) === identity(event))) return current;
+            return { ...current, [traceId]: [...existing, event].sort((left, right) => Date.parse(left.at) - Date.parse(right.at) || left.sequence - right.sequence) };
         });
     }
     async function send(event?: React.FormEvent, submittedText?: string, retryTurnId?: string) {
         event?.preventDefault();
         const question = (submittedText ?? value).trim();
-        if (!question || sending || !assistantId || !workspaceSlug) return;
-        const diagnosticCapture = import.meta.env.DEV && isWorkspaceAdmin && captureNextTurn;
-        setCaptureNextTurn(false);
+        if (!question || sending || conversationLoading || !assistantId || !workspaceSlug) return;
+        const diagnosticCapture = isWorkspaceAdmin && captureMetadata;
         const turnId = retryTurnId || crypto.randomUUID();
         const requestId = crypto.randomUUID();
         const visitorId = crypto.randomUUID();
         const controller = new AbortController(); streamAbort.current = controller;
+        const requestGeneration = conversationGeneration.current;
         setValue(''); setSending(true); setError(''); setLiveStatus(current => ({ ...current, [requestId]: 'CONNECTING' }));
-        setMessages(current => [...current, { id: visitorId, role: 'visitor', text: question, requestId, createdAt: Date.now() }]);
+        setMessages(current => [...current, { id: visitorId, clientTurnId: turnId, role: 'visitor', text: question, requestId, streamRequestId: requestId, createdAt: Date.now() }]);
         setSelectedMessageId(visitorId);
         try {
             const reply = await sendPlaygroundMessageStream(workspaceSlug, assistantId, question, sessionId, turnId, controller.signal, requestId, {
-                onReady: () => setLiveStatus(current => ({ ...current, [requestId]: 'RUNNING' })),
-                onEvent: traceEvent => appendLiveEvent(requestId, traceEvent),
-                onTerminal: terminal => setLiveStatus(current => ({ ...current, [requestId]: terminal.status === 'SUCCEEDED' ? 'COMPLETED' : terminal.status === 'CANCELLED' ? 'CANCELLED' : 'FAILED' })),
+                onReady: () => { if (requestGeneration === conversationGeneration.current) setLiveStatus(current => ({ ...current, [requestId]: 'RUNNING' })); },
+                onEvent: traceEvent => { if (requestGeneration === conversationGeneration.current) appendLiveEvent(requestId, traceEvent); },
+                onTerminal: terminal => { if (requestGeneration === conversationGeneration.current) setLiveStatus(current => ({ ...current, [requestId]: terminal.status === 'SUCCEEDED' ? 'COMPLETED' : terminal.status === 'CANCELLED' ? 'CANCELLED' : 'FAILED' })); },
             }, diagnosticCapture);
+            if (requestGeneration !== conversationGeneration.current) return;
             setSessionId(reply.sessionId);
+            activeConversationSession.current = reply.sessionId;
+            if (typeof reply.diagnosticCaptureEnabled === 'boolean') setCaptureMetadata(reply.diagnosticCaptureEnabled);
             const messageId = reply.messageId || crypto.randomUUID();
             setLiveStatus(current => ({ ...current, [requestId]: 'COMPLETED' }));
-            setMessages(current => [...current, { id: messageId, role: 'assistant', text: reply.reply, sources: reply.sources, provenance: reply.provenance, diagnostics: reply.diagnostics, requestId: reply.diagnostics?.traceId || requestId, streamRequestId: requestId, createdAt: reply.createdAt ? new Date(reply.createdAt).getTime() : Date.now() }]);
+            const completedAt = reply.createdAt ? new Date(reply.createdAt).getTime() : Date.now();
+            updateSessionAfterTurn(reply.sessionId, question, completedAt, reply.diagnosticCaptureEnabled);
+            setMessages(current => [...current, { id: messageId, clientTurnId: turnId, role: 'assistant', text: reply.reply, sources: reply.sources, provenance: reply.provenance, diagnostics: reply.diagnostics, requestId: reply.diagnostics?.traceId || requestId, streamRequestId: requestId, createdAt: completedAt }]);
+            if (reply.diagnostics) setDiagnosticTraces(current => mergePlaygroundTrace(current, { id: `live:${requestId}`, requestId, clientTurnId: turnId, attempt: 0, outcome: 'COMPLETED', payload: reply.diagnostics!, createdAt: new Date(completedAt).toISOString() }));
             setSelectedMessageId(messageId);
+            if (reply.sessionId) void hydrateLatestPlaygroundTraces(reply.sessionId, requestGeneration, requestId, turnId);
         } catch (reason) {
+            if (requestGeneration !== conversationGeneration.current) return;
             if (reason instanceof ApiError && reason.code === 'PLAYGROUND_LIVE_TRACE_DISABLED') {
                 setLiveStatus(current => ({ ...current, [requestId]: 'DISABLED' }));
                 try {
                     const reply = await sendPlaygroundMessage(workspaceSlug, assistantId, question, sessionId, turnId, undefined, requestId, diagnosticCapture);
+                    if (requestGeneration !== conversationGeneration.current) return;
                     setSessionId(reply.sessionId);
+                    activeConversationSession.current = reply.sessionId;
+                    if (typeof reply.diagnosticCaptureEnabled === 'boolean') setCaptureMetadata(reply.diagnosticCaptureEnabled);
                     const messageId = reply.messageId || crypto.randomUUID();
-                    setMessages(current => [...current, { id: messageId, role: 'assistant', text: reply.reply, sources: reply.sources, provenance: reply.provenance, diagnostics: reply.diagnostics, requestId: reply.diagnostics?.traceId || requestId, streamRequestId: requestId, createdAt: reply.createdAt ? new Date(reply.createdAt).getTime() : Date.now() }]);
+                    setLiveStatus(current => ({ ...current, [requestId]: 'COMPLETED' }));
+                    const completedAt = reply.createdAt ? new Date(reply.createdAt).getTime() : Date.now();
+                    updateSessionAfterTurn(reply.sessionId, question, completedAt, reply.diagnosticCaptureEnabled);
+                    setMessages(current => [...current, { id: messageId, clientTurnId: turnId, role: 'assistant', text: reply.reply, sources: reply.sources, provenance: reply.provenance, diagnostics: reply.diagnostics, requestId: reply.diagnostics?.traceId || requestId, streamRequestId: requestId, createdAt: completedAt }]);
+                    if (reply.diagnostics) setDiagnosticTraces(current => mergePlaygroundTrace(current, { id: `live:${requestId}`, requestId, clientTurnId: turnId, attempt: 0, outcome: 'COMPLETED', payload: reply.diagnostics!, createdAt: new Date(completedAt).toISOString() }));
                     setSelectedMessageId(messageId);
+                    if (reply.sessionId) void hydrateLatestPlaygroundTraces(reply.sessionId, requestGeneration, requestId, turnId);
                     return;
                 } catch (fallbackReason) { reason = fallbackReason; }
+            }
+            if (reason instanceof ApiError && isPlaygroundTrace(reason.details) && reason.details.conversationId) {
+                const failedConversationId = reason.details.conversationId;
+                setSessionId(failedConversationId);
+                activeConversationSession.current = failedConversationId;
+                if (!sessions.some(item => item.id === failedConversationId)) refreshSessions();
             }
             const errorText = reason instanceof ApiError ? reason.message : 'The AI response could not be loaded.';
             const failedId = crypto.randomUUID();
@@ -449,19 +775,40 @@ function Playground({ workspaceSlug = '', workspaceRole = '' }: Props) {
             if (reason instanceof DOMException && reason.name === 'AbortError') setLiveStatus(current => ({ ...current, [requestId]: 'CANCELLED' }));
             else if (reason instanceof ApiError && reason.code === 'PLAYGROUND_STREAM_INCOMPLETE') setLiveStatus(current => ({ ...current, [requestId]: 'DISCONNECTED' }));
             else setLiveStatus(current => ({ ...current, [requestId]: 'FAILED' }));
-            setMessages(current => [...current, { id: failedId, role: 'error', text: errorText, requestId: reason instanceof ApiError ? reason.requestId || requestId : requestId, errorCode: reason instanceof ApiError ? reason.code : undefined, diagnostics: reason instanceof ApiError && isPlaygroundTrace(reason.details) ? reason.details : undefined, retryText: question, retryTurnId: turnId, createdAt: Date.now() }]);
+            const failedTrace = reason instanceof ApiError && isPlaygroundTrace(reason.details) ? reason.details : undefined;
+            setMessages(current => [...current, { id: failedId, clientTurnId: turnId, role: 'error', text: errorText, requestId: reason instanceof ApiError ? reason.requestId || requestId : requestId, streamRequestId: requestId, errorCode: reason instanceof ApiError ? reason.code : undefined, diagnostics: failedTrace, retryText: question, retryTurnId: turnId, createdAt: Date.now() }]);
+            if (failedTrace) setDiagnosticTraces(current => mergePlaygroundTrace(current, { id: `live:${requestId}`, requestId: reason instanceof ApiError ? reason.requestId || requestId : requestId, clientTurnId: turnId, attempt: 0, outcome: 'FAILED', payload: failedTrace, createdAt: new Date().toISOString() }));
+            if (activeConversationSession.current) void hydrateLatestPlaygroundTraces(activeConversationSession.current, requestGeneration, requestId, turnId);
             setSelectedMessageId(failedId);
-        } finally { if (streamAbort.current === controller) streamAbort.current = null; setSending(false); }
+        } finally { if (streamAbort.current === controller) streamAbort.current = null; if (requestGeneration === conversationGeneration.current) setSending(false); }
     }
-    const selectedMessage = messages.find(message => message.id === selectedMessageId);
-    const selectedTraceId = selectedMessage?.diagnostics?.traceId || selectedMessage?.requestId;
-    const selectedTrace = selectedMessage?.diagnostics;
-    const selectedEvents = selectedTrace?.events ?? (selectedTraceId ? liveEvents[selectedTraceId] ?? [] : []);
-    const selectedLiveStatus = selectedTrace ? (selectedTrace.events.some(item => item.outcome === 'FAILED' || item.outcome === 'TIMED_OUT') ? 'FAILED' : selectedTrace.events.some(item => item.outcome === 'CANCELLED') ? 'CANCELLED' : 'COMPLETED') : selectedTraceId ? liveStatus[selectedTraceId] ?? 'DISCONNECTED' : 'IDLE';
+    async function hydrateLatestPlaygroundTraces(conversationId: string, generation: number, requestId: string, clientTurnId: string) {
+        try {
+            const controller = conversationLoadController.current ?? new AbortController();
+            conversationLoadController.current = controller;
+            const result = await getPlaygroundDiagnosticTraces(workspaceSlug, assistantId, conversationId, controller.signal, { offset: 0, limit: 40 });
+            if (result.sessionId !== conversationId || generation !== conversationGeneration.current || conversationId !== activeConversationSession.current) return;
+            const related = result.items.filter(item => item.requestId === requestId || item.clientTurnId === clientTurnId);
+            setDiagnosticTraces(current => related.reduce(mergePlaygroundTrace, current));
+            setTraceOffset(result.nextOffset ?? result.items.length); setTraceHasMore(result.hasMore === true);
+            if (result.captureEnabled) setCaptureMetadata(true);
+            setTraceLoadError('');
+        } catch (reason) { if (generation === conversationGeneration.current) setTraceLoadError(reason instanceof ApiError ? reason.message : 'The latest persisted trace could not be refreshed.'); }
+    }
     const selectedAssistant = assistants.find(item => item.id === assistantId);
     const provider = selectedAssistant?.effectiveProviderConfiguration;
     const providerLabel = provider?.provider && provider.model ? `${provider.provider} · ${provider.model}` : `Provider ${provider?.status?.toLowerCase().replaceAll('_', ' ') ?? 'status unavailable'}`;
-    const copyableMessages: CopyableChatMessage[] = messages.filter(message => message.role === 'visitor' || message.role === 'assistant').map(message => ({ id: message.id, role: message.role, content: message.text, createdAt: message.createdAt, provenance: message.provenance, sources: message.sources, diagnostics: message.diagnostics, requestId: message.requestId, liveEvents: message.streamRequestId ? liveEvents[message.streamRequestId] : message.requestId ? liveEvents[message.requestId] : undefined }));
+    const visualMessage: PlaygroundPageMessage | undefined = inspectorChannel === 'WIDGET' ? (() => { const item = [...widgetMessages].reverse().find(message => message.role === 'user' || message.role === 'visitor'); return item ? { id: item.id, role: 'visitor', text: item.content, createdAt: Date.parse(item.createdAt) } : undefined; })() : messages.find(message => message.id === selectedMessageId) ?? [...messages].reverse().find(message => message.role === 'visitor');
+    const visualTurnId = visualMessage?.clientTurnId ?? visualMessage?.retryTurnId;
+    const visualAttempts = inspectorChannel === 'WIDGET' ? widgetTraces : diagnosticTraces.filter(item => Boolean(visualTurnId) && item.clientTurnId === visualTurnId);
+    const visualAttempt = visualAttempts.find(item => item.id === selectedAttemptId) ?? visualAttempts.at(-1);
+    const visualTrace = inspectorChannel === 'WIDGET' ? (visualAttempt?.payload && isPlaygroundTrace(visualAttempt.payload) ? visualAttempt.payload : undefined) : visualAttempt?.payload && isPlaygroundTrace(visualAttempt.payload) ? visualAttempt.payload : visualMessage?.diagnostics;
+    const visualRequestId = visualAttempt?.requestId ?? visualMessage?.requestId ?? visualMessage?.streamRequestId;
+    const visualEvents = (() => { const live = visualRequestId ? liveEvents[visualRequestId] ?? [] : []; const merged = new Map<string, PlaygroundLiveEvent>(); [...(visualTrace?.events ?? []), ...live].forEach(event => { const key = `${event.sequence}:${event.operation}`; merged.set(key, { ...merged.get(key), ...event }); }); return [...merged.values()].sort((left, right) => Date.parse(left.at) - Date.parse(right.at) || left.sequence - right.sequence); })();
+    const visualTraceId = visualTrace?.traceId ?? visualEvents[0]?.traceId ?? visualRequestId;
+    const visualStatus = visualRequestId ? liveStatus[visualRequestId] ?? (visualAttempt ? visualAttempt.outcome === 'COMPLETED' ? 'COMPLETED' : 'FAILED' : sending ? 'RUNNING' : 'DISCONNECTED') : visualTrace ? 'COMPLETED' : 'DISCONNECTED';
+    const selectedVisualStageEvents = visualEvents.filter(event => event.operation === selectedStage);
+    const copyableMessages: CopyableChatMessage[] = messages.filter(message => message.role === 'visitor' || message.role === 'assistant').map(message => ({ id: message.id, clientTurnId: message.clientTurnId, role: message.role, content: message.text, createdAt: message.createdAt, provenance: message.provenance, sources: message.sources, diagnostics: message.diagnostics, requestId: message.requestId, liveEvents: message.streamRequestId ? liveEvents[message.streamRequestId] : message.requestId ? liveEvents[message.requestId] : undefined }));
     const hasTraceData = copyableMessages.some(message => message.diagnostics || message.liveEvents?.length);
     async function copyMessage(message: PlaygroundPageMessage, event: React.MouseEvent<HTMLButtonElement>) {
         event.stopPropagation();
@@ -500,55 +847,146 @@ function Playground({ workspaceSlug = '', workspaceRole = '' }: Props) {
             if (generation === historyCopyGeneration.current) historyCopyLock.current = false;
         }
     }
-    async function exportDebug(download: boolean, selectedOnly = false) {
-        if (!isWorkspaceAdmin || sending || historyCopyLock.current) return;
-        const selected = selectedOnly ? messages.filter(message => (message.role === 'visitor' || message.role === 'assistant' || message.role === 'error') && message.id === selectedMessageId).map(message => ({ id: message.id, role: message.role, content: message.text, createdAt: message.createdAt, provenance: message.provenance, sources: message.sources, diagnostics: message.diagnostics, requestId: message.requestId, liveEvents: message.streamRequestId ? liveEvents[message.streamRequestId] : undefined })) : copyableMessages;
-        if (!selected.length) return;
+    async function copyAllJson(download = false) {
+        const selectedConversationId = inspectorChannel === 'WIDGET' ? widgetSessionId : sessionId;
+        if (!isWorkspaceAdmin || !selectedConversationId || historyCopyLock.current || sending) return;
         const generation = historyCopyGeneration.current;
         const capturedAssistantId = assistantId;
-        const capturedSessionId = sessionId;
+        const capturedSessionId = selectedConversationId;
+        const capturedChannel = inspectorChannel;
         const controller = new AbortController();
-        historyCopyController.current = controller; historyCopyLock.current = true; setCopyFeedback('Preparing debug JSON…');
+        historyCopyController.current = controller; historyCopyLock.current = true; setCopyFeedback('Loading all retained JSON…');
         try {
-            const loadedHistory = !selectedOnly && capturedSessionId
-                ? await loadCompletePlaygroundHistory({ workspaceSlug, assistantId: capturedAssistantId, conversationId: capturedSessionId, signal: controller.signal, localMessages: copyableMessages })
-                : { messages: selected, incomplete: false };
-            const history = selectedOnly ? loadedHistory : { ...loadedHistory, messages: [...loadedHistory.messages, ...messages.filter(message => message.role === 'error').map(message => ({ id: message.id, role: 'error' as const, content: message.text, createdAt: message.createdAt, diagnostics: message.diagnostics, requestId: message.requestId, liveEvents: message.streamRequestId ? liveEvents[message.streamRequestId] : undefined }))].sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0)) };
-            if (controller.signal.aborted || generation !== historyCopyGeneration.current || capturedAssistantId !== assistantId || capturedSessionId !== sessionId) return;
-            const { json } = buildPlaygroundDebugReport({ assistantName: selectedAssistant?.name || 'Carteio AI', conversationId: capturedSessionId ?? null, messages: history.messages, incomplete: history.incomplete, maxBytes: PLAYGROUND_EXPORT_MAX_BYTES });
+            let built: ReturnType<typeof buildPlaygroundDebugReport>;
+            if (capturedChannel === 'WIDGET') {
+                let offset = 0; let hasMore = true; let incomplete = false;
+                const items: PlaygroundDiagnosticTrace[] = []; const seenTraces = new Set<string>(); const widgetHistory = new Map<string, { id: string; role: string; content: string; createdAt: string }>();
+                while (hasMore && items.length < 1000) {
+                    const page = await getWidgetDiagnosticTraces(workspaceSlug, capturedAssistantId, capturedSessionId, controller.signal, { offset, limit: 40 });
+                    if (page.sessionId !== capturedSessionId || page.channel !== 'Widget') throw new Error('Widget trace conversation scope could not be confirmed.');
+                    for (const message of page.messages) widgetHistory.set(message.id, message);
+                    for (const item of page.items) if (!seenTraces.has(item.id)) { seenTraces.add(item.id); items.push(item); }
+                    hasMore = page.hasMore;
+                    if (hasMore && (page.nextOffset === null || page.nextOffset <= offset)) throw new Error('Widget trace pagination did not advance safely.');
+                    offset = page.nextOffset ?? offset + page.items.length;
+                    if (page.items.length === 0 && hasMore) throw new Error('Widget trace pagination returned no progress.');
+                }
+                incomplete = hasMore;
+                if (controller.signal.aborted || generation !== historyCopyGeneration.current || capturedAssistantId !== assistantId || capturedSessionId !== widgetSessionId || capturedChannel !== inspectorChannel) return;
+                built = buildPlaygroundDebugReport({ assistantName: selectedAssistant?.name || 'Carteio AI', conversationId: capturedSessionId, messages: [...widgetHistory.values()].map(message => ({ id: message.id, role: message.role === 'user' || message.role === 'visitor' ? 'user' as const : 'assistant' as const, content: message.content, createdAt: Date.parse(message.createdAt) })), attempts: items, incomplete, maxBytes: PLAYGROUND_EXPORT_MAX_BYTES });
+            } else {
+                const [history, traces] = await Promise.all([
+                    loadCompletePlaygroundHistory({ workspaceSlug, assistantId: capturedAssistantId, conversationId: capturedSessionId, signal: controller.signal, localMessages: copyableMessages }),
+                    loadCompletePlaygroundDiagnosticTraces({ workspaceSlug, assistantId: capturedAssistantId, conversationId: capturedSessionId, signal: controller.signal }),
+                ]);
+                if (controller.signal.aborted || generation !== historyCopyGeneration.current || capturedAssistantId !== assistantId || capturedSessionId !== sessionId || capturedChannel !== inspectorChannel) return;
+                const allMessages = [...history.messages, ...messages.filter(message => message.role === 'error').map(message => ({ id: message.id, clientTurnId: message.clientTurnId, role: 'error' as const, content: message.text, createdAt: message.createdAt, diagnostics: message.diagnostics, requestId: message.requestId, liveEvents: message.streamRequestId ? liveEvents[message.streamRequestId] : undefined }))];
+                const availableAttempts = [...traces.traces];
+                for (const local of diagnosticTraces.filter(item => item.id.startsWith('live:'))) if (!availableAttempts.some(item => item.requestId === local.requestId)) availableAttempts.push(local);
+                const activeLive = Object.entries(liveEvents).filter(([requestId, events]) => !availableAttempts.some(item => item.requestId === requestId || events.some(event => item.payload.traceId === event.traceId))).map(([requestId, events]) => ({ requestId, clientTurnId: messages.find(message => message.streamRequestId === requestId)?.clientTurnId ?? null, status: liveStatus[requestId] ?? 'DISCONNECTED', startedAt: new Date(messages.find(message => message.streamRequestId === requestId)?.createdAt ?? Date.now()).toISOString(), events }));
+                built = buildPlaygroundDebugReport({ assistantName: selectedAssistant?.name || 'Carteio AI', conversationId: capturedSessionId, messages: allMessages, attempts: availableAttempts, liveAttempts: activeLive, incomplete: history.incomplete || traces.incomplete, maxBytes: PLAYGROUND_EXPORT_MAX_BYTES });
+            }
             if (download) {
-                const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+                const blob = new Blob([built.json], { type: 'application/json;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
-                const anchor = document.createElement('a'); anchor.href = url; anchor.download = `carteio-playground-debug-${capturedSessionId ?? 'message'}.json`; anchor.click(); URL.revokeObjectURL(url);
+                const anchor = document.createElement('a'); anchor.href = url; anchor.download = `carteio-playground-trace-${capturedSessionId}.json`; anchor.click(); URL.revokeObjectURL(url);
             } else {
                 if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
-                await navigator.clipboard.writeText(json);
+                await navigator.clipboard.writeText(built.json);
             }
-            if (generation === historyCopyGeneration.current) setCopyFeedback('Debug JSON ready. Message text and evidence excerpts are redacted.');
+            if (generation === historyCopyGeneration.current) setCopyFeedback(`${download ? 'Exported' : 'Copied'} ${built.incomplete ? 'available JSON · marked incomplete at the safe size or retention limit.' : 'all conversation JSON.'}`);
         } catch (reason) {
             if (controller.signal.aborted || generation !== historyCopyGeneration.current) return;
-            setCopyFeedback(reason instanceof ApiError && (reason.status === 401 || reason.status === 403) ? 'Debug export requires authorized workspace access.' : 'Debug JSON could not be prepared.');
-        } finally {
-            if (historyCopyController.current === controller) historyCopyController.current = null;
-            if (generation === historyCopyGeneration.current) historyCopyLock.current = false;
-        }
+            setCopyFeedback(reason instanceof ApiError && (reason.status === 401 || reason.status === 403) ? 'Trace export requires authorized workspace access.' : !download && reason instanceof Error && reason.message.includes('Clipboard') ? 'Clipboard access failed. Allow clipboard access and try again.' : 'All conversation JSON could not be loaded.');
+        } finally { if (historyCopyController.current === controller) historyCopyController.current = null; if (generation === historyCopyGeneration.current) historyCopyLock.current = false; }
     }
     function onComposerKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (value.trim() && !sending) { const question = value; setValue(''); void send(undefined, question); } }
     }
-    return <section className="playground-page" aria-label="AI Playground">
-        <header className="playground-page-header"><div><small>AI DEVELOPMENT / PLAYGROUND</small><h1>Playground</h1></div><div className="playground-controls"><label><span>Assistant</span><select aria-label="Select assistant" value={assistantId} disabled={loading || assistants.length === 0} onChange={e => { setAssistantId(e.target.value); newSession(); }}><option value="">{loading ? 'Loading…' : 'No active assistant'}</option>{assistants.map(assistant => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></label><span className={`playground-connection ${provider?.ready ? 'is-ready' : 'is-pending'}`} title={providerLabel}><i/>{providerLabel}</span><span className="playground-dev-indicator">{import.meta.env.DEV ? 'Developer mode' : selectedTrace ? 'Trace available' : 'Trace status unknown'}</span><button type="button" className="playground-compact-button" onClick={newSession}><RotateCcw size={14}/> New chat</button>{isWorkspaceAdmin && <button type="button" className="playground-compact-button" onClick={() => { setMobileInspectorOpen(value => !value); setInspectorTab('trace'); if (!selectedMessageId) setSelectedMessageId(messages.at(-1)?.id ?? null); }} aria-label="Show execution inspector" aria-expanded={mobileInspectorOpen}><Activity size={15}/> Inspector</button>}</div></header>
-        <div className="playground-grid"><section className="chat-card" aria-label="Assistant chat"><header className="playground-chat-head"><div><strong>Conversation</strong><small>{sessionId ? `Session ${sessionId.slice(0, 8)}` : 'New Playground session'}</small></div><div className="playground-chat-head-actions"><Badge tone={sending ? 'amber' : assistantId ? 'green' : 'amber'}>{sending ? 'Running' : assistantId ? 'Ready' : 'Unavailable'}</Badge>{isWorkspaceAdmin && <><button type="button" className="playground-copy-icon" title="Copy entire conversation" aria-label="Copy entire conversation" disabled={sending || !copyableMessages.length || historyCopyLock.current} onClick={() => void copyHistory()}><Copy size={13}/></button><button type="button" disabled={sending || !copyableMessages.length || historyCopyLock.current} onClick={() => void copyHistory()}>Copy History</button>{hasTraceData && <button type="button" disabled={sending || historyCopyLock.current} onClick={() => void copyHistory(true)}>Copy Chat + Diagnostics</button>}</>}{sending && <button type="button" onClick={() => streamAbort.current?.abort()} aria-label="Cancel current message">Cancel</button>}</div></header>{copyFeedback && <small className="playground-copy-feedback" role="status">{copyFeedback}</small>}<div className="playground-chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text">{!messages.length ? <div className="playground-empty-state"><Bot size={22}/><strong>{loading ? 'Loading assistants…' : 'Start a conversation'}</strong><span>Messages go to the selected assistant in this workspace.</span></div> : messages.map(message => <article key={message.id} className={`playground-chat-message ${message.role}${selectedMessageId === message.id ? ' is-selected' : ''}`} onClick={() => setSelectedMessageId(message.id)}><small>{message.role === 'visitor' ? 'YOU' : message.role === 'error' ? 'REQUEST FAILED' : 'CARTEIO AI'}</small><p>{message.text}</p><footer><span>{message.role === 'assistant' ? playgroundSourceLabel(message) : ''}</span><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{(message.role === 'visitor' || message.role === 'assistant') && <button type="button" className="playground-message-copy" aria-label={`Copy ${message.role === 'visitor' ? 'user' : 'assistant'} message`} title="Copy message" onClick={event => void copyMessage(message, event)}>{copiedMessageId === message.id ? 'Copied' : <Copy size={11}/>}</button>}{isWorkspaceAdmin && <button type="button" aria-label={`Inspect ${message.role} message trace`} onClick={event => { event.stopPropagation(); setSelectedMessageId(message.id); setInspectorTab('trace'); if (window.matchMedia('(max-width: 820px)').matches) setMobileInspectorOpen(true); }}><Activity size={12}/></button>}</footer>{message.role === 'assistant' && message.sources?.length ? <details className="playground-inline-citations"><summary>{message.sources.length} source citation(s)</summary>{message.sources.map(source => <span key={source.reference}>[{source.reference}] {source.title}</span>)}</details> : null}{message.role === 'error' && message.retryText && <button type="button" className="playground-retry-button" onClick={event => { event.stopPropagation(); void send(undefined, message.retryText, message.retryTurnId); }}>Retry</button>}</article>)}{sending && <div className="playground-running" role="status"><i/> Receiving actual backend events…</div>}</div>{error && <Notice tone="amber">{error}</Notice>}<form className="playground-composer" onSubmit={event => void send(event)}><textarea ref={composer} value={value} onChange={event => setValue(event.target.value)} onKeyDown={onComposerKeyDown} rows={1} placeholder="Ask this assistant…" aria-label="Message the assistant" disabled={!assistantId || sending}/><button type="submit" aria-label="Send message" disabled={!assistantId || sending || !value.trim()}><Send size={16}/></button></form><small className="playground-composer-hint">Enter to send · Shift+Enter for a new line</small></section>
-        <aside className={`playground-inspector${mobileInspectorOpen ? ' is-mobile-open' : ''}`} aria-label="Developer Inspector"><header className="playground-inspector-title"><div><strong>Developer Inspector</strong><small>{selectedTraceId ? `Trace ${selectedTraceId.slice(0, 8)} · ${selectedLiveStatus.toLowerCase()}` : 'Select a message to inspect execution'}</small></div><span>{isWorkspaceAdmin ? 'Authorized role' : 'Read only'}</span><button type="button" className="playground-inspector-close" onClick={() => setMobileInspectorOpen(false)} aria-label="Close Inspector">×</button></header>{isWorkspaceAdmin ? <><div className="playground-inspector-tabs"><button type="button" disabled={!selectedMessage || historyCopyLock.current || sending} onClick={() => void exportDebug(false, true)}>Copy Message Debug JSON</button><button type="button" disabled={!copyableMessages.length || historyCopyLock.current || sending} onClick={() => void exportDebug(false)}>Copy Full Conversation Debug JSON</button><button type="button" disabled={!copyableMessages.length || historyCopyLock.current || sending} onClick={() => void exportDebug(true)}>Download Debug JSON</button></div><nav className="playground-inspector-tabs" role="tablist" aria-label="Inspector tabs">{([['trace','Live Flow'],['events','Events'],['knowledge','Knowledge'],['tools','LLM & Tools']] as const).map(([key,label]) => <button key={key} type="button" role="tab" aria-selected={inspectorTab === key} className={inspectorTab === key ? 'active' : ''} onClick={() => setInspectorTab(key as typeof inspectorTab)}>{label}</button>)}</nav><div className="playground-inspector-content" key={`${inspectorTab}:${selectedTraceId || 'none'}`}>
-            {import.meta.env.DEV && <label><input type="checkbox" checked={captureNextTurn} disabled={sending} onChange={event => setCaptureNextTurn(event.target.checked)}/>Capture validation metadata for the next message</label>}
-            {selectedTrace?.developmentCapture && <PlaygroundDevelopmentCapture capture={selectedTrace.developmentCapture}/>}
-            {inspectorTab === 'trace' && <PlaygroundLiveFlow message={selectedMessage} traceId={selectedTraceId} events={selectedEvents} status={selectedLiveStatus}/>}
-            {inspectorTab === 'events' && <PlaygroundEventConsole events={selectedEvents} traceId={selectedTraceId} status={selectedLiveStatus} follow={followEvents} setFollow={setFollowEvents} filter={eventFilter} setFilter={setEventFilter}/>}
-            {inspectorTab === 'knowledge' && (selectedTrace ? <><PlaygroundSourcesPanel message={selectedMessage} trace={selectedTrace}/><PlaygroundQueryPlanPanel trace={selectedTrace}/></> : <PlaygroundTracePanel message={selectedMessage} trace={undefined} sending={sending}/>) }
-            {inspectorTab === 'tools' && <PlaygroundLlmTools trace={selectedTrace} events={selectedEvents} providerLabel={providerLabel} message={selectedMessage}/>}
-          </div></> : <div className="playground-inspector-content"><Empty title="Owner/admin access required" desc={`Current workspace role: ${workspaceRole || 'unavailable'}. Backend access checks remain enforced.`}/></div>}</aside>
+        return <section className={`playground-page${inspectorCollapsed ? ' console-collapsed' : ''}`} aria-label="AI Playground">
+        {deleteTarget && typeof document !== 'undefined' && createPortal(<div className="playground-delete-backdrop" role="presentation"><section ref={deleteDialogRef} className="playground-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="playground-delete-title" aria-describedby="playground-delete-question playground-delete-description playground-delete-name" aria-busy={Boolean(deletingSessionId)} tabIndex={-1} onKeyDown={event => {
+            if (event.key === 'Escape' && !deletingSessionId) { event.preventDefault(); setDeleteTarget(null); return; }
+            if (event.key !== 'Tab') return;
+            const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'));
+            if (!focusable.length) { event.preventDefault(); event.currentTarget.focus(); return; }
+            const first = focusable[0]!; const last = focusable[focusable.length - 1]!;
+            if (event.shiftKey && (document.activeElement === first || !event.currentTarget.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && (document.activeElement === last || !event.currentTarget.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+        }}><h2 id="playground-delete-title">Delete conversation?</h2><p id="playground-delete-question" className="playground-delete-question">Are you sure you want to delete this conversation?</p><p id="playground-delete-description">This permanently deletes its messages and associated debugging records. This action cannot be undone.</p><div id="playground-delete-name" className="playground-delete-name" title={deleteTarget.preview}>{deleteTarget.preview}</div>{deleteError && <p className="playground-delete-error" role="alert">{deleteError}</p>}<div className="playground-delete-actions"><button ref={deleteCancelRef} type="button" disabled={Boolean(deletingSessionId)} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="is-danger" disabled={Boolean(deletingSessionId)} onClick={() => void confirmDeleteSession()}>{deletingSessionId === deleteTarget.id ? 'Deleting…' : 'Delete'}</button></div></section></div>, document.body)}
+        <header className="playground-page-header">
+          <div className="playground-toolbar-primary">
+            <div className="playground-page-title"><small>AI DEVELOPMENT / PLAYGROUND</small><h1>Playground</h1></div>
+            <label className="playground-assistant-control"><span>Assistant</span><select aria-label="Select assistant" value={assistantId} disabled={loading || assistants.length === 0} onChange={e => { setAssistantId(e.target.value); newSession(); }}><option value="">{loading ? 'Loading…' : 'No active assistant'}</option>{assistants.map(assistant => <option key={assistant.id} value={assistant.id}>{assistant.name}</option>)}</select></label>
+            <span className={`playground-connection ${provider?.ready ? 'is-ready' : 'is-pending'}`} title={providerLabel}><i/>{providerLabel}</span>
+          </div>
+          <div className="playground-toolbar-secondary">
+            {isWorkspaceAdmin && <div className="playground-session-picker" ref={sessionPickerRef} onKeyDown={onSessionMenuKeyDown}><span>Conversation</span><button type="button" className="playground-session-trigger" ref={sessionTriggerRef} aria-label="Open conversation" aria-haspopup="listbox" aria-controls="playground-saved-conversations" aria-expanded={sessionMenuOpen} disabled={sending || sessionsLoading} onClick={() => { setSessionMenuOpen(value => !value); setSessionMenuIndex(0); }}><span>{sessions.find(item => item.id === sessionId)?.preview || (sessionId ? 'Current conversation' : 'New conversation')}</span><ChevronDown size={13}/></button>{sessionMenuOpen && <div id="playground-saved-conversations" ref={sessionMenuRef} className="playground-session-menu" role="listbox" aria-label="Saved Playground conversations"><button type="button" role="option" data-option-index="0" tabIndex={sessionMenuIndex === 0 ? 0 : -1} aria-selected={!sessionId} className={`${!sessionId ? 'is-current ' : ''}${sessionMenuIndex === 0 ? 'is-active' : ''}`} onClick={() => { setSessionMenuOpen(false); newSession(); }}>New conversation</button>{sessions.map((item, index) => <div className="playground-session-option" key={item.id}><button type="button" role="option" aria-selected={sessionId === item.id} data-option-index={index + 1} tabIndex={sessionMenuIndex === index + 1 ? 0 : -1} className={`${sessionId === item.id ? 'is-current ' : ''}${sessionMenuIndex === index + 1 ? 'is-active' : ''}`} title={`${item.preview || 'Conversation'} · ${new Date(item.updatedAt).toLocaleString()}`} onMouseEnter={() => setSessionMenuIndex(index + 1)} onClick={() => { setSessionMenuOpen(false); void openSession(item.id); }}><span>{item.preview || 'Conversation'}</span><small>{new Date(item.updatedAt).toLocaleDateString()}</small></button><button type="button" className="playground-session-delete" aria-label={`Delete conversation: ${item.preview || 'Conversation'}`} title="Delete conversation" onClick={event => { event.stopPropagation(); deleteTriggerRef.current = event.currentTarget; setSessionMenuOpen(false); setDeleteError(''); setDeleteTarget({ id: item.id, preview: item.preview || 'Conversation' }); }}><Trash2 size={13}/></button></div>)}{sessionsLoading && !sessions.length && <div className="playground-session-loading" role="status">Loading conversations…</div>}{sessionsError && <div className="playground-session-error" role="alert"><span>{sessionsError}</span><button type="button" onClick={refreshSessions}>Retry</button></div>}{!sessionsLoading && !sessionsError && !sessions.length && <div className="playground-session-loading">No saved conversations.</div>}{sessionsHasMore && <button type="button" className="playground-session-load-more" disabled={sessionsLoading} onClick={() => void loadMoreSessions()}>{sessionsLoading ? 'Loading…' : 'Load more conversations'}</button>}</div>}</div>}
+            {isWorkspaceAdmin && <label className="playground-capture-toggle" title={captureAvailable ? 'Persist safe execution metadata for this conversation.' : 'Diagnostics are disabled in this environment.'}><input type="checkbox" checked={captureMetadata} disabled={sending || !captureAvailable} onChange={event => void changeCaptureMetadata(event.target.checked)}/>Capture Metadata{!captureAvailable && <small aria-hidden="true"> unavailable</small>}</label>}
+            <button type="button" className="playground-compact-button" onClick={newSession}><RotateCcw size={14}/> New chat</button>
+            {isWorkspaceAdmin && <button type="button" className="playground-compact-button" onClick={() => { if (isPlaygroundSmallScreen()) { setInspectorCollapsed(false); setMobileInspectorOpen(value => !value); } else setInspectorCollapsed(value => !value); if (!selectedMessageId) setSelectedMessageId(messages.at(-1)?.id ?? null); }} aria-label={isPlaygroundSmallScreen() ? mobileInspectorOpen ? "Close developer workspace" : "Show execution inspector" : inspectorCollapsed ? "Show execution inspector" : "Collapse developer workspace"} aria-expanded={isPlaygroundSmallScreen() ? mobileInspectorOpen : !inspectorCollapsed}><Activity size={15}/> {isPlaygroundSmallScreen() ? mobileInspectorOpen ? "Close Console" : "Inspector" : inspectorCollapsed ? "Inspector" : "Console"}</button>}
+          </div>
+        </header>
+        <div className={`playground-grid${inspectorCollapsed ? ' console-collapsed' : ''}`}><section className="chat-card" aria-label="Assistant chat"><header className="playground-chat-head"><div><strong>Conversation</strong><small>{sessionId ? `Session ${sessionId.slice(0, 8)}` : 'New Playground session'}</small></div><div className="playground-chat-head-actions"><Badge tone={sending ? 'amber' : assistantId ? 'green' : 'amber'}>{sending ? 'Running' : assistantId ? 'Ready' : 'Unavailable'}</Badge>{isWorkspaceAdmin && <button type="button" className="playground-copy-icon" title="Copy entire conversation" aria-label="Copy entire conversation" disabled={sending || !copyableMessages.length || historyCopyLock.current} onClick={() => void copyHistory()}><Copy size={13}/></button>}{isWorkspaceAdmin && <button type="button" disabled={sending || !copyableMessages.length || historyCopyLock.current} onClick={() => void copyHistory()}>Copy History</button>}{isWorkspaceAdmin && hasTraceData && <button type="button" disabled={sending || historyCopyLock.current} onClick={() => void copyHistory(true)}>Copy Chat + Diagnostics</button>}{sending && <button type="button" onClick={() => streamAbort.current?.abort()} aria-label="Cancel current message">Cancel</button>}</div></header>{copyFeedback && <small className="playground-copy-feedback" role="status">{copyFeedback}</small>}<div className="playground-chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text">{(historyHasMore || traceHasMore) && isWorkspaceAdmin && <button type="button" disabled={loading} onClick={() => void loadEarlierHistory()}>{loading ? 'Loading…' : historyHasMore && traceHasMore ? 'Load earlier messages and traces' : historyHasMore ? 'Load earlier messages' : 'Load older traces'}</button>}{!messages.length ? <div className="playground-empty-state"><Bot size={22}/><strong>{conversationLoading ? 'Loading conversation…' : loading ? 'Loading assistants…' : 'Start a conversation'}</strong><span>Messages go to the selected assistant in this workspace.</span></div> : messages.map(message => <article key={message.id} className={`playground-chat-message ${message.role}${selectedMessageId === message.id ? ' is-selected' : ''}`} tabIndex={0} aria-current={selectedMessageId === message.id ? 'true' : undefined} onClick={() => { setSelectedMessageId(message.id); setSelectedAttemptId(null); setSelectedStage(null); }} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) { event.preventDefault(); setSelectedMessageId(message.id); setSelectedAttemptId(null); setSelectedStage(null); } }}><small>{message.role === 'visitor' ? 'YOU' : message.role === 'error' ? `REQUEST FAILED${message.attempt ? ` · ATTEMPT ${message.attempt}` : ''}` : 'CARTEIO AI'}</small><p>{message.text}</p><footer><span>{message.role === 'assistant' ? playgroundSourceLabel(message) : ''}</span><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>{(message.role === 'visitor' || message.role === 'assistant') && <button type="button" className="playground-message-copy" aria-label={`Copy ${message.role === 'visitor' ? 'user' : 'assistant'} message`} title="Copy message" onClick={event => void copyMessage(message, event)}>{copiedMessageId === message.id ? 'Copied' : <Copy size={11}/>}</button>}</footer>{message.role === 'assistant' && message.sources?.length ? <details className="playground-inline-citations"><summary>{message.sources.length} source citation(s)</summary>{message.sources.map(source => <span key={source.reference}>[{source.reference}] {source.title}</span>)}</details> : null}{message.role === 'error' && message.retryText && <button type="button" className="playground-retry-button" onClick={event => { event.stopPropagation(); void send(undefined, message.retryText, message.retryTurnId); }}>Retry</button>}</article>)}{sending && <div className="playground-running" role="status"><i/> Receiving actual backend events…</div>}</div>{error && <Notice tone="amber">{error}</Notice>}<form className="playground-composer" onSubmit={event => void send(event)}><textarea ref={composer} value={value} onChange={event => setValue(event.target.value)} onKeyDown={onComposerKeyDown} rows={1} placeholder="Ask this assistant…" aria-label="Message the assistant" disabled={!assistantId || sending || conversationLoading}/><button type="submit" aria-label="Send message" disabled={!assistantId || sending || conversationLoading || !value.trim()}><Send size={16}/></button></form><small className="playground-composer-hint">Enter to send · Shift+Enter for a new line</small></section>
+        <aside className={`playground-inspector${mobileInspectorOpen ? ' is-mobile-open' : ''}${inspectorCollapsed ? ' is-collapsed' : ''}`} aria-label="Developer Workspace">
+          <header className="playground-terminal-toolbar">
+            <strong><span className="terminal-prompt">›_</span> Developer Workspace</strong>
+            <span className={`playground-capture-state${captureMetadata && inspectorChannel === 'PLAYGROUND' ? ' is-on' : ''}`}><i/>{inspectorChannel === 'WIDGET' ? 'Authorized Widget traces' : captureMetadata ? 'Capture ON' : captureAvailable ? 'Capture OFF' : 'Capture unavailable'}</span>
+            <span className="terminal-counts">{inspectorChannel === 'WIDGET' ? widgetMessages.filter(item => item.role === 'user').length : messages.filter(item => item.role === 'visitor').length} messages · {inspectorChannel === 'WIDGET' ? widgetTraces.filter(item => item.outcome === 'COMPLETED').length : diagnosticTraces.filter(item => item.outcome === 'COMPLETED').length} success · {inspectorChannel === 'WIDGET' ? widgetTraces.filter(item => item.outcome !== 'COMPLETED').length : diagnosticTraces.filter(item => item.outcome !== 'COMPLETED').length} failed</span>
+            {isWorkspaceAdmin && <label className="dev-source-select">Source <select aria-label="Diagnostic source" value={inspectorChannel} onChange={event => { setInspectorChannel(event.target.value as 'PLAYGROUND' | 'WIDGET'); setSelectedAttemptId(null); setSelectedStage(null); if (event.target.value === 'WIDGET') { setWidgetTraces([]); setWidgetMessages([]); setWidgetSessionId(''); } }}><option value="PLAYGROUND">Playground</option><option value="WIDGET">Widget</option></select></label>}
+            <button type="button" className="terminal-collapse" aria-expanded={!inspectorCollapsed} onClick={() => { if (isPlaygroundSmallScreen()) { setInspectorCollapsed(false); setMobileInspectorOpen(value => !value); } else setInspectorCollapsed(value => !value); }}>{inspectorCollapsed ? 'Expand' : 'Collapse'}</button>
+            <button type="button" className="playground-inspector-close" onClick={() => setMobileInspectorOpen(false)} aria-label="Close developer workspace">×</button>
+          </header>
+          {!inspectorCollapsed && <div className="playground-developer-panels">
+            <section className="playground-visual-inspector" aria-label="Visual Inspector">
+              <div className="playground-visual-toolbar"><div className="playground-visual-tabs" role="tablist" aria-label="Visual Inspector views">{([['flow','Live Flow'],['events','Events'],['knowledge','Knowledge'],['tools','LLM & Tools']] as const).map(([mode,label]) => <button type="button" role="tab" aria-selected={visualMode === mode} className={visualMode === mode ? 'is-active' : ''} key={mode} onClick={() => setVisualMode(mode)}>{label}</button>)}</div>{visualAttempts.length > 0 && <label className="playground-attempt-picker">Attempt <select aria-label="Select diagnostic attempt" value={visualAttempt?.id ?? ''} onChange={event => { setSelectedAttemptId(event.target.value || null); setSelectedStage(null); }}>{visualAttempts.map(item => <option key={item.id} value={item.id}>Attempt {item.attempt} · {item.outcome}</option>)}</select></label>}{inspectorChannel === 'WIDGET' && <label className="playground-attempt-picker">Widget conversation <select aria-label="Widget conversation" value={widgetSessionId} onChange={event => { setWidgetTraces([]); setWidgetMessages([]); setSelectedAttemptId(null); setSelectedStage(null); setWidgetSessionId(event.target.value); }}>{widgetSessions.map(item => <option key={item.id} value={item.id}>{item.preview || item.id}</option>)}</select></label>}</div>
+              {inspectorChannel === 'WIDGET' && <div className="playground-widget-actions">{widgetSessionsMore && <button type="button" onClick={() => { if (!workspaceSlug || !assistantId) return; void listWidgetDiagnosticSessions(workspaceSlug, assistantId, undefined, { offset: widgetSessionsOffset, limit: 20 }).then(page => { setWidgetSessions(current => [...current, ...page.items.filter(item => !current.some(existing => existing.id === item.id))]); setWidgetSessionsMore(page.hasMore); setWidgetSessionsOffset(page.nextOffset ?? widgetSessionsOffset + page.items.length); }); }}>More conversations</button>}{widgetTraceMore && <button type="button" onClick={() => { void getWidgetDiagnosticTraces(workspaceSlug, assistantId, widgetSessionId, undefined, { offset: widgetTraces.length, limit: 40 }).then(page => { if (page.sessionId === widgetSessionId) { setWidgetTraces(current => [...current, ...page.items.filter(item => !current.some(existing => existing.id === item.id))]); setWidgetTraceMore(page.hasMore); } }); }}>Older attempts</button>}</div>}
+              <div className="playground-visual-content" role="tabpanel">
+                {!isWorkspaceAdmin ? <div className="playground-terminal-denied">Owner/admin access required. Backend diagnostic authorization remains enforced.</div> : visualMode === 'flow' ? <><PlaygroundLiveFlow message={visualMessage} trace={visualTrace} traceId={visualTraceId} events={visualEvents} coverage={visualTrace?.stageCoverage ?? []} status={visualStatus} onInspect={stage => setSelectedStage(stage)}/>{selectedStage && <PlaygroundStageJsonList events={selectedVisualStageEvents} selectedStage={selectedStage}/>}</> : visualMode === 'events' ? <PlaygroundEventConsole events={visualEvents} traceId={visualTraceId} status={visualStatus} follow={visualFollow} setFollow={setVisualFollow} filter={visualEventFilter} setFilter={setVisualEventFilter} search={visualEventSearch} setSearch={setVisualEventSearch}/> : visualMode === 'knowledge' ? <div className="playground-knowledge-view"><PlaygroundSourcesPanel message={visualMessage} trace={visualTrace}/>{visualTrace && <PlaygroundQueryPlanPanel trace={visualTrace}/>}</div> : <PlaygroundLlmTools trace={visualTrace} events={visualEvents} providerLabel={providerLabel} message={visualMessage}/>}
+              </div>
+            </section>
+            <section className="playground-terminal-panel" aria-label="JSON Terminal">
+              <header className="playground-json-toolbar"><strong><span className="terminal-prompt">›_</span> JSON Terminal</strong>{isWorkspaceAdmin && <button type="button" className="terminal-copy-all" onClick={() => void copyAllJson()} disabled={!(inspectorChannel === 'WIDGET' ? widgetSessionId : sessionId) || historyCopyLock.current || sending} aria-label="Copy All JSON"><Copy size={13}/> Copy All JSON</button>}{isWorkspaceAdmin && <button type="button" className="terminal-export" onClick={() => void copyAllJson(true)} disabled={!(inspectorChannel === 'WIDGET' ? widgetSessionId : sessionId) || historyCopyLock.current || sending} aria-label="Export conversation JSON"><Download size={12}/> Export</button>}<div className="terminal-toolbar-utilities"><button type="button" className="terminal-clear-view" onClick={() => { setTerminalFilter('all'); followRef.current = true; setFollowEvents(true); if (terminalViewport.current) terminalViewport.current.scrollTop = terminalViewport.current.scrollHeight; }} title="Clear filters and return to latest logs">Clear View</button>{isWorkspaceAdmin && <label className="terminal-filter-label">Filter <select aria-label="Filter terminal events" value={terminalFilter} onChange={event => setTerminalFilter(event.target.value as typeof terminalFilter)}><option value="all">All</option><option value="success">Success</option><option value="failed">Failed</option></select></label>}<label className="terminal-follow"><input type="checkbox" checked={followEvents} onChange={event => { followRef.current = event.target.checked; setFollowEvents(event.target.checked); if (event.target.checked && terminalViewport.current) terminalViewport.current.scrollTop = terminalViewport.current.scrollHeight; }}/> Follow Live</label></div></header>
+              {copyFeedback && <small role="status" className="terminal-feedback">{copyFeedback}</small>}
+              {isWorkspaceAdmin ? inspectorChannel === 'WIDGET' ? <PlaygroundWidgetTerminal messages={widgetMessages} traces={widgetTraces} filter={terminalFilter} loading={widgetTraceLoading} error={widgetTraceError}/> : <PlaygroundTerminal ref={terminalViewport} messages={messages} traces={diagnosticTraces} liveEvents={liveEvents} liveStatus={liveStatus} filter={terminalFilter} follow={followEvents} onManualScroll={() => { followRef.current = false; setFollowEvents(false); }} onJumpLatest={() => { followRef.current = true; setFollowEvents(true); if (terminalViewport.current) terminalViewport.current.scrollTop = terminalViewport.current.scrollHeight; }} loading={conversationLoading || traceLoading} traceError={traceLoadError}/> : <div className="playground-terminal-denied">Owner/admin access required. Backend diagnostic authorization remains enforced.</div>}
+            </section>
+          </div>}
+        </aside>
       </div>
+      </section>;
+    }
+
+export function PlaygroundStageJsonList({ events, selectedStage }: { events: readonly unknown[]; selectedStage?: string | null }) {
+    const recordedEvents = events.filter((event): event is Record<string, unknown> => typeof event === 'object' && event !== null && !Array.isArray(event));
+    if (!recordedEvents.length) return <section className="dev-console-json" aria-label="Recorded stage JSON"><div className="dev-console-section-heading"><strong>Stage JSON</strong></div><p>Detailed trace not recorded.</p></section>;
+    const firstFailure = recordedEvents.findIndex(event => ['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(String(event.outcome)));
+    return <section className="dev-console-json" aria-label="Recorded stage JSON">
+        <div className="dev-console-section-heading"><strong>Stage JSON</strong><span>{recordedEvents.length} recorded events</span></div>
+        <div className="dev-console-json-stages">{recordedEvents.map((event, index) => {
+            const stage = String(event.operation ?? event.stage ?? `Recorded event ${index + 1}`);
+            const outcome = String(event.outcome ?? 'UNKNOWN');
+            const json = JSON.stringify(event, null, 2) ?? '{}';
+            const containsRedaction = json.includes('[REDACTED]') || json.includes('[redacted]');
+            return <details open={Boolean(selectedStage && selectedStage === stage)} className={`dev-console-stage dev-console-stage-${outcome.toLowerCase()}${index === firstFailure ? ' is-first-failure' : ''}`} key={`${stage}:${index}`}>
+                <summary><span className="dev-console-stage-status" aria-label={outcome}>{outcome === 'COMPLETED' ? '✓' : outcome === 'FAILED' ? '×' : outcome === 'SKIPPED' ? '↷' : '·'}</span><span className="dev-console-stage-name">{stage}</span><span className="dev-console-stage-outcome">{outcome}</span>{typeof event.durationMs === 'number' && <span className="dev-console-stage-duration">{event.durationMs} ms</span>}</summary>
+                <div className="dev-console-stage-json-head">{containsRedaction && <span>Redacted fields</span>}<button type="button" onClick={async click => { const button = click.currentTarget; try { if (!navigator.clipboard?.writeText) throw new Error('clipboard_unavailable'); await navigator.clipboard.writeText(json); button.textContent = 'Copied'; } catch { button.textContent = 'Copy failed'; } }}>Copy stage JSON</button></div>
+                <PlaygroundJsonTree value={event}/>
+            </details>;
+        })}</div>
     </section>;
+}
+
+function PlaygroundJsonTree({ value, depth = 0, name }: { value: unknown; depth?: number; name?: string }) {
+    const isArray = Array.isArray(value);
+    const isObject = typeof value === 'object' && value !== null && !isArray;
+    if (isArray || isObject) {
+        const entries: Array<[string, unknown]> = isArray ? value.map((item, index) => [String(index), item]) : Object.entries(value as Record<string, unknown>);
+        const label = name ? <span className="dev-json-key">{name}</span> : null;
+        if (!entries.length) return <div className="dev-json-line">{label}{isArray ? <span className="dev-json-bracket">[]</span> : <span className="dev-json-bracket">{'{}'}</span>}</div>;
+        return <details className="dev-json-node" open={depth < 1}><summary>{label}{isArray ? <span className="dev-json-bracket">Array[{entries.length}]</span> : <span className="dev-json-bracket">Object {'{' + entries.length + '}'}</span>}</summary><div className="dev-json-children">{entries.map(([key, child]) => <PlaygroundJsonTree key={`${depth}:${key}`} name={isArray ? `[${key}]` : key} value={child} depth={depth + 1}/>)}</div></details>;
+    }
+    const kind = value === null ? 'null' : typeof value;
+    const rendered = value === null ? 'null' : typeof value === 'string' ? JSON.stringify(value) : String(value);
+    return <div className="dev-json-line">{name && <span className="dev-json-key">{name}</span>}<span className={`dev-json-value dev-json-${kind}`}>{rendered}</span></div>;
 }
 function PlaygroundDevelopmentCapture({ capture }: { capture: NonNullable<PlaygroundTrace['developmentCapture']> }) {
     if (Date.parse(capture.expiresAt) <= Date.now()) return null;
@@ -556,13 +994,13 @@ function PlaygroundDevelopmentCapture({ capture }: { capture: NonNullable<Playgr
 }
 function PlaygroundTracePanel({ message, trace, sending }: { message?: PlaygroundPageMessage; trace?: PlaygroundTrace; sending: boolean }) {
     if (!message) return <div className="playground-inspector-empty"><Activity size={20}/><strong>Select a message</strong><span>Each response keeps its own diagnostics.</span></div>;
-    if (!trace) return <div className="playground-inspector-empty"><Activity size={20}/><strong>Trace unavailable</strong><span>{sending ? 'Execution stages are not streamed; only a final server trace can be shown.' : message.role === 'error' ? `The request failed without a trace payload${message.errorCode ? ` (${message.errorCode})` : ''}. Request ID: ${message.requestId || 'unavailable'}` : 'This response has no trace payload, or diagnostics are disabled on the backend.'}</span></div>;
+    if (!trace) return <div className="playground-inspector-empty"><Activity size={20}/><strong>Trace unavailable</strong><span>{sending ? 'Execution stages are not streamed; only a final server trace can be shown.' : message.role === 'error' ? `The request failed without a trace payload${message.errorCode ? ` (${message.errorCode})` : ''}. Request ID: ${message.requestId || 'unavailable'}` : 'Detailed trace not recorded for this historical message, or diagnostics are disabled on the backend.'}</span></div>;
     return <div className="playground-trace-view"><div className="playground-trace-id"><span>Trace ID</span><code>{trace.traceId}</code><button type="button" aria-label="Copy trace ID" onClick={() => void navigator.clipboard?.writeText(trace.traceId)}><Copy size={13}/></button></div><div className="playground-trace-summary"><span>Latency <strong>{trace.totalLatencyMs} ms</strong></span><span>Final source <strong>{trace.finalSource.replaceAll('_',' ')}</strong></span>{trace.usage?.totalTokens !== undefined && <span>Tokens <strong>{trace.usage.totalTokens}</strong></span>}</div><ol>{trace.events.map((event,index) => <li key={`${event.operation}:${event.at}:${index}`}><i className={`trace-status trace-${event.status}`}/><div><strong>{event.operation.replaceAll('_',' ')}</strong><small>{event.status}{event.durationMs ? ` · ${event.durationMs} ms` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.errorCategory ? ` · ${event.errorCategory}` : ''}{event.provider ? ` · ${event.provider}${event.model ? ` / ${event.model}` : ''}` : ''}</small></div></li>)}</ol></div>;
 }
-type FlowNodeStatus = 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED' | 'CANCELLED' | 'UNKNOWN';
+type FlowNodeStatus = 'IDLE' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED' | 'CANCELLED' | 'NOT_REACHED' | 'UNKNOWN';
 function flowNodeStatus(events: PlaygroundLiveEvent[], operations: string[], terminal: boolean): FlowNodeStatus {
     const event = [...events].reverse().find(item => operations.includes(item.operation));
-    if (!event) return 'IDLE';
+    if (!event) return terminal ? 'NOT_REACHED' : 'IDLE';
     if (event.outcome === 'STARTED') return terminal ? 'UNKNOWN' : 'RUNNING';
     if (event.outcome === 'COMPLETED') return 'SUCCEEDED';
     if (event.outcome === 'FAILED' || event.outcome === 'TIMED_OUT') return 'FAILED';
@@ -570,7 +1008,7 @@ function flowNodeStatus(events: PlaygroundLiveEvent[], operations: string[], ter
     if (event.outcome === 'SKIPPED') return 'SKIPPED';
     return 'UNKNOWN';
 }
-function PlaygroundLiveFlow({ message, traceId, events, status }: { message?: PlaygroundPageMessage; traceId?: string; events: PlaygroundLiveEvent[]; status: string }) {
+function PlaygroundLiveFlow({ message, trace, traceId, events, coverage, status, onInspect }: { message?: PlaygroundPageMessage; trace?: PlaygroundTrace; traceId?: string; events: PlaygroundLiveEvent[]; coverage: NonNullable<PlaygroundTrace['stageCoverage']>; status: string; onInspect: (stage: string) => void }) {
     if (!message || !traceId) return <div className="playground-inspector-empty"><Activity size={18}/><strong>Select a message</strong><span>Execution nodes appear only from actual backend events.</span></div>;
     if (!events.length && status === 'DISABLED') return <div className="playground-inspector-empty"><Activity size={18}/><strong>Trace unavailable</strong><span>Live diagnostics are disabled by the backend environment flag. Agent Builder flow not active for this conversation.</span></div>;
     if (!events.length) return <div className="playground-inspector-empty"><Activity size={18}/><strong>{status === 'CONNECTING' ? 'Connecting to trace…' : status === 'FAILED' ? 'No trace events received' : 'Trace unavailable'}</strong><span>Historical messages without trace data are not filled with generated execution steps. Agent Builder flow not active for this conversation.</span></div>;
@@ -590,19 +1028,125 @@ function PlaygroundLiveFlow({ message, traceId, events, status }: { message?: Pl
         { label: 'Citation recovery', operations: ['CITATION_RECOVERY'] },
         { label: 'Response persistence', operations: ['RESPONSE_PERSISTED', 'TURN_PERSISTENCE'] },
     ];
-    return <div className="playground-live-flow"><div className="playground-flow-disclaimer"><strong>Orchestrator execution</strong><span>Agent Builder flow not active for this conversation.</span></div><div className="playground-flow-node-list">{nodes.map((node, index) => { const nodeStatus = flowNodeStatus(events, node.operations, terminal); const event = [...events].reverse().find(item => node.operations.includes(item.operation)); return <React.Fragment key={node.label}>{index > 0 && <div className="playground-flow-edge" aria-hidden="true">↓</div>}<article className={`playground-flow-node status-${nodeStatus.toLowerCase()}`}><i aria-hidden="true"/><div><strong>{node.label}</strong><small>{nodeStatus}{event?.durationMs ? ` · ${event.durationMs} ms` : ''}{event?.reason ? ` · ${event.reason}` : ''}{event?.errorCategory ? ` · ${event.errorCategory}` : ''}</small></div></article></React.Fragment>; })}</div>{status === 'DISCONNECTED' && <p className="playground-incomplete-note">Stream disconnected. Confirmed stages are retained; unfinished stage status is unknown.</p>}{status === 'CANCELLED' && <p className="playground-incomplete-note">Request cancelled. Confirmed stages are retained; unfinished stage status is unknown.</p>}{status === 'RUNNING' && <p className="playground-incomplete-note">Live events reflect recorded backend stages; no published flow or specialist agent was executed.</p>}</div>;
+    const firstFailure = events.find(item => ['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(item.outcome));
+    return <div className="playground-live-flow"><div className="playground-flow-disclaimer"><strong>Orchestrator execution</strong><span>Agent Builder flow not active for this conversation.</span></div>{trace?.retentionExpiresAt && <p className="playground-incomplete-note">{Date.parse(trace.retentionExpiresAt) <= Date.now() ? 'Trace retention expired' : `Trace retention expires ${new Date(trace.retentionExpiresAt).toLocaleString()}`}</p>}{firstFailure && <div className="playground-incomplete-note">First failing stage: <strong>{firstFailure.operation}</strong>{firstFailure.errorCategory ? ` · ${firstFailure.errorCategory}` : ''}{firstFailure.reason ? ` · ${firstFailure.reason}` : ''}</div>}<div className="playground-flow-node-list">{nodes.map((node, index) => { const nodeStatus = flowNodeStatus(events, node.operations, terminal); const event = [...events].reverse().find(item => node.operations.includes(item.operation)); return <React.Fragment key={node.label}>{index > 0 && <div className="playground-flow-edge" aria-hidden="true">↓</div>}<article className={`playground-flow-node status-${nodeStatus.toLowerCase()}`}><i aria-hidden="true"/><div><strong>{node.label}</strong><small>{nodeStatus}{event?.durationMs ? ` · ${event.durationMs} ms` : ''}{event?.reason ? ` · ${event.reason}` : ''}{event?.errorCategory ? ` · ${event.errorCategory}` : ''}</small>{event && <button type="button" onClick={() => onInspect(event.operation)}>View {event.operation} JSON</button>}</div></article></React.Fragment>; })}</div>{coverage.length > 0 && <details className="playground-stage-coverage"><summary>Recorded core stages ({coverage.filter(stage => stage.status.startsWith('EXECUTED')).length} executed)</summary><ul>{coverage.map(stage => { const event = [...events].reverse().find(item => item.operation === stage.stage); return <li key={stage.stage}><span>{stage.stage.replaceAll('_', ' ')}</span><small>{stage.status}{event?.durationMs ? ` · ${event.durationMs} ms` : ''}</small>{event && <button type="button" onClick={() => onInspect(stage.stage)}>View JSON</button>}</li>; })}</ul></details>}{trace && <details><summary>Full safe trace JSON</summary><button type="button" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(trace, null, 2))}>Copy full trace JSON</button><JsonPretty value={trace}/></details>}{status === 'DISCONNECTED' && <p className="playground-incomplete-note">Stream disconnected. Confirmed stages are retained; unfinished stage status is unknown.</p>}{status === 'CANCELLED' && <p className="playground-incomplete-note">Request cancelled. Confirmed stages are retained; unfinished stage status is unknown.</p>}{status === 'RUNNING' && <p className="playground-incomplete-note">Live events reflect recorded backend stages; no published flow or specialist agent was executed.</p>}</div>;
 }
-function PlaygroundEventConsole({ events, traceId, status, follow, setFollow, filter, setFilter }: { events: PlaygroundLiveEvent[]; traceId?: string; status: string; follow: boolean; setFollow: (value: boolean) => void; filter: 'all' | 'errors'; setFilter: (value: 'all' | 'errors') => void }) {
+function terminalTimestamp(value: string | number) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'time unavailable';
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `${time}.${String(date.getMilliseconds()).padStart(3, '0')}`;
+}
+const PlaygroundTerminal = React.forwardRef<HTMLDivElement, { messages: PlaygroundPageMessage[]; traces: PlaygroundDiagnosticTrace[]; liveEvents: Record<string, PlaygroundLiveEvent[]>; liveStatus: Record<string, LiveTraceStatus>; filter: 'all' | 'success' | 'failed'; follow: boolean; onManualScroll: () => void; onJumpLatest: () => void; loading: boolean; traceError: string }>(function PlaygroundTerminal({ messages, traces, liveEvents, liveStatus, filter, follow, onManualScroll, onJumpLatest, loading, traceError }, ref) {
+    const [copiedEvent, setCopiedEvent] = React.useState('');
+    const seenTurns = new Set<string>();
+    const visitorMessages = messages.filter(message => message.role === 'visitor').filter(message => {
+        const key = message.clientTurnId ?? message.id;
+        if (seenTurns.has(key)) return false;
+        seenTurns.add(key);
+        return true;
+    });
+    const usedTraces = new Set<string>();
+    const sections = visitorMessages.map((message, index) => {
+        const attempts = traces.filter(item => item.clientTurnId && item.clientTurnId === (message.clientTurnId ?? message.retryTurnId));
+        attempts.forEach(item => usedTraces.add(item.id));
+        const turnId = message.clientTurnId ?? message.retryTurnId;
+        const turnErrors = turnId ? messages.filter(item => item.role === 'error' && (item.clientTurnId === turnId || item.retryTurnId === turnId)) : [];
+        const turnMessages = turnId ? messages.filter(item => item.role === 'visitor' && (item.clientTurnId ?? item.id) === turnId) : [message];
+        const unpersisted = turnMessages.flatMap(turnMessage => {
+            const requestId = turnMessage.requestId ?? turnMessage.streamRequestId ?? 'unknown';
+            const requestEvents = turnMessage.streamRequestId ? liveEvents[turnMessage.streamRequestId] ?? [] : turnMessage.requestId ? liveEvents[turnMessage.requestId] ?? [] : [];
+            if (!requestEvents.length || attempts.some(item => item.requestId === requestId || item.payload.events.some(saved => requestEvents.some(live => live.sequence === saved.sequence && live.operation === saved.operation)))) return [];
+            return [{ requestId, clientTurnId: turnId ?? null, attempt: 0, outcome: requestEvents.some(event => event.outcome === 'FAILED' || event.outcome === 'TIMED_OUT') ? 'FAILED' as const : liveStatus[requestId] === 'COMPLETED' ? 'COMPLETED' as const : 'RUNNING' as const, createdAt: new Date(turnMessage.createdAt).toISOString(), payload: { traceId: requestId, events: requestEvents } as PlaygroundTrace }];
+        });
+        return { message, number: index + 1, attempts, unpersisted, turnErrors };
+    });
+    const orphaned = traces.filter(item => !usedTraces.has(item.id));
+    const visible = (outcome: string) => filter === 'all' || filter === 'success' && outcome === 'COMPLETED' || filter === 'failed' && outcome !== 'COMPLETED';
+    const renderAttempt = (attempt: PlaygroundDiagnosticTrace | (typeof sections)[number]['unpersisted'][number], messageLabel: string, key: string) => {
+        const trace = attempt.payload;
+        const expiresAt = 'expiresAt' in attempt ? attempt.expiresAt : undefined;
+        const liveForRequest = 'id' in attempt ? Object.entries(liveEvents).find(([requestId, events]) => requestId === attempt.requestId || events.some(event => event.traceId === trace.traceId))?.[1] ?? [] : [];
+        const eventMap = new Map<string, PlaygroundLiveEvent>();
+        [...trace.events, ...liveForRequest].forEach(event => {
+            const key = `${event.sequence}:${event.operation}`;
+            eventMap.set(key, { ...eventMap.get(key), ...event });
+        });
+        const events = [...eventMap.values()].sort((left, right) => Date.parse(left.at) - Date.parse(right.at) || left.sequence - right.sequence);
+        const liveProtectedCallIndexes = new Set(events.flatMap(event => { const call = event.output?.modelCall as { providerCallIndex?: unknown } | undefined; return Number.isSafeInteger(call?.providerCallIndex) ? [call!.providerCallIndex as number] : []; }));
+        const metadata = { ...trace, events: undefined };
+        return <section className={`terminal-attempt outcome-${attempt.outcome.toLowerCase()}`} key={key}>
+            <div className="terminal-attempt-heading"><time>{terminalTimestamp(attempt.createdAt)}</time><strong>{messageLabel} · {attempt.attempt ? `Attempt ${attempt.attempt}` : 'attempt number unavailable'}</strong><span className={`terminal-outcome outcome-${attempt.outcome.toLowerCase()}`}>{attempt.outcome}</span>{expiresAt && Date.parse(expiresAt) <= Date.now() && <span className="terminal-outcome">Expired</span>}</div>
+            {events.filter(event => visible(event.outcome)).map((event, eventIndex) => <article className={`terminal-event outcome-${event.outcome.toLowerCase()}`} key={`${event.traceId}:${event.sequence}:${event.operation}:${eventIndex}`}>
+                <div className="terminal-event-heading"><time>{terminalTimestamp(event.at)}</time><strong>{event.operation.replaceAll('_', ' ')}</strong><span className={`terminal-outcome outcome-${event.outcome.toLowerCase()}`}>{event.outcome}</span>{typeof event.durationMs === 'number' && <small>{event.durationMs} ms</small>}<button type="button" className="terminal-stage-copy" aria-label={`Copy ${event.operation} JSON`} title="Copy stage JSON" onClick={async () => { try { if (!navigator.clipboard?.writeText) throw new Error('clipboard'); await navigator.clipboard.writeText(JSON.stringify(event, null, 2)); setCopiedEvent(`${event.sequence}:${event.operation}`); window.setTimeout(() => setCopiedEvent(''), 1500); } catch { setCopiedEvent('failed'); } }}>{copiedEvent === `${event.sequence}:${event.operation}` ? 'Copied' : copiedEvent === 'failed' ? 'Copy failed' : <Copy size={11}/>}</button></div>
+                <JsonPretty value={event}/>
+            </article>)}
+            {trace.protectedResponseDebug?.modelCalls?.filter(call => !liveProtectedCallIndexes.has(call.providerCallIndex) && (filter === 'all' || filter === 'success' && call.outcome === 'RECEIVED' || filter === 'failed' && call.outcome !== 'RECEIVED')).map(call => <article className={`terminal-event model-call outcome-${call.outcome === 'RECEIVED' ? 'completed' : 'failed'}`} key={`${call.requestId}:${call.providerCallIndex}`}><div className="terminal-event-heading"><time>{terminalTimestamp(call.at)}</time><strong>MODEL OUTPUT · {call.purpose.replaceAll('_', ' ')} · Call {call.providerCallIndex}</strong><span className={`terminal-outcome outcome-${call.outcome === 'RECEIVED' ? 'completed' : 'failed'}`}>{call.outcome}</span><small>{call.provider} / {call.model} · {call.response.durationMs} ms</small></div><small className="terminal-model-output-label">Sanitized provider-returned content{call.response.truncated ? ' · bounded' : ''}</small><pre className="terminal-model-output">{call.response.content ?? `[${call.response.status}]`}</pre><details><summary>Complete provider-call diagnostic JSON</summary><JsonPretty value={call}/></details></article>)}
+            {trace.protectedResponseDebug?.omittedModelCallCount ? <small className="terminal-warning">Protected model-call capture reached its bound; {trace.protectedResponseDebug.omittedModelCallCount} provider call record(s) are unavailable.</small> : null}
+            {filter === 'all' && <details className="terminal-trace-metadata"><summary>Trace metadata · {trace.traceId}</summary><JsonPretty value={metadata}/></details>}
+            {!events.length && <small className="terminal-empty-line">No recorded stage events for this attempt.</small>}
+        </section>;
+    };
+    const viewport = React.useRef<HTMLDivElement | null>(null);
+    React.useImperativeHandle(ref, () => viewport.current as HTMLDivElement);
+    React.useEffect(() => { if (follow && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [traces, liveEvents, messages, follow]);
+    return <div className="playground-terminal-viewport" ref={viewport} role="log" aria-label="All conversation execution JSON" aria-live="polite" onScroll={event => {
+        const node = event.currentTarget;
+        const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 32;
+        if (!atBottom && follow) onManualScroll();
+    }}>
+        {loading && !messages.length && <p className="terminal-empty-state">Loading retained conversation traces…</p>}
+        {traceError && <p className="terminal-warning" role="status">{traceError}</p>}
+        {!visitorMessages.length && !traces.length && !loading && <p className="terminal-empty-state">{traceError ? 'Trace history could not be loaded.' : 'No recorded trace for this conversation. Enable Capture Metadata to record subsequent messages. Earlier messages without retained traces are not reconstructed.'}</p>}
+        {sections.map(({ message, number, attempts, unpersisted, turnErrors }) => <section className="terminal-message" key={message.id}>
+            <header><span>MESSAGE #{number}</span><time>{terminalTimestamp(message.createdAt)}</time><strong title={message.text}>{message.text || 'Message text unavailable'}</strong></header>
+            {[...attempts.filter(item => visible(item.outcome)).map((item, index) => renderAttempt(item, `Message #${number}`, `${item.id}:${index}`)), ...unpersisted.filter(item => visible(item.outcome)).map((item, index) => renderAttempt(item, `Message #${number}`, `${item.requestId}:${index}`))]}
+            {turnErrors.filter(item => !item.diagnostics && !unpersisted.length).map(item => <p className="terminal-warning" key={item.id}>Request failed{item.errorCode ? ` · ${item.errorCode}` : ''}; no stage trace was retained. {item.text}</p>)}
+            {!attempts.length && !unpersisted.length && <small className="terminal-no-trace">No recorded trace for this message.</small>}
+        </section>)}
+        {orphaned.map(item => visible(item.outcome) && <section className="terminal-message" key={item.id}><header><span>RETAINED ATTEMPT</span><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><strong>{(item.payload as PlaygroundTrace & { customerMessage?: string }).customerMessage || item.requestId}</strong></header>{renderAttempt(item, 'Retained message', item.id)}</section>)}
+        {Object.entries(liveStatus).filter(([, status]) => status === 'RUNNING' || status === 'CONNECTING' || status === 'DISCONNECTED').map(([requestId, status]) => !traces.some(item => item.requestId === requestId) && !visitorMessages.some(message => message.streamRequestId === requestId) && <p className="terminal-warning" key={requestId}>{status === 'DISCONNECTED' ? 'Stream disconnected' : status === 'CONNECTING' ? 'Connecting to event stream' : 'Receiving backend events'} · {requestId}</p>)}
+        {!follow && <button type="button" className="terminal-jump-latest" onClick={onJumpLatest}>Jump to Latest ↓</button>}
+    </div>;
+});
+
+function PlaygroundWidgetTerminal({ messages, traces, filter, loading, error }: { messages: Array<{ id: string; role: string; content: string; createdAt: string }>; traces: PlaygroundDiagnosticTrace[]; filter: 'all' | 'success' | 'failed'; loading: boolean; error: string }) {
+    const filtered = traces.filter(item => filter === 'all' || filter === 'success' && item.outcome === 'COMPLETED' || filter === 'failed' && item.outcome !== 'COMPLETED');
+    return <div className="playground-terminal-viewport" role="log" aria-label="Authorized Widget conversation JSON">
+        {loading && !messages.length && <p className="terminal-empty-state">Loading authorized Widget traces…</p>}
+        {error && <p className="terminal-warning" role="status">{error}</p>}
+        {!messages.length && !traces.length && !loading && <p className="terminal-empty-state">No retained Widget traces are available. Capture may be disabled, records may have expired, or no attempts were recorded.</p>}
+        {messages.map((message, index) => <section className="terminal-message" key={message.id}><header><span>MESSAGE #{index + 1} · {message.role.toUpperCase()}</span><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><strong>{message.content}</strong></header></section>)}
+        {filtered.map(item => <section className={`terminal-attempt outcome-${item.outcome.toLowerCase()}`} key={item.id}><div className="terminal-attempt-heading"><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><strong>ATTEMPT {item.attempt} · {item.requestId}</strong><span className={`terminal-outcome outcome-${item.outcome.toLowerCase()}`}>{item.outcome}</span>{item.expiresAt && Date.parse(item.expiresAt) <= Date.now() && <span className="terminal-outcome">Expired</span>}</div>{item.payload.events.map((event, index) => <article className={`terminal-event outcome-${event.outcome.toLowerCase()}`} key={`${item.id}:${event.sequence}:${index}`}><div className="terminal-event-heading"><time>{new Date(event.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><strong>{event.operation.replaceAll('_', ' ')}</strong><span className={`terminal-outcome outcome-${event.outcome.toLowerCase()}`}>{event.outcome}</span>{typeof event.durationMs === 'number' && <small>{event.durationMs} ms</small>}</div><JsonPretty value={event}/></article>)}{item.payload.protectedResponseDebug?.modelCalls?.map(call => <article className="terminal-event model-call" key={`${call.requestId}:${call.providerCallIndex}`}><div className="terminal-event-heading"><time>{new Date(call.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><strong>MODEL OUTPUT · {call.purpose} · Call {call.providerCallIndex}</strong><span>{call.outcome}</span></div><small className="terminal-model-output-label">Sanitized provider-returned content{call.response.truncated ? ' · bounded' : ''}</small><pre className="terminal-model-output">{call.response.content ?? `[${call.response.status}]`}</pre><JsonPretty value={call}/></article>)}{item.payload.protectedResponseDebug?.omittedModelCallCount ? <small className="terminal-warning">{item.payload.protectedResponseDebug.omittedModelCallCount} protected model-call record(s) unavailable due to the configured bound.</small> : null}<details className="terminal-trace-metadata"><summary>Complete Widget trace JSON</summary><JsonPretty value={item.payload}/></details></section>)}
+    </div>;
+}
+
+const JsonPretty = React.memo(function JsonPretty({ value }: { value: unknown }) {
+    const source = JSON.stringify(value, null, 2) ?? 'null';
+    const tokenPattern = /("(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/gu;
+    const nodes: React.ReactNode[] = []; let offset = 0; let index = 0;
+    for (const match of source.matchAll(tokenPattern)) {
+        const start = match.index ?? 0; const token = match[0];
+        if (start > offset) nodes.push(source.slice(offset, start));
+        const key = token.startsWith('"') && source.slice(start + token.length).trimStart().startsWith(':');
+        const kind = key ? 'key' : token.startsWith('"') ? 'string' : /^(?:true|false|null)$/.test(token) ? 'literal' : 'number';
+        nodes.push(<span key={index++} className={`json-${kind}`}>{token}</span>); offset = start + token.length;
+    }
+    if (offset < source.length) nodes.push(source.slice(offset));
+    return <pre>{nodes}</pre>;
+});
+function PlaygroundEventConsole({ events, traceId, status, follow, setFollow, filter, setFilter, search, setSearch }: { events: PlaygroundLiveEvent[]; traceId?: string; status: string; follow: boolean; setFollow: (value: boolean) => void; filter: 'all' | 'errors' | 'completed' | 'skipped'; setFilter: (value: 'all' | 'errors' | 'completed' | 'skipped') => void; search: string; setSearch: (value: string) => void }) {
     const list = useRef<HTMLDivElement | null>(null);
     useEffect(() => { if (follow && list.current) list.current.scrollTop = list.current.scrollHeight; }, [events, follow]);
-    const shown = filter === 'errors' ? events.filter(item => ['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(item.outcome)) : events;
-    return <div className="playground-event-console"><div className="playground-event-actions"><code>{traceId ?? 'No trace selected'}</code><button type="button" disabled={!traceId} onClick={() => traceId && void navigator.clipboard?.writeText(traceId)}>Copy ID</button><label><input type="checkbox" checked={follow} onChange={event => setFollow(event.target.checked)}/> Follow</label><select aria-label="Filter trace events" value={filter} onChange={event => setFilter(event.target.value as 'all' | 'errors')}><option value="all">All events</option><option value="errors">Errors</option></select></div><div ref={list} className="playground-event-list" onScroll={event => { const target = event.currentTarget; if (target.scrollHeight - target.scrollTop - target.clientHeight < 16) setFollow(true); else setFollow(false); }} role="log" aria-label="Backend execution events">{shown.map(event => <details key={`${event.sequence}:${event.operation}`} className={`playground-event event-${event.outcome.toLowerCase()}`}><summary><time>{new Date(event.at).toISOString().slice(11, 23)}</time><strong>{event.operation}{event.tool ? ` · ${event.tool}` : ''}</strong><span>[{event.outcome.toLowerCase()}]{event.durationMs ? ` ${event.durationMs}ms` : ''}</span></summary><pre>{JSON.stringify({ sequence: event.sequence, stage: event.operation, outcome: event.outcome, durationMs: event.durationMs, tool: event.tool, reason: event.reason, errorCategory: event.errorCategory, provider: event.provider, model: event.model, purpose: event.purpose, callIndex: event.callIndex, requestDispatched: event.requestDispatched, retryReason: event.retryReason, usage: event.usage, resultCount: event.resultCount, evidenceCount: event.evidenceCount }, null, 2)}</pre></details>)}{!shown.length && <p className="playground-console-empty">{status === 'RUNNING' ? 'Waiting for backend events…' : filter === 'errors' ? 'No recorded errors.' : 'No trace events for this message.'}</p>}</div>{status === 'DISCONNECTED' && <p className="playground-incomplete-note">Stream disconnected before terminal completion.</p>}</div>;
+    const shown = events.filter(item => (filter === 'all' || filter === 'errors' && ['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(item.outcome) || filter === 'completed' && item.outcome === 'COMPLETED' || filter === 'skipped' && item.outcome === 'SKIPPED') && item.operation.toLowerCase().includes(search.trim().toLowerCase()));
+    return <div className="playground-event-console"><div className="playground-event-actions"><code>{traceId ?? 'No trace selected'}</code><button type="button" disabled={!traceId} onClick={() => traceId && void navigator.clipboard?.writeText(traceId)}>Copy ID</button><label><input type="checkbox" checked={follow} onChange={event => setFollow(event.target.checked)}/> Follow</label><input aria-label="Search trace stages" placeholder="Filter stages" value={search} onChange={event => setSearch(event.target.value)}/><select aria-label="Filter trace events" value={filter} onChange={event => setFilter(event.target.value as typeof filter)}><option value="all">All events</option><option value="errors">Errors</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select></div><div ref={list} className="playground-event-list" onScroll={event => { const target = event.currentTarget; if (target.scrollHeight - target.scrollTop - target.clientHeight < 16) setFollow(true); else setFollow(false); }} role="log" aria-label="Backend execution events">{shown.map(event => { const payload = { sequence: event.sequence, stage: event.operation, outcome: event.outcome, startedAt: event.startedAt, durationMs: event.durationMs, input: event.input, output: event.output, decision: event.decision, tool: event.tool, reason: event.reason, errorCategory: event.errorCategory, provider: event.provider, model: event.model, purpose: event.purpose, callIndex: event.callIndex, requestDispatched: event.requestDispatched, retryReason: event.retryReason, usage: event.usage, resultCount: event.resultCount, evidenceCount: event.evidenceCount }; return <details key={`${event.sequence}:${event.operation}`} className={`playground-event event-${event.outcome.toLowerCase()}`}><summary><time>{new Date(event.at).toISOString().slice(11, 23)}</time><strong>{event.operation}{event.tool ? ` · ${event.tool}` : ''}</strong><span>[{event.outcome.toLowerCase()}]{event.durationMs ? ` ${event.durationMs}ms` : ''}</span></summary><button type="button" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(payload, null, 2))}>Copy stage JSON</button><JsonPretty value={payload}/></details>; })}{!shown.length && <p className="playground-console-empty">{status === 'RUNNING' ? 'Waiting for backend events…' : filter === 'errors' ? 'No recorded errors.' : 'No trace events for this message.'}</p>}</div>{status === 'DISCONNECTED' && <p className="playground-incomplete-note">Stream disconnected before terminal completion.</p>}</div>;
 }
 function PlaygroundLlmTools({ trace, events, providerLabel, message }: { trace?: PlaygroundTrace; events: PlaygroundLiveEvent[]; providerLabel: string; message?: PlaygroundPageMessage }) {
     const providerEvents = events.filter(item => ['PROVIDER_SELECTION', 'PROVIDER_REQUEST_STARTED', 'PROVIDER_RESPONSE_RECEIVED', 'ANSWER_GENERATION', 'INTENT_INTERPRETATION', 'INTERPRETATION_RECOVERY', 'PRODUCT_ROUTING_DECISION'].includes(item.operation));
+    const interpretationEvent = [...events].reverse().find(item => item.operation === 'INTENT_INTERPRETATION');
     const tools = trace?.tools ?? [];
     const providerCalls = trace?.providerCalls ?? [];
-    return <div className="playground-llm-tools">
+    return <div className="playground-llm-tools">{trace?.protectedResponseDebug && Date.parse(trace.protectedResponseDebug.expiresAt) > Date.now() && <section><h4>Protected model output</h4><p>Sanitized diagnostic representations; sensitive values are redacted, system prompt contents omitted, and output is bounded. Expires {new Date(trace.protectedResponseDebug.expiresAt).toLocaleTimeString()}.</p>{Boolean(trace.protectedResponseDebug.omittedModelCallCount) && <p role="status">Protected call capture reached its size/count bound; {trace.protectedResponseDebug.omittedModelCallCount} provider call record(s) are unavailable in this trace.</p>}{trace.protectedResponseDebug.modelCalls?.map(call => <article className="protected-model-call" key={`${call.requestId}:${call.providerCallIndex}`}><header><strong>#{call.providerCallIndex} · {call.purpose.replaceAll('_', ' ')}</strong><small>{call.outcome} · {call.provider} / {call.model} · {call.response.durationMs}ms</small></header><details><summary>LLM Request</summary><JsonPretty value={call.requestedInput}/></details><details open><summary>Original Model Response · {call.response.status}</summary><small>{call.response.representation} · {call.response.responseLength} characters{call.response.truncated ? ' · truncated at capture time' : ''}</small><pre>{call.response.content ?? '[No model content was received]'}</pre><details><summary>Response metadata and tool calls</summary><JsonPretty value={{ ...call.response, content: undefined }}/></details></details><details><summary>Parsed JSON</summary><JsonPretty value={call.parsing ?? { status: 'Not parsed by this call contract' }}/></details><details><summary>Validation Result / Rejected Fields</summary><JsonPretty value={call.validation ?? { status: 'No validator result recorded for this call' }}/></details>{call.repair && <details><summary>Repair Attempt</summary><JsonPretty value={call.repair}/></details>}{call.backendDecision && <details><summary>Final Backend Decision</summary><JsonPretty value={call.backendDecision}/></details>}<button type="button" onClick={async () => { try { if (!navigator.clipboard?.writeText) throw new Error('clipboard'); await navigator.clipboard.writeText(JSON.stringify(call, null, 2)); } catch { /* Clipboard access can be unavailable in non-secure contexts. */ } }}>Copy Call JSON</button></article>)}{trace.protectedResponseDebug.records.map((record, index) => <details key={`${record.attemptId}:${index}`}><summary>{record.stage} · {record.attemptId}</summary><pre>{record.text}{record.truncated ? '\n[Content bounded at capture time.]' : ''}</pre></details>)}</section>}{interpretationEvent && <section><h4>LLM interpretation and backend validation</h4><p>Model response: {interpretationEvent.outcome} · {interpretationEvent.provider ?? 'provider unavailable'} / {interpretationEvent.model ?? 'model unavailable'}. Protected request/response details are displayed above when capture is authorized.</p>{interpretationEvent.output && <details><summary>Validated interpretation and validation result</summary><JsonPretty value={interpretationEvent.output}/></details>}{interpretationEvent.decision && <details><summary>Backend decision</summary><JsonPretty value={interpretationEvent.decision}/></details>}</section>}
       <section><h4>Provider</h4><p>Configured route: <strong>{providerLabel}</strong></p><p>Provider attempts: <strong>{trace?.providerCallCount ?? providerCalls.length}</strong> · requests dispatched: <strong>{trace?.providerRequestCount ?? providerCalls.filter(call => call.requestDispatched).length}</strong> · retries: <strong>{providerCalls.filter(call => call.retryReason).length}</strong></p>{providerCalls.length ? providerCalls.map(call => <article key={call.callIndex}><strong>#{call.callIndex} · {call.purpose.replaceAll('_', ' ')}</strong><small>{call.outcome} · {call.provider} / {call.model} · {call.durationMs}ms · {call.requestDispatched ? 'request dispatched' : 'not dispatched'}{call.retryReason ? ` · retry: ${call.retryReason.replaceAll('_', ' ')}` : ''}{call.errorCategory ? ` · ${call.errorCategory}` : ''}</small>{call.usage && <small>Tokens: input {call.usage.inputTokens ?? '—'} · output {call.usage.outputTokens ?? '—'} · total {call.usage.totalTokens ?? '—'}</small>}</article>) : providerEvents.length ? providerEvents.map((event, index) => <article key={`${event.sequence}:${index}`}><strong>{event.operation.replaceAll('_', ' ')}{event.purpose ? ` · ${event.purpose.replaceAll('_', ' ')}` : ''}</strong><small>{event.outcome} · {event.provider ? `${event.provider}${event.model ? ` / ${event.model}` : ''}` : 'Provider identity unavailable'}{event.durationMs ? ` · ${event.durationMs}ms` : ''}{event.errorCategory ? ` · ${event.errorCategory}` : ''}</small></article>) : <small>{message ? 'No provider invocation event has been observed for this message.' : 'Select a message to inspect provider calls.'}</small>}{trace?.usage && <p>Turn tokens: input {trace.usage.inputTokens ?? '—'} · output {trace.usage.outputTokens ?? '—'} · total {trace.usage.totalTokens ?? '—'}</p>}</section>
       {trace?.assistantConfiguration && <section><h4>Assistant behavior</h4><p>Configuration {shortDiagnosticId(trace.assistantConfiguration.id)} · version {trace.assistantConfiguration.version ?? 'unavailable'} · loaded {trace.assistantConfiguration.loaded ? 'yes' : 'no'}.</p><p>Saved section lengths: {Object.entries(trace.assistantConfiguration.sectionLengths).map(([key, length]) => `${key} ${length}`).join(' · ') || 'none reported'} characters.</p><p>Prompt assembly {trace.promptAssembly?.completed ? 'completed' : 'not completed'} · platform layer {trace.promptAssembly?.platformInstructionsIncluded ? 'included' : 'not confirmed'} · assistant behavior {trace.promptAssembly?.assistantBehaviorIncluded ? 'included' : 'not included'} · outbound request {trace.promptAssembly?.outboundProviderRequestDispatched ? 'dispatched' : 'not confirmed'} · behavior sent {trace.promptAssembly?.assistantBehaviorSentToProvider ? 'yes' : 'no'} · provider calls [{trace.promptAssembly?.providerCallIndexes?.join(', ') ?? ''}] · behavior calls [{trace.promptAssembly?.assistantBehaviorCallIndexes?.join(', ') ?? ''}] · Agent Builder node instructions {trace.promptAssembly?.agentBuilderNodeInstructionsIncluded ? 'included' : 'not included in this execution'}.</p><p>Included behavior sections: {trace.promptAssembly?.assistantBehaviorSectionCount ?? 0}. Configuration content and protected prompts are withheld.</p>{trace.configuredFacts && <p>Support contacts: configured {trace.configuredFacts.configured ? 'yes' : 'no'} · selected {trace.configuredFacts.selected ? 'yes' : 'no'} · revalidated {trace.configuredFacts.revalidated ? 'yes' : 'no'} · supplied to provider {trace.configuredFacts.supplied ? 'yes' : 'no'}{trace.configuredFacts.excludedReason ? ` · ${trace.configuredFacts.excludedReason}` : ''}{trace.configuredFacts.sourceId ? ` · assistant source ${shortDiagnosticId(trace.configuredFacts.sourceId)}` : ''}.</p>}</section>}
       {trace?.commerceReadiness && <section><h4>Shopify AI readiness</h4><p>Connection {trace.commerceReadiness.connectionStatus} · grant snapshot {trace.commerceReadiness.scopeSnapshotStatus} · catalog operation {trace.commerceReadiness.eligible ? 'eligible' : trace.commerceReadiness.reason ?? 'unavailable'} · {trace.commerceReadiness.recordCount} query-ready product(s).</p><p>Relevant granted scopes: {trace.commerceReadiness.relevantGrantedScopes.join(', ') || 'none reported'} · assistant-enabled operations: {trace.commerceReadiness.assistantEnabledOperations.join(', ') || 'none reported'} · data source: {trace.commerceReadiness.dataSource.replaceAll('_', ' ').toLowerCase()}.</p></section>}
@@ -731,6 +1275,7 @@ function Integrations({ go, workspaceSlug = '', workspaceRole = '', openShopify 
 }
 function Shopify({ go, notify, workspaceSlug = '', workspaceRole = '', recordId = '', openShopify }: Props) {
     const [connectors, setConnectors] = useState<ConnectorInstance[]>([]); const [permissions, setPermissions] = useState<ConnectorPermissions | null>(null); const [permissionsConnectorId, setPermissionsConnectorId] = useState(''); const [assistantId, setAssistantId] = useState(''); const [jobs, setJobs] = useState<SyncJob[]>([]); const [historyConnectorId, setHistoryConnectorId] = useState(''); const [shopDomain, setShopDomain] = useState(''); const [error, setError] = useState(''); const [actionError, setActionError] = useState(''); const [permissionsError, setPermissionsError] = useState(''); const [historyError, setHistoryError] = useState(''); const [loading, setLoading] = useState(true); const [loaded, setLoaded] = useState(false); const [permissionsLoading, setPermissionsLoading] = useState(true); const [historyLoading, setHistoryLoading] = useState(true); const [working, setWorking] = useState(false); const [workingAction, setWorkingAction] = useState(''); const [retry, setRetry] = useState(0); const [verificationPollTimedOut, setVerificationPollTimedOut] = useState(false); const [verificationPollUnavailable, setVerificationPollUnavailable] = useState(false); const [verificationStatusCheckedAt, setVerificationStatusCheckedAt] = useState<string | null>(null); const [syncPollingPaused, setSyncPollingPaused] = useState(false);
+    const [apiTestOperation, setApiTestOperation] = useState<ShopifyApiTestOperation>('VERIFY_CONNECTION'); const [apiTestQuery, setApiTestQuery] = useState(''); const [apiTestProductId, setApiTestProductId] = useState(''); const [apiTestResult, setApiTestResult] = useState<ShopifyApiTestResult | null>(null); const [apiTestError, setApiTestError] = useState(''); const [apiTestBusy, setApiTestBusy] = useState(false);
     const shopifyConnectors = connectors.filter(value => value.connectorId === 'shopify_v1');
     const connector = recordId ? shopifyConnectors.find(value => value.id === recordId) ?? null : shopifyConnectors[0] ?? null;
     const visiblePermissions = connector && permissionsConnectorId === connector.id ? permissions : null;
@@ -826,6 +1371,15 @@ function Shopify({ go, notify, workspaceSlug = '', workspaceRole = '', recordId 
       } finally { setWorking(false); }
     }
     async function reconnect() { const normalized = normalizeShopifyDomain(shopDomain); if (!manager || !workspaceSlug || !normalized || working) return; setWorking(true); setWorkingAction('oauth'); setActionError(''); try { const result = await beginShopifyInstall(workspaceSlug, normalized); window.location.assign(result.authorizationUrl); } catch (reason) { setActionError(reason instanceof ApiError ? reason.message : 'Shopify authorization could not be started.'); } finally { setWorking(false); setWorkingAction(''); } }
+    async function testShopifyApi() {
+      if (!connector || !manager || apiTestBusy) return;
+      setApiTestBusy(true); setApiTestError(''); setApiTestResult(null);
+      try {
+        const result = await runShopifyApiTest(workspaceSlug, connector.id, { operation: apiTestOperation, ...(apiTestQuery.trim() ? { query: apiTestQuery.trim() } : {}), ...(apiTestProductId.trim() ? { productId: apiTestProductId.trim() } : {}), ...(assistantId ? { assistantId } : {}) });
+        setApiTestResult(result);
+      } catch (reason) { setApiTestError(reason instanceof ApiError ? reason.message : 'Shopify API test failed.'); }
+      finally { setApiTestBusy(false); }
+    }
     const domain = String(connector?.configuration?.shopDomain ?? shopDomain ?? '');
     const connected = connectorIsActive(connector);
     const pendingVerification = connector?.state === 'DRAFT' && connector.hasCredentials;
@@ -848,12 +1402,13 @@ function Shopify({ go, notify, workspaceSlug = '', workspaceRole = '', recordId 
             {databaseVerificationRetry && <Card className="major"><SectionHeader title="Verification was not saved" desc="The database could not persist the final status. This does not indicate invalid Shopify credentials; verify again to retry the save."/><Btn disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Verifying…</> : 'Retry verification'}</Btn></Card>}
             {needsOauth && <Card className="major"><SectionHeader title={connector.state === 'DRAFT' ? 'Connect Shopify' : 'Reconnect Shopify'} desc="Continue through Shopify OAuth to establish or restore the authorized connection. Existing grants are not expanded automatically."/><div className="inline-field"><input value={shopDomain} onChange={event => setShopDomain(event.target.value)} placeholder="your-store.myshopify.com" aria-label="Shopify store domain" autoComplete="url" aria-invalid={Boolean(shopDomain.trim() && !normalizeShopifyDomain(shopDomain))}/><Btn disabled={!manager || working || !normalizeShopifyDomain(shopDomain)} onClick={() => void reconnect()}>{workingAction === 'oauth' ? <><i className="shopify-inline-spinner"/> Opening Shopify…</> : connector.state === 'DRAFT' ? 'Connect Shopify' : 'Reconnect Shopify'}</Btn></div>{shopDomain.trim() && !normalizeShopifyDomain(shopDomain) && <small className="shopify-domain-hint" role="alert">Enter a valid myshopify.com domain before opening Shopify authorization.</small>}{!manager && <Notice tone="amber">Workspace owner or admin access is required to manage Shopify.</Notice>}</Card>}
             {(pendingVerification || degradedVerification) && !databaseVerificationRetry && <Card className="major"><SectionHeader title={degradedVerification ? 'Retry connection verification' : 'Finish connection verification'} desc={degradedVerification ? 'The connection has a prior verification but currently needs a fresh provider check. Retry verification explicitly; this does not initiate Shopify OAuth.' : 'Stored connector credentials are present, but Shopify access is not marked connected until verification succeeds.'}/><Btn disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Verifying…</> : degradedVerification ? 'Retry verification' : 'Verify connection'}</Btn>{connector.lastErrorCode && <p role="status">Last connector error: {connector.lastErrorCode}</p>}</Card>}
+            <ShopifyApiTestPlayground key={connector.id} slug={workspaceSlug} connector={connector} permissions={visiblePermissions} assistantId={assistantId} canManage={manager}/>
             {connector.hasCredentials && <>
             {visiblePermissions?.storedRecordCounts && <><Metrics items={[{ label: 'Stored products', value: visiblePermissions.storedRecordCounts.products.toLocaleString(), change: 'Persisted connector records', icon: Package, positive: false }, { label: 'Stored variants', value: visiblePermissions.storedRecordCounts.variants.toLocaleString(), change: 'Persisted connector records', icon: Layers3, positive: false }, { label: 'Collections', value: visiblePermissions.storedRecordCounts.collections.toLocaleString(), change: 'Persisted connector records', icon: ShoppingBag, positive: false }, { label: 'Products with price / inventory', value: `${visiblePermissions.storedRecordCounts.productsWithPrices.toLocaleString()} / ${visiblePermissions.storedRecordCounts.productsWithInventory.toLocaleString()}`, change: 'Persisted field counts', icon: PackageCheck, positive: false }]}/><p className="shopify-domain-hint">Stored synchronized records: {visiblePermissions.storedRecordCounts.products.toLocaleString()} products and {visiblePermissions.storedRecordCounts.variants.toLocaleString()} variants. Current Products API visibility: {visiblePermissions.visibleProductCount === null || visiblePermissions.visibleProductCount === undefined ? 'Unavailable' : visiblePermissions.visibleProductCount.toLocaleString()} products under active connector, Shopify grant and workspace permission checks.</p></>}
             <div className="action-line major">{connected && <Btn secondary disabled={!manager || working} onClick={() => void action('verify')}>{workingAction === 'verify' ? <><i className="shopify-inline-spinner"/> Verifying…</> : 'Verify connection'}</Btn>}{connected && connector.verifiedCapabilities.includes('PRODUCT_CATALOG') && canSyncCategory('PRODUCTS') && <Btn disabled={!manager || working} onClick={() => void action('sync')}>{workingAction === 'sync' ? <><i className="shopify-inline-spinner"/> Queueing…</> : 'Sync products & variants'}</Btn>}{connected && connector.verifiedCapabilities.includes('ORDERS') && canSyncCategory('ORDERS') && <Btn secondary disabled={!manager || working} onClick={() => void action('orders')}>{workingAction === 'orders' ? 'Queueing…' : 'Sync orders'}</Btn>}{connected && connector.verifiedCapabilities.includes('WEBSITE_CONTENT') && ['WEBSITE_PAGES', 'FAQ_POLICIES'].some(canSyncCategory) && <Btn secondary disabled={!manager || working} onClick={() => void action('content')}>{workingAction === 'content' ? 'Queueing…' : 'Sync content'}</Btn>}{connected && <><Btn secondary disabled={!manager || working} onClick={() => void action('scope-upgrade')}>Review additional Shopify permissions</Btn><Btn secondary disabled={!manager || working} onClick={() => void action('disconnect')}>Disconnect store</Btn></>}{connected && <Btn secondary disabled={!manager || working} onClick={() => void action('permissions')}>{workingAction === 'permissions' ? <><i className="shopify-inline-spinner"/> Refreshing…</> : 'Refresh granted permissions'}</Btn>}</div>
             {permissionsError && <Notice tone="amber"><span>{permissionsError} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry permissions</button></span></Notice>}{historyError && <Notice tone="amber"><span>{historyError} <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Retry sync history</button></span></Notice>}
             {permissionsLoading && !visiblePermissions && <ShopifyLoadingSkeleton/>}
-            {visiblePermissions && <ShopifyPermissionsPanel name={connector.displayName} permissions={visiblePermissions} assistantId={assistantId} refreshing={workingAction === 'permissions'} busy={working || permissionsLoading} refreshAvailable={connected} onAssistantChange={id => { setAssistantId(id); writeShopifyAssistantSelection(workspaceSlug, connector.id, id); setPermissionsLoading(true); void getConnectorPermissions(workspaceSlug, connector.id, id).then(next => { setPermissions(previous => ({ ...next, assistants: next.assistants ?? previous?.assistants })); setPermissionsConnectorId(connector.id); setPermissionsError(''); }).catch(reason => setPermissionsError(reason instanceof ApiError ? reason.message : 'Assistant permissions could not be loaded.')).finally(() => setPermissionsLoading(false)); }} onRefresh={() => void action('permissions')} onPermission={(category, enabled, selectedAssistant, scope) => void changePermission(category, enabled, selectedAssistant, scope)}/>}
+            <ShopifyApiTestPlayground slug={workspaceSlug} connector={connector} permissions={visiblePermissions} assistantId={assistantId} canManage={manager}/>{visiblePermissions && <ShopifyPermissionsPanel name={connector.displayName} permissions={visiblePermissions} assistantId={assistantId} refreshing={workingAction === 'permissions'} busy={working || permissionsLoading} refreshAvailable={connected} onAssistantChange={id => { setAssistantId(id); writeShopifyAssistantSelection(workspaceSlug, connector.id, id); setPermissionsLoading(true); void getConnectorPermissions(workspaceSlug, connector.id, id).then(next => { setPermissions(previous => ({ ...next, assistants: next.assistants ?? previous?.assistants })); setPermissionsConnectorId(connector.id); setPermissionsError(''); }).catch(reason => setPermissionsError(reason instanceof ApiError ? reason.message : 'Assistant permissions could not be loaded.')).finally(() => setPermissionsLoading(false)); }} onRefresh={() => void action('permissions')} onPermission={(category, enabled, selectedAssistant, scope) => void changePermission(category, enabled, selectedAssistant, scope)}/>}
             {!permissionsLoading && !visiblePermissions && !permissionsError && <Empty title="Granted permissions unavailable" desc="The connector API returned no permission snapshot."/>}
             <Card className="major"><SectionHeader title="Synchronization history" desc="Actual connector jobs, timestamps and backend error codes." action={historyLoading ? <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>Loading history…</span> : activeSyncJob ? syncPollingPaused ? <button type="button" className="text-link" onClick={() => setRetry(value => value + 1)}>Refresh sync status</button> : <span className="shopify-refresh-indicator" role="status"><i className="shopify-inline-spinner"/>{syncStatusLabel}</span> : undefined}/>{historyLoading && visibleJobs.length === 0 ? <div className="shopify-history-loading" role="status"><i className="shopify-inline-spinner"/>Loading synchronization history…</div> : visibleJobs.length ? <div className="timeline">{visibleJobs.map(job => <div key={job.id}><span className="timeline-dot"/><strong>{job.resourceType} · {job.state}</strong><small>{new Date(job.createdAt).toLocaleString()} · {job.itemCount.toLocaleString()} records · {job.attemptCount} attempts{job.lastErrorCode ? ` · ${job.lastErrorCode}` : ''}</small>{job.state === 'FAILED' && <Btn secondary disabled={!manager || working} onClick={() => void action('retry', job.id)}>{workingAction === 'retry' ? 'Retrying…' : 'Retry failed sync'}</Btn>}</div>)}</div> : historyError ? <Empty title="Sync history unavailable" desc="Retry to load actual synchronization jobs."/> : <Empty title="No sync jobs available" desc="The connector API returned no synchronization history."/>}</Card>
             </>}

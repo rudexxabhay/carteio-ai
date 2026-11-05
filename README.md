@@ -31,7 +31,7 @@ This README is the project-level product and engineering reference. It distingui
 | Shared contracts | `packages/shared-types/` contains transport-oriented shared types. |
 | Persistence | PostgreSQL, including Neon-compatible connection support, accessed through Prisma. Prisma and `@prisma/client` are pinned to 7.10.0 in the backend manifest. |
 | AI | Carteio's custom NestJS orchestration and provider adapters. The repository does not use LangChain or LangGraph. |
-| Providers | Gemini, Groq, and OpenAI adapters. Provider/model choice and credentials are server-managed. |
+| Provider | OpenRouter is the sole LLM and embedding gateway. The configured model and credentials are server-managed. |
 | Knowledge retrieval | Workspace-owned FAQ/Text processing, chunking, PostgreSQL lexical retrieval, optional configured embeddings/pgvector, hybrid ranking, source authorization, and citation/evidence checks. |
 | Authentication and tenancy | Authenticated user sessions and organization/workspace membership are enforced by the backend. Assistant, Knowledge, Playground, and workspace APIs are tenant-scoped. |
 
@@ -147,11 +147,11 @@ This checklist is limited to AI Assistants, AI Training, Knowledge, providers, a
 | Phase 09 item | Status | Repository evidence / remaining condition |
 |---|---|---|
 | Assistant CRUD and lifecycle | DONE_IN_CODE; MIGRATION_REQUIRED; NOT_RUNTIME_VERIFIED | Create/list/get/update/activate/deactivate and workspace-scoped archive/restore are implemented. Archive deactivates active assistants, preserves links/history, and is audited. Restore never reactivates implicitly. Permanent deletion is refused because current relations cascade into retained records. The additive `archivedAt` migration is authored but unapplied. |
-| Assistant configuration | DONE_IN_CODE, NOT_VERIFIED | Name, purpose, instructions, language, tone/style, fallback wording, business rules, and provider fallback policy persist through APIs. Provider/model selection remains server-managed. Runtime configuration behavior still needs UAT validation. |
+| Assistant configuration | DONE_IN_CODE, NOT_VERIFIED | Name, purpose, instructions, language, tone/style, fallback wording, and business rules persist through APIs. OpenRouter model selection remains server-managed. Runtime configuration behavior still needs UAT validation. |
 | AI Training and Playground | DONE_IN_CODE, NOT_VERIFIED | Assistant selection, owned Playground sessions, bounded history, chat, training history/overview, idempotency, and safe metadata paths exist. Runtime conversations were not exercised for this README. |
 | FAQ/Text Knowledge CRUD | DONE_IN_CODE, NOT_VERIFIED | FAQ/Text CRUD, batch/import paths, Knowledge Bases, archive/restore, processing, and search-related code exist. Website and document ingestion are unavailable. |
 | Knowledge-to-assistant assignment | DONE_IN_CODE, NOT_VERIFIED | Direct source and Knowledge Base linking are organization-scoped; source eligibility is checked by the backend. |
-| Provider configuration and truthful status | PARTIAL | Gemini/Groq/OpenAI routing and server-side keys exist. Configuration status distinguishes missing keys and ready-for-testing; it is not a live connectivity test. |
+| Provider configuration and truthful status | PARTIAL | OpenRouter routing and server-side keys exist. Configuration status distinguishes a missing key from configured status; it is not a live connectivity test. |
 | Multilingual/context behavior | DONE_IN_CODE, NOT_RUNTIME_VERIFIED | Interpretation, social/dialogue handling, context, clarification, and bounded references are wired into the orchestration. No multilingual benchmark is claimed. |
 | Grounded answer pipeline | DONE_IN_CODE, NOT_RUNTIME_VERIFIED | Authorized query planning, retrieval, evidence-aware generation planning, limitations, and response-safety checks exist. Semantic entailment is not universally proven. |
 | Citation and source authorization | DONE_IN_CODE, NOT_RUNTIME_VERIFIED | Workspace/assistant eligibility, evidence revalidation, and citation identity checks are implemented. A valid citation identifier is not proof of entailment. |
@@ -219,7 +219,7 @@ Statuses below are based on source/docs presence, not an assertion that code was
 ### Phase 07 — AI Provider Engine
 
 - **Objective and deliverables:** Route bounded requests to configured model providers with truthful errors and provenance.
-- **Backend/data:** Gemini, Groq, and OpenAI adapters, provider/model validation, configuration reporting, and explicit MANUAL/AUTO_FALLBACK policy.
+- **Backend/data:** OpenRouter chat and embedding adapters, model validation, and server-side configuration reporting. Each request uses the single configured OpenRouter model.
 - **Frontend/integrations:** Provider status is surfaced in assistant/training views without exposing credentials; provider accounts/keys are external prerequisites.
 - **Security/performance/acceptance:** Timeouts, cancellation, validated outputs, no silent manual-mode fallback; accept after authorized provider-specific tests and fallback checks.
 - **Status:** IMPLEMENTED_IN_CODE; live provider connectivity is NOT_RUNTIME_VERIFIED.
@@ -491,7 +491,7 @@ Configuration is validated by the backend. Names below are taken from repository
 | Runtime/network | `NODE_ENV`, `PORT`, `HOST`, `API_PREFIX`, `CORS_ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `LOG_LEVEL` |
 | Database | `DATABASE_URL` (application/pooler connection where configured), `DIRECT_URL` (direct Prisma migration connection) |
 | Authentication | `AUTH_SESSION_DAYS`, `PUBLIC_APP_URL`, `AUTH_OTP_EXPIRES_MINUTES`, `AUTH_OTP_MAX_ATTEMPTS`, `AUTH_OTP_RESEND_COOLDOWN_SECONDS`, `AUTH_OTP_HASH_SECRET`, `GOOGLE_CLIENT_ID`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM` |
-| AI providers | `AI_DEFAULT_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_MODEL`, `OPENAI_API_KEY`, `OPENAI_MODEL` |
+| OpenRouter | `AI_DEFAULT_PROVIDER`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL`, `KNOWLEDGE_EMBEDDING_PROVIDER`, `KNOWLEDGE_EMBEDDING_MODEL`, `KNOWLEDGE_EMBEDDING_BASE_URL` |
 | Playground limits | `PLAYGROUND_USER_REQUESTS_PER_MINUTE`, `PLAYGROUND_WORKSPACE_REQUESTS_PER_MINUTE` |
 | Knowledge processing | `KNOWLEDGE_WORKER_ENABLED`, `KNOWLEDGE_SEMANTIC_ENABLED`, `KNOWLEDGE_EMBEDDING_PROVIDER`, `KNOWLEDGE_EMBEDDING_MODEL` |
 | Optional isolated renderer | `KNOWLEDGE_BROWSER_RENDERING_ENABLED`, `KNOWLEDGE_RENDERER_IMAGE` |
@@ -515,7 +515,7 @@ The Nginx templates document an alternative production routing shape: serve the 
 
 ### External prerequisites
 
-- Gemini, Groq, or OpenAI credentials and account/model access for live provider use.
+- OpenRouter credentials, credits, and model access for live provider use.
 - Neon/PostgreSQL database URLs and approved migrations for persistence in an environment.
 - Google OAuth and email delivery configuration for the enabled authentication paths.
 - A secret-manager/KMS design before storing connector credentials; current connection foundations intentionally store only opaque secret references and do not implement provider credential storage.

@@ -105,6 +105,14 @@ describe('ConversationProviderService', () => {
     expect(result).toMatchObject({ provider: 'openrouter', model, content: '{"ok":true}', finishReason: 'stop' });
   });
 
+  it('delivers actual provider content to the protected diagnostic hook before output rejection', async () => {
+    const onModelOutputReceived = jest.fn();
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: '{invalid json from model' }, finish_reason: 'stop' }] }), { status: 200 }));
+    const response = await adapter.complete({ ...request, provider: 'openrouter', model: 'vendor/model-v7', responseFormat: 'json_object', onModelOutputReceived });
+    expect(response.content).toBe('{invalid json from model');
+    expect(onModelOutputReceived).toHaveBeenCalledWith(expect.objectContaining({ content: '{invalid json from model', finishReason: 'stop', responseStatus: 200 }));
+  });
+
   it('uses OpenRouter JSON mode only after cached model metadata declares response_format support', async () => {
     const model = 'google/gemini-2.5-flash-lite';
     initializeEffectiveProviderConfiguration({ AI_DEFAULT_PROVIDER: 'openrouter', OPENROUTER_MODEL: model, OPENROUTER_API_KEY: 'router-test-key' });

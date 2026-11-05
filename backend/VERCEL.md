@@ -19,6 +19,40 @@ Set these environment variables for the UAT deployment, with Neon UAT credential
 - `RESEND_API_KEY` and `AUTH_EMAIL_FROM`: UAT mail delivery configuration
 - `GOOGLE_CLIENT_ID`: Google OAuth client ID used by the UAT frontend
 
+For full authorized UAT Inspector capture, configure these exact values in the **backend Vercel project**:
+
+```env
+APP_ENV=uat
+PLAYGROUND_DIAGNOSTICS_ENABLED=true
+PLAYGROUND_RAW_DEBUG_ENABLED=true
+PLAYGROUND_TRACE_RETENTION_HOURS=24
+```
+
+Raw capture is permitted only when `APP_ENV=uat` is explicit, diagnostics are enabled, the user has authenticated owner/admin access, and the conversation's persistent Capture Metadata preference is ON. Local development permits the same capture with `NODE_ENV=development`; public production rejects raw capture even if the raw flag is accidentally true. Keep `PLAYGROUND_RAW_DEBUG_ENABLED=false` in production. Raw model output is bounded, redacted, retained with the trace, and returned only through protected workspace APIs. Public Widget responses never include diagnostic fields. The persistent conversation toggle remains ON across refresh/reopen until explicitly turned OFF. Trace rows are durable Inspector records; Vercel runtime logs are supplemental and not required for retrieval.
+
+After setting values, apply the authored Prisma migrations through the reviewed deployment migration workflow, then redeploy the backend so runtime functions load the configuration. Restart/redeploy any separately hosted worker only if its environment is changed; Widget trace retrieval is served by the backend. Changing Vercel environment values alone does not update an existing deployment. Local configuration may use `APP_ENV=local`, `NODE_ENV=development`, `PLAYGROUND_DIAGNOSTICS_ENABLED=true`, `PLAYGROUND_RAW_DEBUG_ENABLED=true`, and retention `24`. Never enable raw capture in public production.
+
+### Inspector and Shopify UAT diagnostics (2026-11-03)
+
+For an explicitly authorized UAT capture window, configure these **backend Vercel project** values exactly:
+
+```env
+APP_ENV=uat
+PLAYGROUND_DIAGNOSTICS_ENABLED=true
+PLAYGROUND_RAW_DEBUG_ENABLED=true
+PLAYGROUND_TRACE_RETENTION_HOURS=24
+```
+
+Keep `CONNECTOR_SYNC_DEBUG=false` in the backend unless a Shopify sync-job investigation is separately approved; set it only in the environment that runs the sync worker when that worker emits the relevant job logs. The raw flag is enabled only for an explicitly approved UAT capture window; capture still requires authenticated owner/admin access and the conversation-scoped Capture Metadata toggle. Turn it off when the window ends. Keep it false in public production. No additional diagnostic environment variables are required.
+
+Apply authored Prisma migrations through the reviewed deployment migration workflow before enabling retrieval, including `20261103190000_widget_diagnostic_capture_consent` after `20261103150000_widget_diagnostic_trace_parity`. Do not apply them from this documentation or against a live environment without its normal approval/backup procedure. Redeploy/restart backend functions after environment changes and regenerate the Prisma client through that deployment workflow. Vercel Function Logs are in the backend Vercel project's **Functions** logs; persistent Inspector records are read from the protected dashboard Inspector API/database and are distinct from runtime logs. If sync runs in a separate worker deployment, locate its stdout/runtime logs at that worker host; there is no separate Vercel worker process in this deployment architecture.
+
+Correlate a request by its `requestId` (also the per-attempt `traceId`) in backend logs and Inspector stage events. Shopify API test logs carry the same request ID and operation. For sync issues, use `jobId` from connector sync history together with the worker's request/operation metadata; `CONNECTOR_SYNC_DEBUG=true` adds bounded job attempt and resource metadata without credentials or raw provider responses. Widget Inspector records are associated only after the signed visitor session, tenant, assistant, and persisted support conversation have been validated; public Widget responses contain no diagnostics.
+
+This is configuration guidance only. It does not establish UAT or deployed verification.
+
+Durable Inspector history is stored in PostgreSQL and is not a substitute for runtime logs. Backend `conversation_stage`, `conversation_request_completed`, and `shopify_api_test` structured events go to the Vercel backend Function Logs for the API invocation. Background connector workers, when run as a separate process, write to that worker process's own configured stdout/stderr destination; Vercel does not collect logs from a developer machine or an unrelated container. No infrastructure-wide log aggregation provider is configured by this repository.
+
 The running Prisma adapter connects through `DATABASE_URL`; startup validation also requires `DIRECT_URL`. No migration command is part of the build or deployment. Prisma Client generation is part of the existing backend build script.
 
 `src/main.ts` remains the conventional Nest server entrypoint and continues to listen on `PORT` for local development. Vercel's NestJS framework detects that entrypoint when the project root is set to `backend`.

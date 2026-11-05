@@ -7,7 +7,7 @@ export interface DashboardAssistant {
   purpose: string | null;
   status: 'draft' | 'active' | 'inactive';
   providerConfigured: boolean;
-  provider?: 'groq' | 'gemini' | 'openai' | 'openrouter' | null;
+  provider?: 'openrouter' | null;
   model?: string | null;
   updatedAt: string;
   linkedKnowledgeBaseCount: number;
@@ -34,9 +34,9 @@ function isAssistantSummaryData(value: unknown): value is NonNullable<WorkspaceD
   if (!isRecord(value) || !isNumber(value.total) || !isNumber(value.active) || !isNumber(value.withoutKnowledge) || !isNumber(value.withoutProvider) || !isNullableString(value.firstActiveAssistantId) || !Array.isArray(value.items)) return false;
   if (value.effectiveProviderConfiguration !== undefined) {
     const config = value.effectiveProviderConfiguration;
-    if (!isRecord(config) || (config.provider !== null && config.provider !== 'groq' && config.provider !== 'gemini' && config.provider !== 'openai' && config.provider !== 'openrouter') || !isNullableString(config.model) || typeof config.status !== 'string' || typeof config.configurationValid !== 'boolean' || typeof config.keyConfigured !== 'boolean' || typeof config.ready !== 'boolean') return false;
+    if (!isRecord(config) || (config.provider !== null && config.provider !== 'openrouter') || !isNullableString(config.model) || typeof config.status !== 'string' || typeof config.configurationValid !== 'boolean' || typeof config.keyConfigured !== 'boolean' || typeof config.ready !== 'boolean') return false;
   }
-  return value.items.every((item: unknown) => isRecord(item) && typeof item.id === 'string' && typeof item.name === 'string' && isNullableString(item.purpose) && ['draft', 'active', 'inactive'].includes(String(item.status)) && typeof item.providerConfigured === 'boolean' && (item.provider === undefined || item.provider === null || item.provider === 'groq' || item.provider === 'gemini' || item.provider === 'openai' || item.provider === 'openrouter') && (item.model === undefined || isNullableString(item.model)) && typeof item.updatedAt === 'string' && isNumber(item.linkedKnowledgeBaseCount) && isNumber(item.directKnowledgeCount));
+  return value.items.every((item: unknown) => isRecord(item) && typeof item.id === 'string' && typeof item.name === 'string' && isNullableString(item.purpose) && ['draft', 'active', 'inactive'].includes(String(item.status)) && typeof item.providerConfigured === 'boolean' && (item.provider === undefined || item.provider === null || item.provider === 'openrouter') && (item.model === undefined || isNullableString(item.model)) && typeof item.updatedAt === 'string' && isNumber(item.linkedKnowledgeBaseCount) && isNumber(item.directKnowledgeCount));
 }
 
 function isKnowledgeSummaryData(value: unknown): value is NonNullable<WorkspaceDashboardSummary['knowledge']['data']> {
