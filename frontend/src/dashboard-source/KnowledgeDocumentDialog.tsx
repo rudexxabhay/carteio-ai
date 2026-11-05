@@ -153,7 +153,7 @@ export function KnowledgeDocumentDialog({ slug, section, role, sourceId, onClose
   const provenanceVerified = source?.document?.provenance === 'AUTHENTICATED_PDF_EXTRACTION_V1';
   const lexicalStatus = !provenanceVerified ? 'Unavailable · verification required' : source?.processingStatus === 'ready' && source.activeIndexGeneration != null && (processing?.chunkCount ?? 0) > 0 ? 'Ready' : source?.processingStatus === 'failed' ? 'Failed' : source?.processingStatus === 'processing' || source?.processingStatus === 'queued' ? 'Processing' : 'Not published';
   const semanticVectorCount = processing?.semanticVectorCount ?? 0;
-  const semanticProfileIsValid = Boolean(processing && ((processing.semanticEmbeddingProvider === 'openrouter' && processing.semanticEmbeddingModel === 'openai/text-embedding-3-small') || (processing.semanticEmbeddingProvider === 'openai' && processing.semanticEmbeddingModel === 'text-embedding-3-small')) && processing.semanticEmbeddingDimensions === 1536);
+  const semanticProfileIsValid = Boolean(processing?.semanticEmbeddingProvider === 'openrouter' && processing.semanticEmbeddingModel === 'openai/text-embedding-3-small' && processing.semanticEmbeddingDimensions === 1536);
   const semanticEmbeddingProfile = processing?.semanticEmbeddingProvider && processing.semanticEmbeddingModel
     ? `${processing.semanticEmbeddingProvider}/${processing.semanticEmbeddingModel} · ${processing.semanticEmbeddingDimensions ?? 'dimensions not reported'}`
     : 'Not recorded';

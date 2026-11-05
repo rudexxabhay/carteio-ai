@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlaygroundChat, pdfPageFromLocator } from '../pages/training/PlaygroundChat';
 import { ApiError } from '../services/api/client';
-import { getPlaygroundConversation, getProviderConfigurationStatus, sendPlaygroundMessage, updateAssistant, type Assistant } from '../services/api/assistants';
+import { getPlaygroundConversation, getProviderConfigurationStatus, sendPlaygroundMessage, type Assistant } from '../services/api/assistants';
 
 vi.mock('../services/api/assistants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api/assistants')>();
@@ -11,21 +11,17 @@ vi.mock('../services/api/assistants', async (importOriginal) => {
     ...actual,
     getPlaygroundConversation: vi.fn().mockResolvedValue({ sessionId: 'session-1', messages: [] }),
     getProviderConfigurationStatus: vi.fn().mockResolvedValue({
-      groq: { keyConfigured: true, status: 'READY_FOR_TESTING' },
-      gemini: { keyConfigured: true, status: 'READY_FOR_TESTING', supportedModels: [] },
-      openai: { keyConfigured: true, status: 'READY_FOR_TESTING' },
       openrouter: { keyConfigured: true, status: 'READY_FOR_TESTING', modelValidation: null },
-      effective: { provider: 'groq', model: 'openai/gpt-oss-20b', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true },
+      effective: { provider: 'openrouter', model: 'google/gemini-2.5-flash', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true },
     }),
     sendPlaygroundMessage: vi.fn(),
-    updateAssistant: vi.fn(),
   };
 });
 
 const assistant = {
   id: 'assistant-1', organizationId: 'org-1', createdById: 'user-1', name: 'Support', description: null,
-  aiProvider: 'groq', aiModel: 'test-model', businessPurpose: null, systemInstructions: null,
-  effectiveProviderConfiguration: { provider: 'groq', model: 'openai/gpt-oss-20b', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true },
+  aiProvider: 'openrouter', aiModel: 'google/gemini-2.5-flash', businessPurpose: null, systemInstructions: null,
+  effectiveProviderConfiguration: { provider: 'openrouter', model: 'google/gemini-2.5-flash', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true },
   defaultLanguage: 'auto', responseTone: 'friendly', responseStyle: 'balanced', fallbackMessage: 'Contact support.',
   greetingMessage: null, escalationMessage: null, status: 'active', createdAt: '', updatedAt: '',
 } as Assistant;
@@ -42,11 +38,8 @@ describe('PlaygroundChat', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboardWrite } });
     vi.mocked(getPlaygroundConversation).mockResolvedValue({ sessionId: 'session-1', messages: [] });
     vi.mocked(getProviderConfigurationStatus).mockResolvedValue({
-      groq: { keyConfigured: true, status: 'READY_FOR_TESTING' },
-      gemini: { keyConfigured: true, status: 'READY_FOR_TESTING', supportedModels: [] },
-      openai: { keyConfigured: true, status: 'READY_FOR_TESTING' },
       openrouter: { keyConfigured: true, status: 'READY_FOR_TESTING', modelValidation: null },
-      effective: { provider: 'groq', model: 'openai/gpt-oss-20b', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true },
+      effective: { provider: 'openrouter', model: 'google/gemini-2.5-flash', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true },
     });
   });
 
@@ -267,26 +260,26 @@ describe('PlaygroundChat', () => {
     const storageKey = 'carteio-playground-session:acme:assistant-1:groq:test-model:MANUAL:[]';
     const sessionId = '22222222-2222-4222-8222-222222222222';
     sessionStorage.setItem(storageKey, sessionId);
-    vi.mocked(getPlaygroundConversation).mockResolvedValue({ sessionId, messages: [{ id: 'grounded-history', role: 'assistant', content: 'Saved public answer.', sources: [{ reference: 'S1', title: 'Returns FAQ', type: 'FAQ', locator: null }], responseType: 'grounded_answer', provenance: 'KNOWLEDGE_GROUNDED', providerUsed: 'gemini', modelUsed: 'gemini-2.5-flash', createdAt: '2026-10-12T00:00:00.000Z' }] });
+    vi.mocked(getPlaygroundConversation).mockResolvedValue({ sessionId, messages: [{ id: 'grounded-history', role: 'assistant', content: 'Saved public answer.', sources: [{ reference: 'S1', title: 'Returns FAQ', type: 'FAQ', locator: null }], responseType: 'grounded_answer', provenance: 'KNOWLEDGE_GROUNDED', providerUsed: 'openrouter', modelUsed: 'google/gemini-2.5-flash', createdAt: '2026-10-12T00:00:00.000Z' }] });
     render(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
     expect(await screen.findByText('Saved public answer.')).toBeTruthy();
     expect(screen.getByText('AI generated · Knowledge Base')).toBeTruthy();
     expect(screen.getByText(/Returns FAQ/)).toBeTruthy();
-    expect(screen.getByText('Generated by Google Gemini · gemini-2.5-flash')).toBeTruthy();
+    expect(screen.getByText('Generated by OpenRouter · google/gemini-2.5-flash')).toBeTruthy();
   });
 
   it('restores the same authorized session after provider configuration changes', async () => {
     const sessionId = '33333333-3333-4333-8333-333333333333';
     sessionStorage.setItem('carteio-playground-session:acme:assistant-1:groq:old-model:MANUAL:[]', sessionId);
     vi.mocked(getPlaygroundConversation).mockResolvedValue({ sessionId, messages: [{ id: 'restored-session-message', role: 'assistant', content: 'Existing saved conversation.', sources: [], responseType: 'social', createdAt: '2026-10-12T00:00:00.000Z' }] });
-    render(<PlaygroundChat workspaceSlug="acme" assistant={{ ...assistant, effectiveProviderConfiguration: { provider: 'gemini', model: 'gemini-2.5-flash', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true } }} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
+    render(<PlaygroundChat workspaceSlug="acme" assistant={{ ...assistant, effectiveProviderConfiguration: { provider: 'openrouter', model: 'google/gemini-2.5-flash', status: 'READY_FOR_TESTING', configurationValid: true, keyConfigured: true, ready: true } }} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
     await waitFor(() => expect(getPlaygroundConversation).toHaveBeenCalledWith('acme', 'assistant-1', sessionId, expect.any(AbortSignal), { latest: true }));
     expect(await screen.findByText('Existing saved conversation.')).toBeTruthy();
     expect(sessionStorage.getItem('carteio-playground-session:acme:assistant-1')).toBe(sessionId);
   });
 
   it('shows the actual provider on a newly generated reply instead of relying on current settings', async () => {
-    vi.mocked(sendPlaygroundMessage).mockResolvedValue({ sessionId: 'session-1', messageId: 'generated-1', reply: 'Generated answer.', retrievalMode: 'not_required', responseLanguage: 'English', sources: [], provenance: 'AI_GENERATED', providerUsed: 'openai', modelUsed: 'gpt-4o-mini' });
+    vi.mocked(sendPlaygroundMessage).mockResolvedValue({ sessionId: 'session-1', messageId: 'generated-1', reply: 'Generated answer.', retrievalMode: 'not_required', responseLanguage: 'English', sources: [], provenance: 'AI_GENERATED', providerUsed: 'openrouter', modelUsed: 'openai/gpt-4o-mini' });
     const user = userEvent.setup();
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboardWrite } });
     render(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
@@ -421,26 +414,15 @@ describe('PlaygroundChat', () => {
     expect(composer).toHaveAttribute('dir', 'auto');
   });
 
-  it('shows the server-managed provider read-only and saves only explicit routing policy', async () => {
+  it('shows the server-managed OpenRouter route and current configuration status', async () => {
     vi.mocked(getProviderConfigurationStatus).mockResolvedValue({
-      groq: { keyConfigured: true, status: 'READY_FOR_TESTING' },
-      gemini: { keyConfigured: false, status: 'MISSING_API_KEY', supportedModels: ['gemini-3.8-flash', 'gemini-3.7-flash'] },
-      openai: { keyConfigured: true, status: 'READY_FOR_TESTING' },
-      openrouter: { keyConfigured: true, status: 'READY_FOR_TESTING', modelValidation: null },
-      effective: { provider: 'gemini', model: 'gemini-2.5-flash', status: 'MISSING_API_KEY', configurationValid: true, keyConfigured: false, ready: false },
+      openrouter: { keyConfigured: false, status: 'MISSING_API_KEY', modelValidation: null },
+      effective: { provider: 'openrouter', model: 'google/gemini-2.5-flash', status: 'MISSING_API_KEY', configurationValid: true, keyConfigured: false, ready: false },
     });
-    vi.mocked(updateAssistant).mockResolvedValue({ ...assistant, providerMode: 'MANUAL', providerFallbacks: [] });
-    const user = userEvent.setup();
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: clipboardWrite } });
     render(<PlaygroundChat workspaceSlug="acme" assistant={assistant} manager onAssistantUpdated={vi.fn()} onClose={vi.fn()}/>);
-    await user.click(screen.getByRole('button', { name: 'Provider settings' }));
-    expect(screen.getByText('Google Gemini · gemini-2.5-flash', { selector: '#playground-settings-panel .workspace-field > span' })).toBeTruthy();
-    expect(screen.getByText('Provider and model are managed by the server configuration.')).toBeTruthy();
-    expect(screen.queryByLabelText('Provider')).toBeNull();
-    expect(screen.queryByLabelText('Model name')).toBeNull();
-    await user.selectOptions(screen.getByLabelText('Selection mode'), 'MANUAL');
-    await user.click(screen.getByRole('button', { name: 'Save routing settings' }));
-    await waitFor(() => expect(updateAssistant).toHaveBeenCalledWith('acme', 'assistant-1', { providerMode: 'MANUAL', providerFallbacks: [] }));
+    expect(await screen.findByText('OpenRouter · google/gemini-2.5-flash', { selector: '.playground-provider-label' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message your assistant' })).toBeDisabled();
   });
 });
 

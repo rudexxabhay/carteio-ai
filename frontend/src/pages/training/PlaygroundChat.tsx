@@ -8,13 +8,14 @@ import './playground-chat.css';
 
 type Message = { id: string; role: 'user' | 'assistant' | 'notice' | 'error'; content: string; createdAt: number; sources?: PlaygroundChatReply['sources']; productCards?: PlaygroundChatReply['productCards']; provenance?: ResponseProvenance; providerUsed?: AssistantProvider | null; modelUsed?: string | null; diagnostics?: PlaygroundChatReply['diagnostics']; retryText?: string; retryTurnId?: string };
 
-export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantUpdated, onClose }: { workspaceSlug: string; assistant: Assistant; manager: boolean; onAssistantUpdated: (assistant: Assistant) => void; onClose: () => void }) {
+export function PlaygroundChat({ workspaceSlug, assistant, manager, onClose }: { workspaceSlug: string; assistant: Assistant; manager: boolean; onAssistantUpdated: (assistant: Assistant) => void; onClose: () => void }) {
   const [sessionId, setSessionId] = useState<string | null>(() => storedSessionId(workspaceSlug, assistant));
   const [sessionNeedsNewChat, setSessionNeedsNewChat] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => assistant.greetingMessage ? [{ id: crypto.randomUUID(), role: 'assistant', content: assistant.greetingMessage, provenance: 'SYSTEM_RESPONSE', createdAt: Date.now() }] : []);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [captureResponseDebug, setCaptureResponseDebug] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
   useEffect(() => {
     const expiries = messages.flatMap((message) => message.diagnostics?.protectedResponseDebug ? [Date.parse(message.diagnostics.protectedResponseDebug.expiresAt)] : []).filter(Number.isFinite);
     if (!expiries.length) return;
@@ -69,7 +70,9 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
   useEffect(() => {
     if (!manager) return;
     const controller = new AbortController();
-    void getProviderConfigurationStatus(workspaceSlug, controller.signal).then(setProviderStatus).catch(() => setProviderStatus(null));
+    void getProviderConfigurationStatus(workspaceSlug, controller.signal).then((status) => { setProviderStatus(status); setSettingsError(''); }).catch(() => {
+      if (!controller.signal.aborted) { setProviderStatus(null); setSettingsError('Server-managed provider settings could not be loaded. Try again shortly.'); }
+    });
     return () => controller.abort();
   }, [workspaceSlug, manager]);
 
@@ -204,6 +207,7 @@ export function PlaygroundChat({ workspaceSlug, assistant, manager, onAssistantU
     <div className="playground-chat-column">
 
     {assistant.status !== 'active' && <p className="playground-disclaimer" role="status">Activate this assistant before running a customer conversation test.</p>}
+    {settingsError && <p className="playground-settings-error" role="alert">{settingsError}</p>}
     <div className="playground-copy-toolbar"><button type="button" className="playground-copy-history" onClick={() => void copyHistory()} disabled={!manager || sending || !messages.length}><Copy size={13}/> Copy History</button>{manager && messages.some((message) => message.diagnostics) && <button type="button" className="playground-copy-history" onClick={() => void copyHistory(true)} disabled={sending}><Activity size={13}/> Copy Chat + Diagnostics</button>}{copyFeedback && <span role={/^(?:Could not|Clipboard access failed)/.test(copyFeedback) ? 'alert' : 'status'}>{copyFeedback}</span>}</div>
     <div className="playground-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text">
       {!messages.length && <div className="playground-empty"><span className="playground-avatar" aria-hidden="true"><Bot size={20}/></span><p>{assistant.greetingMessage || `Send a test message to ${assistant.name}.`}</p>{!configured && manager && <small>Check the server-managed provider and model configuration.</small>}</div>}

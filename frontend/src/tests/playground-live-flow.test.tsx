@@ -13,7 +13,7 @@ import Pages from '../dashboard-source/pages';
 
 const assistant = {
   id: 'assistant-1', name: 'Support', status: 'ACTIVE',
-  effectiveProviderConfiguration: { ready: true, provider: 'gemini', model: 'gemini-2.5-flash', status: 'READY' },
+  effectiveProviderConfiguration: { ready: true, provider: 'openrouter', model: 'google/gemini-2.5-flash', status: 'READY_FOR_TESTING' },
 };
 
 const writeText = vi.fn();
@@ -298,7 +298,7 @@ describe('active dashboard Playground', () => {
     expect(screen.queryByRole('listbox', { name: 'Saved Playground conversations' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.keyboard('{Shift>}{Tab}{/Shift}');
-    expect(screen.getByRole('button', { name: 'Delete', exact: true })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus();
     await user.keyboard('{Tab}');
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
     expect(document.body.style.overflow).toBe('hidden');
@@ -311,7 +311,7 @@ describe('active dashboard Playground', () => {
     expect(screen.getByRole('checkbox', { name: 'Capture Metadata' })).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.click(screen.getByRole('button', { name: 'Delete conversation: Shipping question' }));
-    await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mocks.deletePlaygroundSession).toHaveBeenCalledTimes(1));
     expect(mocks.deletePlaygroundSession).toHaveBeenCalledWith('north', 'assistant-1', 'saved-session');
     await waitFor(() => expect(screen.getByText('New Playground session')).toBeInTheDocument());
@@ -329,7 +329,7 @@ describe('active dashboard Playground', () => {
     await screen.findByText('Pending deletion');
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.click(screen.getByRole('button', { name: 'Delete conversation: Pending deletion' }));
-    await user.click(await screen.findByRole('button', { name: 'Delete', exact: true }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
     expect(await screen.findByRole('button', { name: 'Deleting…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     expect(mocks.deletePlaygroundSession).toHaveBeenCalledTimes(1);
@@ -352,7 +352,7 @@ describe('active dashboard Playground', () => {
     expect(mocks.deletePlaygroundSession).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.click(screen.getByRole('button', { name: 'Delete conversation: Keep this chat' }));
-    await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Conversation could not be deleted.');
     expect(screen.getByText('Keep this chat')).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Delete conversation?' })).toBeInTheDocument();
@@ -368,7 +368,7 @@ describe('active dashboard Playground', () => {
     await screen.findByText('Current chat');
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.click(screen.getByRole('button', { name: 'Delete conversation: Conversation 1' }));
-    await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(mocks.deletePlaygroundSession).toHaveBeenCalledWith('north', 'assistant-1', 'saved-1'));
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.click(screen.getByRole('button', { name: 'Load more conversations' }));
